@@ -1,0 +1,58 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: bank-portfolio-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: bank
+      POSTGRES_PASSWORD: bank1234
+      POSTGRES_DB: bank
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
+    ports:
+      - "5434:5432"  # 기존 banking 스택(5433)과 동시 실행 가능하도록 분리
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/01_schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+      - ./db/02_seed.sql:/docker-entrypoint-initdb.d/02_seed.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bank -d bank"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: bank-portfolio-backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://bank:bank1234@postgres:5432/bank
+      JWT_SECRET: dev-secret-change-in-production-please-12345
+      JWT_ALGORITHM: HS256
+      JWT_EXPIRE_MINUTES: 60
+      CORS_ORIGINS: http://localhost:3001
+    ports:
+      - "8001:8000"  # 기존 banking 스택(8000)과 분리
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./backend/app:/app/app  # 핫리로드용
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: bank-portfolio-frontend
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8001
+    ports:
+      - "3001:3000"  # 기존 banking 스택(3000)과 분리
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
