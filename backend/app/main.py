@@ -1,17 +1,26 @@
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from .config import settings
-from .db import init_pool, close_pool, get_pool
+from .db import close_pool, get_pool, init_pool
+from .exceptions import BankingException
+from .logging_setup import get_logger, setup_logging
+from .middleware import REQUEST_ID_HEADER, RequestContextMiddleware
+
+setup_logging()
+log = get_logger("app")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    log.info("app_startup")
     await init_pool()
     yield
     await close_pool()
+    log.info("app_shutdown")
 
 
 app = FastAPI(title="bank-portfolio API", version="0.1.0", lifespan=lifespan)
@@ -22,7 +31,46 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=[REQUEST_ID_HEADER],
 )
+app.add_middleware(RequestContextMiddleware)
+
+
+@app.exception_handler(BankingException)
+async def banking_exception_handler(request: Request, exc: BankingException):
+    # 비즈니스 룰 위반(잔액부족 등)은 WARN, 시스템/외부 오류는 ERROR.
+    payload = dict(
+        code=exc.code,
+        http_status=exc.http_status,
+        message=exc.message,
+        details=exc.details,
+    )
+    if exc.http_status >= 500:
+        log.error("banking_exception", **payload)
+    else:
+        log.warning("banking_exception", **payload)
+    return JSONResponse(
+        status_code=exc.http_status,
+        content={
+            "code": exc.code,
+            "message": exc.message,
+            "request_id": getattr(request.state, "request_id", None),
+        },
+    )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    # 예상 외 예외 — 절대 raw 메시지/스택을 응답에 노출하지 않는다.
+    log.exception("unhandled_exception")
+    return JSONResponse(
+        status_code=500,
+        content={
+            "code": "E_INTERNAL_ERROR",
+            "message": "내부 오류가 발생했습니다.",
+            "request_id": getattr(request.state, "request_id", None),
+        },
+    )
 
 
 @app.get("/")

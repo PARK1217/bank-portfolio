@@ -168,6 +168,14 @@ tempCodeRunnerFile.py
 # PyPI configuration file
 .pypirc
 
+# 명세서/설계 문서 (로컬 전용 — 커밋 제외)
+*.xlsx
+*.xls
+개발_가이드라인_v*.md
+
+# 런타임 로그 (구조화 로깅: backend/logs/banking.log{.YYYY-MM-DD})
+backend/logs/
+
 # Frontend (Next.js) — Python의 lib/ 규칙이 frontend/lib 를 잡아먹지 않도록 예외
 !frontend/lib/
 !frontend/lib/**
