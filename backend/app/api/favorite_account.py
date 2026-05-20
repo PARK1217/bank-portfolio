@@ -19,11 +19,13 @@ log = structlog.get_logger("favorite_account")
 
 
 def _to_item(r: dict) -> FavoriteAccountItem:
+    raw = r["ACCOUNT_NO"] or ""
     return FavoriteAccountItem(
         id=int(r["FREQUENT_ACCOUNT_ID"]),
         alias=r["ALIAS"] or "",
         bank_cd=r["BANK_CD"] or "",
-        masked_account_no=mask_account_no(r["ACCOUNT_NO"] or ""),
+        account_no=raw,
+        masked_account_no=mask_account_no(raw),
         account_holder_name=r["ACCOUNT_HOLDER_NAME"] or "",
         use_count=int(r["USE_COUNT"] or 0),
         last_used_at=r["LAST_USED_AT"],
@@ -56,6 +58,7 @@ async def add_favorite(
         id=fav_id,
         alias=req.alias,
         bank_cd=req.bank_cd,
+        account_no=req.account_no,
         masked_account_no=mask_account_no(req.account_no),
         account_holder_name=req.account_holder_name,
         use_count=0,

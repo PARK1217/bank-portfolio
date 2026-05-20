@@ -80,7 +80,8 @@ class FavoriteAccountItem(BaseModel):
     id: int
     alias: str
     bank_cd: str
-    masked_account_no: str
+    account_no: str = Field(..., description="평문 — 즐겨찾기→이체 prefill 용도")
+    masked_account_no: str = Field(..., description="목록 표시용 마스킹")
     account_holder_name: str
     use_count: int
     last_used_at: datetime | None = None
