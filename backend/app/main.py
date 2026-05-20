@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse
 
 from .api.account import router as account_router
 from .api.auth import router as auth_router
-from .api.auto_transfer import router as auto_transfer_router
+1from .api.auto_transfer import router as auto_transfer_router
 from .api.dashboard import router as dashboard_router
 from .api.loan import router as loan_router
 from .api.product import router as product_router
@@ -95,6 +95,9 @@ api.include_router(account_router)
 api.include_router(transactions_router)
 api.include_router(dashboard_router)
 api.include_router(product_router)
+# auto_transfer_router 는 transfer_router 보다 먼저 등록 — transfer_router 의
+# `/{tx_token}` catch-all 이 `/transfer/auto`, `/transfer/scheduled` 등을 가로채는 것을 방지.
+api.include_router(auto_transfer_router)
 api.include_router(transfer_router)
 api.include_router(loan_router)
 app.include_router(api)
