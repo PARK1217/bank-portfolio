@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 from .api.account import router as account_router
 from .api.auth import router as auth_router
 from .api.dashboard import router as dashboard_router
+from .api.loan import router as loan_router
 from .api.product import router as product_router
 from .api.signup import router as signup_router
 from .api.transactions import router as transactions_router
@@ -90,6 +91,7 @@ app.include_router(transactions_router)
 app.include_router(dashboard_router)
 app.include_router(product_router)
 app.include_router(transfer_router)
+app.include_router(loan_router)
 
 
 @app.get("/")
