@@ -105,8 +105,8 @@ function ChatScreen() {
     }
   }, [messages]);
 
-  async function send() {
-    const text = input.trim();
+  async function send(textOverride?: string) {
+    const text = (textOverride || input).trim();
     if (!text || sending) return;
     setSending(true);
     // 사용자 메시지 낙관적으로 먼저 그림
@@ -185,7 +185,7 @@ function ChatScreen() {
 
       <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto py-4">
         {messages.length === 0 ? (
-          <EmptyState onPick={(p) => setInput(p)} />
+          <EmptyState onPick={(p) => void send(p)} />
         ) : (
           messages.map((m) => (
             <MessageBubble

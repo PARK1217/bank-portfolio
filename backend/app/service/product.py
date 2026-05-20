@@ -56,6 +56,7 @@ def _row_to_catalog_item(r, base_rate: float = 0.0) -> ProductCatalogItem:
 
 async def fetch_catalog() -> list[ProductCatalogItem]:
     """판매 가능 상품 카탈로그. base_rate는 RATE_POLICY 첫 행 APPLY_RATE 대표값."""
+    today = date.today().strftime("%Y%m%d")
     pool = get_pool()
     sql = (
         f'SELECT {_PRODUCT_COLS}, '
@@ -64,10 +65,13 @@ async def fetch_catalog() -> list[ProductCatalogItem]:
         '     ORDER BY rp."RATE_SEQ" LIMIT 1) AS base_rate '
         'FROM public."PRODUCT" p '
         'WHERE p."DELETE_YN" = \'N\' '
+        "  AND p.\"PRODUCT_STATUS_CD\" = 'SALE' "
+        "  AND (p.\"SALE_START_DATE\" IS NULL OR p.\"SALE_START_DATE\" <= $1) "
+        "  AND (p.\"SALE_END_DATE\" IS NULL OR p.\"SALE_END_DATE\" >= $1) "
         'ORDER BY p."PRODUCT_ID"'
     )
     async with pool.acquire() as conn:
-        rows = await conn.fetch(sql)
+        rows = await conn.fetch(sql, today)
     return [
         _row_to_catalog_item(r, float(r["base_rate"] or 0.0))
         for r in rows
@@ -75,12 +79,18 @@ async def fetch_catalog() -> list[ProductCatalogItem]:
 
 
 async def fetch_product_detail(product_id: int) -> ProductDetailResponse:
+    today = date.today().strftime("%Y%m%d")
     pool = get_pool()
     async with pool.acquire() as conn:
+        # 목록(fetch_catalog)과 동일한 판매 상태/기간 조건 적용 (검증 인계 ⚠️)
         prod = await conn.fetchrow(
             f'SELECT {_PRODUCT_COLS} FROM public."PRODUCT" '
-            'WHERE "PRODUCT_ID" = $1 AND "DELETE_YN" = \'N\'',
+            'WHERE "PRODUCT_ID" = $1 AND "DELETE_YN" = \'N\' '
+            "  AND \"PRODUCT_STATUS_CD\" = 'SALE' "
+            "  AND (\"SALE_START_DATE\" IS NULL OR \"SALE_START_DATE\" <= $2) "
+            "  AND (\"SALE_END_DATE\" IS NULL OR \"SALE_END_DATE\" >= $2)",
             product_id,
+            today,
         )
         if prod is None:
             raise NotFoundError(E_NOT_FOUND, "상품을 찾을 수 없습니다.")

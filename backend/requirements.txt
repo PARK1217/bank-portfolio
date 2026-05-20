@@ -14,3 +14,4 @@ httpx==0.27.2
 # torch 는 sentence-transformers 가 자동으로 가져온다 (Dockerfile에서 CPU 휠 인덱스 지정).
 sentence-transformers==3.2.1
 pgvector==0.3.6
+pyotp==2.9.0

@@ -102,9 +102,10 @@ async def logout(
     return LogoutResponse(revoked_tokens=revoked)
 
 
+import pyotp
+
 # ---------------------------------------------------------------------------
 # AU-010 OTP 등록 — TOTP 표준 (RFC 6238).
-# 운영은 pyotp 등으로 실시간 검증. 데모 단계는 secret 발급 + mock 6자리 검증.
 # secret/활성 상태는 in-memory — 운영은 CUSTOMER 테이블에 OTP_SECRET 컬럼 추가.
 # ---------------------------------------------------------------------------
 
@@ -112,7 +113,8 @@ _otp_secrets: dict[int, dict] = {}
 
 
 def _gen_otp_secret() -> str:
-    return base64.b32encode(secrets.token_bytes(20)).decode().rstrip("=")
+    # pyotp.random_base32() 가 32자 기반 secret 생성 표준.
+    return pyotp.random_base32()
 
 
 @router.post("/otp/init", response_model=OtpSetupInitResponse)
@@ -121,10 +123,9 @@ async def otp_init(
 ) -> OtpSetupInitResponse:
     s = _gen_otp_secret()
     _otp_secrets[user.customer_no] = {"secret": s, "active": False}
-    uri = (
-        f"otpauth://totp/bank-portfolio:{user.email}"
-        f"?secret={s}&issuer=bank-portfolio&algorithm=SHA1&digits=6&period=30"
-    )
+    # pyotp.TOTP(s).provisioning_uri(...) 로 자동 생성 가능
+    totp = pyotp.TOTP(s)
+    uri = totp.provisioning_uri(name=user.email, issuer_name="bank-portfolio")
     log.info("otp_init", customer_no=user.customer_no)
     return OtpSetupInitResponse(secret=s, otpauth_uri=uri)
 
@@ -137,9 +138,13 @@ async def otp_verify(
     entry = _otp_secrets.get(user.customer_no)
     if entry is None:
         raise BusinessError(E_VALIDATION, "먼저 OTP 등록을 시작해주세요.")
-    # 데모: 6자리 숫자 형식만 검증 (실 TOTP HOTP 계산은 운영에서).
-    if not (req.otp_code.isdigit() and len(req.otp_code) == 6):
-        raise BusinessError(E_VALIDATION, "6자리 OTP 코드가 올바르지 않습니다.")
+
+    # pyotp 실시간 TOTP 검증 (30초 윈도우)
+    totp = pyotp.TOTP(entry["secret"])
+    if not totp.verify(req.otp_code):
+        # 6자리 숫자 형식만 맞는다고 통과시키던 mock 검증 우회 픽스 (2026-05-20)
+        raise BusinessError(E_VALIDATION, "OTP 코드가 올바르지 않습니다.")
+
     entry["active"] = True
     log.info("otp_active", customer_no=user.customer_no)
     return {"active": True}

@@ -226,9 +226,11 @@ async def fetch_transactions(
 async def fetch_transaction(tx_id: int, customer_no: int) -> TransactionRow:
     """본인 소유 계좌의 거래만 반환."""
     pool = get_pool()
+    # TRANSACTION, ACCOUNT 테이블 모두 ACCOUNT_NO 컬럼이 있어 명시적 t. prefix 필요
+    tx_cols_prefixed = ", ".join([f"t.{col}" for col in _TX_COLS.split(", ")])
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
-            f'SELECT {_TX_COLS} FROM public."TRANSACTION" t '
+            f"SELECT {tx_cols_prefixed} FROM public.\"TRANSACTION\" t "
             'JOIN public."ACCOUNT" a ON a."ACCOUNT_NO" = t."ACCOUNT_NO" '
             'WHERE t."TRANSACTION_ID" = $1 AND a."CUSTOMER_NO" = $2 '
             '  AND a."DELETE_YN" = \'N\'',
