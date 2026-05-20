@@ -1,6 +1,6 @@
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import APIRouter, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -84,14 +84,19 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
     )
 
 
-app.include_router(auth_router)
-app.include_router(signup_router)
-app.include_router(account_router)
-app.include_router(transactions_router)
-app.include_router(dashboard_router)
-app.include_router(product_router)
-app.include_router(transfer_router)
-app.include_router(loan_router)
+# 프론트엔드는 모든 도메인 API 를 `/api/<도메인>/...` 로 호출한다 (frontend/lib/api.ts BASE_URL + 호출부).
+# 도메인 라우터들은 `/api` 하위로만 마운트하고, `/`·`/health` 같은 인프라 엔드포인트는
+# prefix 없이 그대로 둔다.
+api = APIRouter(prefix="/api")
+api.include_router(auth_router)
+api.include_router(signup_router)
+api.include_router(account_router)
+api.include_router(transactions_router)
+api.include_router(dashboard_router)
+api.include_router(product_router)
+api.include_router(transfer_router)
+api.include_router(loan_router)
+app.include_router(api)
 
 
 @app.get("/")
