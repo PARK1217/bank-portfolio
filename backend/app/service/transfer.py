@@ -313,6 +313,7 @@ async def _process_intra_bank(
                 )
 
             # TRANSFER INSERT — IDEMPOTENCY_KEY UNIQUE 가정. 충돌 시 ConflictError로 전환.
+            # v53 settlement_* 컬럼도 동시 채움 (DB와 API 응답 갈라짐 방지).
             try:
                 transfer_id = await conn.fetchval(
                     'INSERT INTO public."TRANSFER" ('
@@ -322,9 +323,13 @@ async def _process_intra_bank(
                     '  "TRANSFER_AMOUNT", "FEE", '
                     '  "REQUEST_DATETIME", "COMPLETE_DATETIME", '
                     '  "TRANSFER_TYPE_CD", "TRANSFER_STATUS_CD", '
+                    '  "SETTLEMENT_TYPE", "SETTLEMENT_STATUS", '
+                    '  "SETTLEMENT_REQUESTED_AT", "SETTLEMENT_COMPLETED_AT", '
                     '  "TRANSFER_MEMO", "IDEMPOTENCY_KEY", "CANCEL_YN", "DELETE_YN"'
                     ') VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $11, '
-                    "          'INTRA', 'SETTLED', $12, $13, 'N', 'N') "
+                    "          'INTRA', 'SETTLED', 'INTRA_BANK', 'SETTLED', "
+                    "          NOW(), NOW(), "
+                    "          $12, $13, 'N', 'N') "
                     'RETURNING "TRANSFER_ID"',
                     from_account_no,
                     OWN_BANK_CODE,
@@ -471,9 +476,11 @@ async def _process_inter_bank(
                     '  "DEPOSIT_ACCOUNT_NO", "DEPOSIT_BANK_CD", '
                     '  "ENTERED_HOLDER_NAME", "TRANSFER_AMOUNT", "FEE", '
                     '  "REQUEST_DATETIME", "TRANSFER_TYPE_CD", "TRANSFER_STATUS_CD", '
+                    '  "SETTLEMENT_TYPE", "SETTLEMENT_STATUS", "SETTLEMENT_REQUESTED_AT", '
                     '  "TRANSFER_MEMO", "IDEMPOTENCY_KEY", "CANCEL_YN", "DELETE_YN"'
                     ") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'PENDING', "
-                    "          $11, $12, 'N', 'N') "
+                    "          $11, 'PENDING', NOW(), "
+                    "          $12, $13, 'N', 'N') "
                     'RETURNING "TRANSFER_ID"',
                     from_account_no,
                     OWN_BANK_CODE,
@@ -485,6 +492,7 @@ async def _process_inter_bank(
                     0,
                     now_str,
                     type_cd,
+                    settlement_type,  # KFTC_SMALL / BOK_LARGE
                     memo,
                     idempotency_key,
                 )
@@ -607,7 +615,9 @@ async def _mark_settled(transfer_id: int) -> None:
         async with conn.transaction():
             await conn.execute(
                 'UPDATE public."TRANSFER" SET "TRANSFER_STATUS_CD" = \'SETTLED\', '
-                '"COMPLETE_DATETIME" = $1 WHERE "TRANSFER_ID" = $2',
+                '"COMPLETE_DATETIME" = $1, '
+                '"SETTLEMENT_STATUS" = \'SETTLED\', "SETTLEMENT_COMPLETED_AT" = NOW() '
+                'WHERE "TRANSFER_ID" = $2',
                 now_str,
                 transfer_id,
             )
@@ -663,7 +673,9 @@ async def _reverse_transfer(
             )
             await conn.execute(
                 'UPDATE public."TRANSFER" SET "TRANSFER_STATUS_CD" = \'REVERSED\', '
-                '"COMPLETE_DATETIME" = $1 WHERE "TRANSFER_ID" = $2',
+                '"COMPLETE_DATETIME" = $1, '
+                '"SETTLEMENT_STATUS" = \'REVERSED\', "SETTLEMENT_COMPLETED_AT" = NOW() '
+                'WHERE "TRANSFER_ID" = $2',
                 now_str,
                 transfer_id,
             )
