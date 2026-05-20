@@ -66,11 +66,10 @@ const krw = new Intl.NumberFormat("ko-KR");
 function openCtaTarget(productId: number, type: string): { href: string; label: string } | null {
   switch (type) {
     case "SAVING":
-      return { href: `/products/${productId}/open-saving`, label: "자유입출금 개설" };
     case "DEPOSIT":
-      return { href: `/products/${productId}/open-deposit`, label: "정기예금 가입" };
     case "INSTALLMENT":
-      return { href: `/products/${productId}/open-installment`, label: "적금 가입" };
+      // 약관 동의를 거쳐 type-specific open 페이지로
+      return { href: `/products/${productId}/terms`, label: "가입하기" };
     case "LOAN":
       return { href: `/loans/${productId}/precheck`, label: "한도 조회 (가신청)" };
     default:
@@ -230,9 +229,27 @@ function DetailContent({ productId }: { productId: string }) {
       ) : null}
 
       {cta ? (
-        <Link href={cta.href} className={cn(buttonVariants(), "w-full")}>
-          {cta.label} →
-        </Link>
+        <div className="space-y-2">
+          <Link href={cta.href} className={cn(buttonVariants(), "w-full")}>
+            {cta.label} →
+          </Link>
+          {product.product_type_cd === "SAVING" ? (
+            <div className="grid grid-cols-2 gap-2">
+              <Link
+                href={`/products/${product.product_id}/open-joint`}
+                className={cn(buttonVariants({ variant: "outline", size: "sm" }), "")}
+              >
+                공동명의로 개설 ⭐
+              </Link>
+              <Link
+                href={`/products/${product.product_id}/open-minor`}
+                className={cn(buttonVariants({ variant: "outline", size: "sm" }), "")}
+              >
+                미성년 자녀 명의 ⭐
+              </Link>
+            </div>
+          ) : null}
+        </div>
       ) : null}
     </div>
   );
