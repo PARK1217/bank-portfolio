@@ -4,7 +4,10 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from .api.account import router as account_router
 from .api.auth import router as auth_router
+from .api.dashboard import router as dashboard_router
+from .api.transactions import router as transactions_router
 from .config import settings
 from .db import close_pool, get_pool, init_pool
 from .exceptions import BankingException
@@ -78,6 +81,9 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 
 
 app.include_router(auth_router)
+app.include_router(account_router)
+app.include_router(transactions_router)
+app.include_router(dashboard_router)
 
 
 @app.get("/")

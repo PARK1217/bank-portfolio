@@ -16,6 +16,7 @@ from ..db import get_pool
 from ..errors import E_UNAUTHORIZED
 from ..exceptions import AuthError
 from ..schema.auth import LoginRequest, LoginResponse, LogoutResponse
+from ..service.account import fetch_accounts_for, issue_account_tokens
 from ..service.auth import (
     CurrentCustomer,
     current_customer,
@@ -33,7 +34,10 @@ _LOGIN_FAIL_MSG = "이메일 또는 비밀번호가 일치하지 않습니다."
 
 
 @router.post("/login", response_model=LoginResponse)
-async def login(req: LoginRequest) -> LoginResponse:
+async def login(
+    req: LoginRequest,
+    tokens: TokenService = Depends(get_token_service),
+) -> LoginResponse:
     pool = get_pool()
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
@@ -63,14 +67,20 @@ async def login(req: LoginRequest) -> LoginResponse:
         )
 
     structlog.contextvars.bind_contextvars(customer_no=customer_no)
-    log.info("login_success")
+
+    # 본인 계좌 accountToken 일괄 발급 (sheet 02)
+    accounts = await fetch_accounts_for(customer_no)
+    account_tokens_list = await issue_account_tokens(
+        tokens, customer_no, [a.account_no for a in accounts]
+    )
+    log.info("login_success", account_count=len(account_tokens_list))
 
     return LoginResponse(
         access_token=token,
         expires_in=expires_in,
         customer_no=customer_no,
         requires_device_otp=False,  # device_fingerprint 분기는 추후
-        account_tokens=[],  # 계좌 도메인 구현 후 채움
+        account_tokens=account_tokens_list,
     )
 
 
