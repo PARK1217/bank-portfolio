@@ -58,6 +58,9 @@ function TransferForm() {
   const router = useRouter();
   const search = useSearchParams();
   const prefillToken = search.get("from") ?? "";
+  const prefillToBank = search.get("to_bank") ?? "";
+  const prefillToAccount = search.get("to_account") ?? "";
+  const prefillToHolder = search.get("to_holder") ?? "";
 
   const { data: accountsData, error: accountsError, loading: accountsLoading } =
     useFetch<AccountListData>("/api/accounts");
@@ -68,9 +71,9 @@ function TransferForm() {
   );
 
   const [fromToken, setFromToken] = useState<string>("");
-  const [toBank, setToBank] = useState<string>("020");
-  const [toAccount, setToAccount] = useState<string>("");
-  const [toHolder, setToHolder] = useState<string>("");
+  const [toBank, setToBank] = useState<string>(prefillToBank || "020");
+  const [toAccount, setToAccount] = useState<string>(prefillToAccount);
+  const [toHolder, setToHolder] = useState<string>(prefillToHolder);
   const [amount, setAmount] = useState<string>("");
   const [memo, setMemo] = useState<string>("");
 
