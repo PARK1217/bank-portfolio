@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, Query
 from ..schema.account import (
     AccountDetailResponse,
     AccountListResponse,
+    DashboardResponse,
     TransactionListResponse,
 )
 from ..service.account import (
@@ -27,6 +28,18 @@ from ..service.token import TokenService
 
 router = APIRouter(prefix="/accounts", tags=["account"])
 log = structlog.get_logger("account")
+
+
+# /accounts/{account_token} 보다 먼저 등록 — account_token='dashboard' 로 매칭돼서
+# 신규 가입자(계좌 0건) 가 404 맞는 사고 방지. /api/dashboard 와 동일 응답을 반환한다.
+@router.get("/dashboard", response_model=DashboardResponse)
+async def accounts_dashboard_alias(
+    user: CurrentCustomer = Depends(current_customer),
+    tokens: TokenService = Depends(get_token_service),
+) -> DashboardResponse:
+    from .dashboard import get_dashboard
+
+    return await get_dashboard(user, tokens)
 
 
 @router.get("", response_model=AccountListResponse)
