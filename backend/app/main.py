@@ -10,6 +10,7 @@ from .api.auto_transfer import router as auto_transfer_router
 from .api.chatbot import router as chatbot_router
 from .api.dashboard import router as dashboard_router
 from .api.loan import router as loan_router
+from .api.notification import router as notification_router
 from .api.product import router as product_router
 from .api.signup import router as signup_router
 from .api.transactions import router as transactions_router
@@ -113,6 +114,7 @@ api.include_router(auto_transfer_router)
 api.include_router(transfer_router)
 api.include_router(loan_router)
 api.include_router(chatbot_router)
+api.include_router(notification_router)
 app.include_router(api)
 
 
