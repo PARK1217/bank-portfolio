@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
+import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useFetch } from "@/lib/use-fetch";
 import { showApiError } from "@/lib/toast";
@@ -92,12 +93,19 @@ function FavoritesContent() {
   }
 
   function onTransfer(fav: FavoriteItem) {
+    // ⚠️ 임시 워크어라운드 — 백엔드 `FavoriteAccountItem` 에 평문 `account_no` 필드가
+    //    추가될 때까지(워크보드 "다음 작업") 계좌번호 prefill 비활성.
+    //    이전 로직 `masked.replace(/\*/g, "")` 는 `110-001-****56` → `110-001-56` 같은
+    //    부정확한 번호를 만들어 이체 사고 위험이 있어 차단함.
+    //    은행·예금주만 prefill 하고 계좌번호는 사용자가 직접 입력하도록 안내.
     const qs = new URLSearchParams({
       to_bank: fav.bank_cd,
-      to_account: fav.masked_account_no.replace(/\*/g, ""),
       to_holder: fav.account_holder_name,
     });
     router.push(`/transfer?${qs.toString()}`);
+    toast.info(`${fav.alias} 정보로 이동합니다 — 계좌번호는 직접 입력해 주세요`, {
+      description: `${bankName(fav.bank_cd)} ${fav.masked_account_no}`,
+    });
   }
 
   return (
