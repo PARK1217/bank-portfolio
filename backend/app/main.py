@@ -6,6 +6,7 @@ from fastapi.responses import JSONResponse
 
 from .api.account import router as account_router
 from .api.auth import router as auth_router
+from .api.auto_transfer import router as auto_transfer_router
 from .api.dashboard import router as dashboard_router
 from .api.loan import router as loan_router
 from .api.product import router as product_router
