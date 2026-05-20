@@ -13,8 +13,10 @@ v53 settlement_* 컬럼은 미적용 — 응답의 settlement_type/status는 코
 
 from __future__ import annotations
 
+import asyncio
+import random
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import structlog
 
@@ -35,6 +37,30 @@ log = structlog.get_logger("transfer")
 
 # 본행 코드 — 임시 상수. 운영 시 settings.BANK_CODE로 외부화.
 OWN_BANK_CODE = "098"
+
+# 가이드 §0 — 10억 이상은 BOK-Wire+ (RTGS) 채널.
+LARGE_AMOUNT_THRESHOLD = 1_000_000_000
+
+# 외부 결제망 시뮬레이션 파라미터 (가이드 §2.4).
+KFTC_DELAY_MS = (100, 500)
+KFTC_SUCCESS_RATE = 0.99
+BOK_DELAY_MS = (1_000, 3_000)
+BOK_SUCCESS_RATE = 0.95
+
+
+def _is_bok_wire_open_now(now: datetime | None = None) -> bool:
+    """한국은행 거액결제망(BOK-Wire+) 운영시간: 평일 09:00 ~ 17:30 (KST)."""
+    # 컨테이너 기본 timezone 이 UTC 인 경우 대비 KST(UTC+9) 보정.
+    now = now or (datetime.utcnow() + timedelta(hours=9))
+    if now.weekday() >= 5:  # 토(5)/일(6)
+        return False
+    if now.hour < 9:
+        return False
+    if now.hour > 17:
+        return False
+    if now.hour == 17 and now.minute >= 30:
+        return False
+    return True
 
 
 @dataclass
@@ -152,24 +178,39 @@ async def execute_transfer(
     # 3. 출금계좌 본인 검증
     from_acct = await fetch_account(from_account_no, user_customer_no)
 
-    # 4. 결제 채널 결정 — 현재는 당행만 지원
-    settlement_type = "INTRA_BANK" if to_bank_cd == OWN_BANK_CODE else (
-        "BOK_LARGE" if amount_krw >= 1_000_000_000 else "KFTC_SMALL"
-    )
-    if settlement_type != "INTRA_BANK":
-        raise BusinessError(
-            E_VALIDATION,
-            "타행/거액 이체는 아직 지원하지 않습니다. (KFTC/BOK 채널은 후속 작업)",
+    # 4. 결제 채널 3-tier 분기 (가이드 §2.1).
+    if to_bank_cd == OWN_BANK_CODE:
+        settlement_type = "INTRA_BANK"
+    elif amount_krw >= LARGE_AMOUNT_THRESHOLD:
+        settlement_type = "BOK_LARGE"
+        if not _is_bok_wire_open_now():
+            raise BusinessError(
+                "E_BOK_WIRE_CLOSED",
+                "한국은행 거액결제망 운영시간 외입니다. (평일 09:00~17:30)",
+            )
+    else:
+        settlement_type = "KFTC_SMALL"
+
+    if settlement_type == "INTRA_BANK":
+        return await _process_intra_bank(
+            from_account_no=from_account_no,
+            to_account_no=to_account_no,
+            to_bank_cd=to_bank_cd,
+            to_holder_name=to_holder_name,
+            amount_krw=amount_krw,
+            memo=memo,
+            idempotency_key=idempotency_key,
         )
 
-    return await _process_intra_bank(
+    return await _process_inter_bank(
         from_account_no=from_account_no,
-        to_account_no=to_account_no,
         to_bank_cd=to_bank_cd,
+        to_account_no=to_account_no,
         to_holder_name=to_holder_name,
         amount_krw=amount_krw,
         memo=memo,
         idempotency_key=idempotency_key,
+        settlement_type=settlement_type,
     )
 
 
@@ -333,6 +374,226 @@ async def _process_intra_bank(
         completed_at=now_dt,
         idempotent_replay=False,
     )
+
+
+# ---------------------------------------------------------------------------
+# 타행이체 — 출금 즉시 + 외부 결제망 시뮬레이션 비동기 정산
+# ---------------------------------------------------------------------------
+
+async def _process_inter_bank(
+    *,
+    from_account_no: str,
+    to_bank_cd: str,
+    to_account_no: str,
+    to_holder_name: str | None,
+    amount_krw: int,
+    memo: str | None,
+    idempotency_key: str,
+    settlement_type: str,
+) -> TransferResult:
+    """타행 소액(KFTC) / 거액(BOK) 공통 진입.
+    출금은 즉시 차감 + TRANSFER status=PENDING 으로 기록 → background task 가 정산.
+    가이드 §2.3 의사코드 기반.
+    """
+    pool = get_pool()
+    now_str = _now_str()
+    now_dt = datetime.now()
+    type_cd = "KFTC" if settlement_type == "KFTC_SMALL" else "BOK"
+
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            from_row = await conn.fetchrow(
+                'SELECT "ACCOUNT_NO", "BALANCE", "ACCOUNT_HOLDER_NAME", "DELETE_YN" '
+                'FROM public."ACCOUNT" WHERE "ACCOUNT_NO" = $1 FOR UPDATE',
+                from_account_no,
+            )
+            if from_row is None or from_row["DELETE_YN"] == "Y":
+                raise NotFoundError(E_NOT_FOUND, "출금 계좌를 찾을 수 없습니다.")
+            from_balance = int(from_row["BALANCE"] or 0)
+            if from_balance < amount_krw:
+                raise BusinessError(
+                    E_BALANCE_INSUFFICIENT,
+                    "잔액이 부족합니다.",
+                    details={"balance": from_balance, "amount": amount_krw},
+                )
+
+            try:
+                transfer_id = await conn.fetchval(
+                    'INSERT INTO public."TRANSFER" ('
+                    '  "WITHDRAW_ACCOUNT_NO", "WITHDRAW_BANK_CD", "WITHDRAW_HOLDER_NAME", '
+                    '  "DEPOSIT_ACCOUNT_NO", "DEPOSIT_BANK_CD", '
+                    '  "ENTERED_HOLDER_NAME", "TRANSFER_AMOUNT", "FEE", '
+                    '  "REQUEST_DATETIME", "TRANSFER_TYPE_CD", "TRANSFER_STATUS_CD", '
+                    '  "TRANSFER_MEMO", "IDEMPOTENCY_KEY", "CANCEL_YN", "DELETE_YN"'
+                    ") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'PENDING', "
+                    "          $11, $12, 'N', 'N') "
+                    'RETURNING "TRANSFER_ID"',
+                    from_account_no,
+                    OWN_BANK_CODE,
+                    from_row["ACCOUNT_HOLDER_NAME"],
+                    to_account_no,
+                    to_bank_cd,
+                    to_holder_name,
+                    amount_krw,
+                    0,
+                    now_str,
+                    type_cd,
+                    memo,
+                    idempotency_key,
+                )
+            except Exception as e:
+                if "duplicate" in str(e).lower() or "IDEMPOTENCY" in str(e).upper():
+                    raise ConflictError(
+                        E_IDEMPOTENCY_CONFLICT,
+                        "동일한 멱등성 키로 이체가 동시 처리되었습니다.",
+                    ) from e
+                raise
+
+            # 출금 거래만 즉시 기록 (입금 거래는 정산 완료 후).
+            tx_id_withdraw = await conn.fetchval(
+                'INSERT INTO public."TRANSACTION" ('
+                '  "ACCOUNT_NO", "TX_DATETIME", "TX_TYPE_CD", "TX_AMOUNT", '
+                '  "POST_TX_BALANCE", "COUNTERPART_ACCOUNT_NO", "COUNTERPART_BANK_CD", '
+                '  "COUNTERPART_HOLDER_NAME", "OWN_BANK_YN", "TX_STATUS_CD", '
+                '  "TRANSFER_ID", "TX_MEMO", "CANCEL_YN"'
+                ") VALUES ($1, $2, 'WITHDRAW', $3, $4, $5, $6, $7, 'N', 'PENDING', "
+                "          $8, $9, 'N') "
+                'RETURNING "TRANSACTION_ID"',
+                from_account_no,
+                now_str,
+                -amount_krw,
+                from_balance - amount_krw,
+                to_account_no,
+                to_bank_cd,
+                to_holder_name,
+                transfer_id,
+                memo,
+            )
+            await conn.execute(
+                'UPDATE public."ACCOUNT" SET "BALANCE" = "BALANCE" - $1, '
+                '"LAST_TX_DATETIME" = $2 WHERE "ACCOUNT_NO" = $3',
+                amount_krw,
+                now_str,
+                from_account_no,
+            )
+
+    # 트랜잭션 커밋 후 background settle 시뮬레이션 발행 (가이드 §3.3 트랜잭션 경계).
+    asyncio.create_task(
+        _settle_simulation(int(transfer_id), from_account_no, amount_krw, settlement_type)
+    )
+
+    log.info(
+        "inter_bank_transfer_pending",
+        transfer_id=transfer_id,
+        amount=amount_krw,
+        settlement_type=settlement_type,
+    )
+
+    return TransferResult(
+        transfer_id=int(transfer_id),
+        tx_id_withdraw=int(tx_id_withdraw),
+        settlement_type=settlement_type,
+        settlement_status="PENDING",
+        requested_at=now_dt,
+        completed_at=None,
+        idempotent_replay=False,
+    )
+
+
+async def _settle_simulation(
+    transfer_id: int,
+    from_account_no: str,
+    amount_krw: int,
+    settlement_type: str,
+) -> None:
+    """외부 결제망(KFTC/BOK) 정산 시뮬레이션 — sleep + 성공률."""
+    delay_range = KFTC_DELAY_MS if settlement_type == "KFTC_SMALL" else BOK_DELAY_MS
+    success_rate = (
+        KFTC_SUCCESS_RATE if settlement_type == "KFTC_SMALL" else BOK_SUCCESS_RATE
+    )
+    delay = random.uniform(*delay_range) / 1000
+    await asyncio.sleep(delay)
+    success = random.random() < success_rate
+
+    try:
+        if success:
+            await _mark_settled(transfer_id)
+            log.info("inter_bank_settled", transfer_id=transfer_id, delay_ms=int(delay * 1000))
+        else:
+            await _reverse_transfer(transfer_id, from_account_no, amount_krw)
+            log.warning("inter_bank_reversed", transfer_id=transfer_id)
+    except Exception:
+        log.exception("settle_simulation_error", transfer_id=transfer_id)
+
+
+async def _mark_settled(transfer_id: int) -> None:
+    """정산 완료 — TRANSFER status + COMPLETE_DATETIME 갱신, 출금 거래 status 갱신."""
+    now_str = _now_str()
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            await conn.execute(
+                'UPDATE public."TRANSFER" SET "TRANSFER_STATUS_CD" = \'SETTLED\', '
+                '"COMPLETE_DATETIME" = $1 WHERE "TRANSFER_ID" = $2',
+                now_str,
+                transfer_id,
+            )
+            await conn.execute(
+                'UPDATE public."TRANSACTION" SET "TX_STATUS_CD" = \'COMPLETE\' '
+                'WHERE "TRANSFER_ID" = $1',
+                transfer_id,
+            )
+
+
+async def _reverse_transfer(
+    transfer_id: int, from_account_no: str, amount_krw: int
+) -> None:
+    """역분개 (가이드 §2.5) — 출금 복원 + TRANSFER status=REVERSED."""
+    now_str = _now_str()
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            # 멱등 — 이미 REVERSED 면 skip
+            cur = await conn.fetchrow(
+                'SELECT "TRANSFER_STATUS_CD" FROM public."TRANSFER" '
+                'WHERE "TRANSFER_ID" = $1 FOR UPDATE',
+                transfer_id,
+            )
+            if cur is None or cur["TRANSFER_STATUS_CD"] == "REVERSED":
+                return
+
+            from_row = await conn.fetchrow(
+                'SELECT "BALANCE" FROM public."ACCOUNT" WHERE "ACCOUNT_NO" = $1 FOR UPDATE',
+                from_account_no,
+            )
+            new_balance = int(from_row["BALANCE"] or 0) + amount_krw
+            await conn.execute(
+                'INSERT INTO public."TRANSACTION" ('
+                '  "ACCOUNT_NO", "TX_DATETIME", "TX_TYPE_CD", "TX_AMOUNT", '
+                '  "POST_TX_BALANCE", "OWN_BANK_YN", "TX_STATUS_CD", "TX_MEMO", '
+                '  "TRANSFER_ID", "CANCEL_YN", "ORIGINAL_TX_REF"'
+                ") VALUES ($1, $2, 'REVERSAL', $3, $4, 'Y', 'COMPLETE', $5, $6, 'N', $7)",
+                from_account_no,
+                now_str,
+                amount_krw,
+                new_balance,
+                f"REVERSAL of transfer #{transfer_id}",
+                transfer_id,
+                transfer_id,
+            )
+            await conn.execute(
+                'UPDATE public."ACCOUNT" SET "BALANCE" = "BALANCE" + $1, '
+                '"LAST_TX_DATETIME" = $2 WHERE "ACCOUNT_NO" = $3',
+                amount_krw,
+                now_str,
+                from_account_no,
+            )
+            await conn.execute(
+                'UPDATE public."TRANSFER" SET "TRANSFER_STATUS_CD" = \'REVERSED\', '
+                '"COMPLETE_DATETIME" = $1 WHERE "TRANSFER_ID" = $2',
+                now_str,
+                transfer_id,
+            )
 
 
 # ---------------------------------------------------------------------------
