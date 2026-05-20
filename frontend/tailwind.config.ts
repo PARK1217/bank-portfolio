@@ -7,7 +7,7 @@ const config: Config = {
     "./components/**/*.{ts,tsx}",
   ],
   theme: {
-    container: { center: true, padding: "1rem" },
+    container: { center: true, padding: "1rem", screens: { "2xl": "1280px" } },
     extend: {
       fontFamily: {
         sans: ["Pretendard", "system-ui", "sans-serif"],
@@ -30,9 +30,21 @@ const config: Config = {
           DEFAULT: "hsl(var(--muted))",
           foreground: "hsl(var(--muted-foreground))",
         },
+        accent: {
+          DEFAULT: "hsl(var(--accent))",
+          foreground: "hsl(var(--accent-foreground))",
+        },
         destructive: {
           DEFAULT: "hsl(var(--destructive))",
           foreground: "hsl(var(--destructive-foreground))",
+        },
+        success: {
+          DEFAULT: "hsl(var(--success))",
+          foreground: "hsl(var(--success-foreground))",
+        },
+        warning: {
+          DEFAULT: "hsl(var(--warning))",
+          foreground: "hsl(var(--warning-foreground))",
         },
         card: {
           DEFAULT: "hsl(var(--card))",
@@ -41,8 +53,17 @@ const config: Config = {
       },
       borderRadius: {
         lg: "var(--radius)",
-        md: "calc(var(--radius) - 2px)",
-        sm: "calc(var(--radius) - 4px)",
+        md: "calc(var(--radius) - 4px)",
+        sm: "calc(var(--radius) - 8px)",
+      },
+      keyframes: {
+        "fade-in": {
+          from: { opacity: "0" },
+          to: { opacity: "1" },
+        },
+      },
+      animation: {
+        "fade-in": "fade-in 200ms ease-out",
       },
     },
   },
