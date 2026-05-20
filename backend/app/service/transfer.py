@@ -31,6 +31,8 @@ from ..errors import (
 from ..exceptions import AuthError, BusinessError, ConflictError, NotFoundError
 from .account import fetch_account, issue_tx_token, resolve_account_token
 from .auth.passwords import verify_password
+from .favorite_account import touch_use as _favorite_touch_use
+from .notification import insert_notification as _insert_notification
 from .token import TokenService
 
 log = structlog.get_logger("transfer")
@@ -192,7 +194,7 @@ async def execute_transfer(
         settlement_type = "KFTC_SMALL"
 
     if settlement_type == "INTRA_BANK":
-        return await _process_intra_bank(
+        result = await _process_intra_bank(
             from_account_no=from_account_no,
             to_account_no=to_account_no,
             to_bank_cd=to_bank_cd,
@@ -201,17 +203,61 @@ async def execute_transfer(
             memo=memo,
             idempotency_key=idempotency_key,
         )
+    else:
+        result = await _process_inter_bank(
+            from_account_no=from_account_no,
+            to_bank_cd=to_bank_cd,
+            to_account_no=to_account_no,
+            to_holder_name=to_holder_name,
+            amount_krw=amount_krw,
+            memo=memo,
+            idempotency_key=idempotency_key,
+            settlement_type=settlement_type,
+            customer_no=user_customer_no,
+        )
 
-    return await _process_inter_bank(
-        from_account_no=from_account_no,
-        to_bank_cd=to_bank_cd,
-        to_account_no=to_account_no,
-        to_holder_name=to_holder_name,
-        amount_krw=amount_krw,
-        memo=memo,
-        idempotency_key=idempotency_key,
-        settlement_type=settlement_type,
+    # 이체 완료 알림 + 자주쓰는계좌 use_count 갱신 (실패해도 main 흐름 영향 X).
+    try:
+        await _post_transfer_hooks(
+            customer_no=user_customer_no,
+            result=result,
+            to_bank_cd=to_bank_cd,
+            to_account_no=to_account_no,
+            amount_krw=amount_krw,
+        )
+    except Exception:
+        log.exception("post_transfer_hooks_failed", transfer_id=result.transfer_id)
+
+    return result
+
+
+async def _post_transfer_hooks(
+    *,
+    customer_no: int,
+    result: "TransferResult",
+    to_bank_cd: str,
+    to_account_no: str,
+    amount_krw: int,
+) -> None:
+    if result.settlement_status == "SETTLED":
+        title = "이체 완료"
+        body = f"{amount_krw:,}원이 정상 이체되었습니다."
+    elif result.settlement_status == "PENDING":
+        title = "이체 요청 접수"
+        body = f"{amount_krw:,}원 이체가 정산 대기 중입니다."
+    else:
+        title = "이체 처리"
+        body = f"이체 상태: {result.settlement_status}"
+
+    await _insert_notification(
+        customer_no,
+        type_cd="TRANSFER",
+        title=title,
+        body=body,
+        reference_id=result.transfer_id,
+        reference_type="TRANSFER",
     )
+    await _favorite_touch_use(customer_no, to_account_no, to_bank_cd)
 
 
 # ---------------------------------------------------------------------------
@@ -390,6 +436,7 @@ async def _process_inter_bank(
     memo: str | None,
     idempotency_key: str,
     settlement_type: str,
+    customer_no: int,
 ) -> TransferResult:
     """타행 소액(KFTC) / 거액(BOK) 공통 진입.
     출금은 즉시 차감 + TRANSFER status=PENDING 으로 기록 → background task 가 정산.
@@ -479,7 +526,9 @@ async def _process_inter_bank(
 
     # 트랜잭션 커밋 후 background settle 시뮬레이션 발행 (가이드 §3.3 트랜잭션 경계).
     asyncio.create_task(
-        _settle_simulation(int(transfer_id), from_account_no, amount_krw, settlement_type)
+        _settle_simulation(
+            int(transfer_id), from_account_no, amount_krw, settlement_type, customer_no
+        )
     )
 
     log.info(
@@ -505,8 +554,9 @@ async def _settle_simulation(
     from_account_no: str,
     amount_krw: int,
     settlement_type: str,
+    customer_no: int,
 ) -> None:
-    """외부 결제망(KFTC/BOK) 정산 시뮬레이션 — sleep + 성공률."""
+    """외부 결제망(KFTC/BOK) 정산 시뮬레이션 — sleep + 성공률 + 후속 알림."""
     delay_range = KFTC_DELAY_MS if settlement_type == "KFTC_SMALL" else BOK_DELAY_MS
     success_rate = (
         KFTC_SUCCESS_RATE if settlement_type == "KFTC_SMALL" else BOK_SUCCESS_RATE
@@ -519,9 +569,32 @@ async def _settle_simulation(
         if success:
             await _mark_settled(transfer_id)
             log.info("inter_bank_settled", transfer_id=transfer_id, delay_ms=int(delay * 1000))
+            try:
+                await _insert_notification(
+                    customer_no,
+                    type_cd="TRANSFER",
+                    title="이체 완료",
+                    body=f"{amount_krw:,}원 이체가 정산 완료되었습니다.",
+                    reference_id=transfer_id,
+                    reference_type="TRANSFER",
+                )
+            except Exception:
+                log.exception("settle_notification_failed", transfer_id=transfer_id)
         else:
             await _reverse_transfer(transfer_id, from_account_no, amount_krw)
             log.warning("inter_bank_reversed", transfer_id=transfer_id)
+            try:
+                await _insert_notification(
+                    customer_no,
+                    type_cd="TRANSFER",
+                    title="이체 실패 — 자금 반환",
+                    body=f"{amount_krw:,}원 이체가 외부 결제망 거절로 실패했습니다. "
+                         "출금액은 자동 복원되었습니다.",
+                    reference_id=transfer_id,
+                    reference_type="TRANSFER",
+                )
+            except Exception:
+                log.exception("reverse_notification_failed", transfer_id=transfer_id)
     except Exception:
         log.exception("settle_simulation_error", transfer_id=transfer_id)
 
