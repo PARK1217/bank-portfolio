@@ -32,8 +32,8 @@ from ..service.chatbot import (
     get_source,
     list_faq,
     search_terms,
-    submit_feedback,
 )
+from ..service.chatbot_feedback import submit_feedback_db
 from ..service.token import TokenService
 
 router = APIRouter(prefix="/chatbot", tags=["chatbot"])
@@ -119,5 +119,5 @@ async def post_feedback(
     req: ChatFeedbackRequest,
     user: CurrentCustomer = Depends(current_customer),
 ) -> dict:
-    submit_feedback(req.message_id, req.rating, req.comment)
+    await submit_feedback_db(user.customer_no, req.message_id, req.rating, req.comment)
     return {"received": True}
