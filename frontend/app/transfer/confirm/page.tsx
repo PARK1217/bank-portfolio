@@ -97,7 +97,7 @@ function ConfirmContent() {
       </CardHeader>
       <CardContent className="space-y-5">
         <dl className="divide-y rounded-md border bg-card text-sm">
-          <Row k="출금 계좌" v={`${draft.from_account_label ?? ""} ${draft.from_account_masked ?? ""}`.trim()} />
+          <Row k="출금 계좌" v={`${draft.from_account_label ?? ""} ${draft.from_account_no ?? ""}`.trim()} />
           <Row k="입금 은행" v={draft.to_bank_name ?? draft.to_bank_cd} />
           <Row k="입금 계좌" v={draft.to_account_no} />
           {draft.to_holder_name ? <Row k="예금주" v={draft.to_holder_name} /> : null}

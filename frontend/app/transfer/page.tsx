@@ -42,7 +42,7 @@ interface AccountSummary {
   balance: number;
   status_cd: string;
   hidden: boolean;
-  masked_account_no: string;
+  account_no: string;
 }
 
 interface AccountListData {
@@ -107,8 +107,8 @@ function TransferForm() {
     const bank = BANKS.find((b) => b.code === toBank);
     setTransferDraft({
       from_account_token: fromAccount.account_token,
-      from_account_label: fromAccount.alias ?? fromAccount.masked_account_no,
-      from_account_masked: fromAccount.masked_account_no,
+      from_account_label: fromAccount.alias ?? fromAccount.account_no,
+      from_account_no: fromAccount.account_no,
       to_bank_cd: toBank,
       to_bank_name: bank?.name,
       to_account_no: toAccount,
@@ -153,7 +153,7 @@ function TransferForm() {
             >
               {accounts.map((a) => (
                 <option key={a.account_token} value={a.account_token}>
-                  {(a.alias ?? a.account_type_cd) + " · " + a.masked_account_no + " · " + fmt(a.balance)}
+                  {(a.alias ?? a.account_type_cd) + " · " + a.account_no + " · " + fmt(a.balance)}
                 </option>
               ))}
             </select>

@@ -20,7 +20,7 @@ interface AccountSummary {
   balance: number;
   status_cd: string;
   hidden: boolean;
-  masked_account_no: string;
+  account_no: string;
 }
 
 interface DepositContractInfo {
@@ -83,8 +83,8 @@ function AccountDetailContent({ token }: { token: string }) {
     <div className="space-y-6">
       <section>
         <div className="text-xs text-muted-foreground">{account.account_type_cd}</div>
-        <h1 className="text-xl font-semibold">{account.alias ?? account.masked_account_no}</h1>
-        <div className="mt-1 font-mono text-xs text-muted-foreground">{account.masked_account_no}</div>
+        <h1 className="text-xl font-semibold">{account.alias ?? account.account_no}</h1>
+        <div className="mt-1 font-mono text-xs text-muted-foreground">{account.account_no}</div>
         <div className="num-tabular mt-3 text-3xl font-semibold">{fmt(account.balance)}</div>
       </section>
 

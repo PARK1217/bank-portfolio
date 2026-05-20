@@ -21,7 +21,7 @@ interface AccountSummary {
   balance: number;
   status_cd: string;
   hidden: boolean;
-  masked_account_no: string;
+  account_no: string;
 }
 
 interface LoanSummaryItem {
@@ -164,12 +164,12 @@ function DashboardContent() {
                       ) : null}
                     </div>
                     <CardTitle className="text-base">
-                      {acct.alias ?? acct.masked_account_no}
+                      {acct.alias ?? acct.account_no}
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-1 pt-0">
                     <div className="font-mono text-xs text-muted-foreground">
-                      {acct.masked_account_no}
+                      {acct.account_no}
                     </div>
                     <div className="num-tabular text-xl font-semibold">
                       {formatKrw(acct.balance)}

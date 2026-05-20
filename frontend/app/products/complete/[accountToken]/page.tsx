@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils";
 
 interface ProductCompleteData {
   account_token: string;
-  masked_account_no: string;
+  account_no: string;
   product_name: string;
 }
 
@@ -49,7 +49,7 @@ function CompleteContent({ token }: { token: string }) {
       <CardContent className="space-y-5">
         <section className="rounded-md border bg-muted/30 p-4 text-center">
           <div className="text-xs text-muted-foreground">개설된 계좌</div>
-          <div className="mt-1 font-mono text-lg">{data.masked_account_no}</div>
+          <div className="mt-1 font-mono text-lg">{data.account_no}</div>
         </section>
 
         <p className="text-xs text-muted-foreground">

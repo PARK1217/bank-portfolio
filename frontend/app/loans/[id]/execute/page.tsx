@@ -29,7 +29,7 @@ interface AccountSummary {
   currency: string;
   balance: number;
   hidden: boolean;
-  masked_account_no: string;
+  account_no: string;
   status_cd: string;
 }
 interface AccountListData {
@@ -169,7 +169,7 @@ function ExecuteContent({ loanToken }: { loanToken: string }) {
                 >
                   {krwAccounts.map((a) => (
                     <option key={a.account_token} value={a.account_token}>
-                      {(a.alias ?? a.account_type_cd) + " · " + a.masked_account_no}
+                      {(a.alias ?? a.account_type_cd) + " · " + a.account_no}
                     </option>
                   ))}
                 </select>

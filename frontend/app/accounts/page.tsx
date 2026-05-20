@@ -17,7 +17,7 @@ interface AccountSummary {
   balance: number;
   status_cd: string;
   hidden: boolean;
-  masked_account_no: string;
+  account_no: string;
 }
 
 interface AccountListData {
@@ -81,12 +81,12 @@ function AccountsContent() {
                     ) : null}
                   </div>
                   <CardTitle className="text-base">
-                    {acct.alias ?? acct.masked_account_no}
+                    {acct.alias ?? acct.account_no}
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="pt-0">
                   <div className="font-mono text-xs text-muted-foreground">
-                    {acct.masked_account_no}
+                    {acct.account_no}
                   </div>
                   <div className="num-tabular text-xl font-semibold">{fmt(acct.balance)}</div>
                 </CardContent>
@@ -105,7 +105,7 @@ function AccountsContent() {
             {hidden.map((a) => (
               <li key={a.account_token}>
                 <Link href={`/accounts/${a.account_token}`} className="text-muted-foreground hover:text-foreground">
-                  {a.alias ?? a.masked_account_no}
+                  {a.alias ?? a.account_no}
                 </Link>
               </li>
             ))}

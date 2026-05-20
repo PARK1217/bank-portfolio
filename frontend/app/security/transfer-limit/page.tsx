@@ -21,7 +21,7 @@ interface AccountSummary {
   currency: string;
   balance: number;
   hidden: boolean;
-  masked_account_no: string;
+  account_no: string;
   status_cd: string;
 }
 interface AccountListData {
@@ -144,7 +144,7 @@ function LimitsList() {
               <CardTitle className="text-base">
                 {a.alias ?? a.account_type_cd}
               </CardTitle>
-              <div className="font-mono text-xs text-muted-foreground">{a.masked_account_no}</div>
+              <div className="font-mono text-xs text-muted-foreground">{a.account_no}</div>
             </CardHeader>
             <CardContent className="pt-0">
               <LimitForm accountToken={a.account_token} />

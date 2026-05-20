@@ -16,7 +16,7 @@ const KEY = "bank.transfer.draft";
 export interface TransferDraft {
   from_account_token: string;
   from_account_label?: string;
-  from_account_masked?: string;
+  from_account_no?: string;
   to_bank_cd: string;
   to_bank_name?: string;
   to_account_no: string;
