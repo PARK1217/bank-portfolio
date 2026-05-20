@@ -4,11 +4,13 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from .api.auth import router as auth_router
 from .config import settings
 from .db import close_pool, get_pool, init_pool
 from .exceptions import BankingException
 from .logging_setup import get_logger, setup_logging
 from .middleware import REQUEST_ID_HEADER, RequestContextMiddleware
+from .service.token import InMemoryTokenStore, TokenService
 
 setup_logging()
 log = get_logger("app")
@@ -18,6 +20,8 @@ log = get_logger("app")
 async def lifespan(app: FastAPI):
     log.info("app_startup")
     await init_pool()
+    # 단기 토큰 저장소 — 개발 단계는 In-Memory. 운영은 RedisTokenStore 로 교체.
+    app.state.token_service = TokenService(InMemoryTokenStore())
     yield
     await close_pool()
     log.info("app_shutdown")
@@ -71,6 +75,9 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
             "request_id": getattr(request.state, "request_id", None),
         },
     )
+
+
+app.include_router(auth_router)
 
 
 @app.get("/")
