@@ -6,7 +6,8 @@ from fastapi.responses import JSONResponse
 
 from .api.account import router as account_router
 from .api.auth import router as auth_router
-1from .api.auto_transfer import router as auto_transfer_router
+from .api.auto_transfer import router as auto_transfer_router
+from .api.chatbot import router as chatbot_router
 from .api.dashboard import router as dashboard_router
 from .api.loan import router as loan_router
 from .api.product import router as product_router
@@ -30,6 +31,17 @@ async def lifespan(app: FastAPI):
     await init_pool()
     # 단기 토큰 저장소 — 개발 단계는 In-Memory. 운영은 RedisTokenStore 로 교체.
     app.state.token_service = TokenService(InMemoryTokenStore())
+    # 챗봇 RAG 코퍼스 (FAQ + 약관) in-memory 로드 — `/app/data` 마운트 또는 docker cp 필요.
+    from pathlib import Path
+
+    from .service.chatbot import corpora_stats, load_corpora
+
+    data_dir = Path("/app/data")
+    if data_dir.exists():
+        load_corpora(data_dir)
+        log.info("chatbot_corpora_loaded", **corpora_stats())
+    else:
+        log.warning("chatbot_corpora_missing", data_dir=str(data_dir))
     yield
     await close_pool()
     log.info("app_shutdown")
@@ -100,6 +112,7 @@ api.include_router(product_router)
 api.include_router(auto_transfer_router)
 api.include_router(transfer_router)
 api.include_router(loan_router)
+api.include_router(chatbot_router)
 app.include_router(api)
 
 
