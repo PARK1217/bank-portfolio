@@ -10,6 +10,7 @@ const ROUTE_SECTIONS: { title: string; items: { href: string; code: string; labe
     title: "인증 / 가입",
     items: [
       { href: "/login", code: "AU-001", label: "로그인" },
+      { href: "/signup", code: "AU-pre", label: "가입 사전 게이트" },
       { href: "/signup/terms", code: "AU-002", label: "약관 동의" },
       { href: "/signup/verify", code: "AU-003", label: "본인인증" },
       { href: "/signup/account", code: "AU-004", label: "계정정보" },
