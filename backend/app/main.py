@@ -8,6 +8,7 @@ from .api.account import router as account_router
 from .api.auth import router as auth_router
 from .api.dashboard import router as dashboard_router
 from .api.product import router as product_router
+from .api.signup import router as signup_router
 from .api.transactions import router as transactions_router
 from .api.transfer import router as transfer_router
 from .config import settings
@@ -83,6 +84,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 
 
 app.include_router(auth_router)
+app.include_router(signup_router)
 app.include_router(account_router)
 app.include_router(transactions_router)
 app.include_router(dashboard_router)
