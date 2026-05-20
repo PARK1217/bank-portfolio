@@ -150,7 +150,8 @@ class OpenForeignRequest(BaseModel):
 
 class ProductCompleteResponse(BaseModel):
     account_token: str
-    masked_account_no: str
+    # 방금 개설한 본인 계좌 — 평문 노출 (가이드 §3.9).
+    account_no: str
     product_name: str
 
 

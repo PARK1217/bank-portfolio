@@ -252,7 +252,7 @@ def to_account_summary(row: AccountRow, account_token: str) -> AccountSummary:
         balance=row.balance,
         status_cd=row.account_status_cd or "UNKNOWN",
         hidden=(row.hidden_yn == "Y"),
-        masked_account_no=mask_account_no(row.account_no),
+        account_no=row.account_no,
     )
 
 

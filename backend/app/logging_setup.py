@@ -24,26 +24,51 @@ import structlog
 
 
 # --- 마스킹 -----------------------------------------------------------------
+#
+# 공통 규칙 (가이드라인 §3.9):
+#   - 식별 가능한 디지트 시퀀스에 대해 **뒤에서 3번째 자리부터 4자리**를 마스킹.
+#   - **하이픈은 자릿수 계산에서 제외**, 위치는 그대로 보존.
+#   - 디지트 6자 이하는 fallback 으로 전체 마스킹.
+#
+# 예시:
+#   110-001-123456     → 110-001-****56
+#   900101-1234567     → 900101-1****67
+#   1234-5678-9012-3456 → 1234-5678-90**-**56
+#   12345              → ***** (6자 이하 fallback)
+
+
+def _mask_middle(v: Any) -> str:
+    """뒤에서 3번째 자리부터 4자리를 마스킹. 하이픈은 제외하고 위치 보존."""
+    s = str(v)
+    digit_count = sum(1 for c in s if c != "-")
+    if digit_count <= 6:
+        return "".join("-" if c == "-" else "*" for c in s)
+    mask_start = digit_count - 6  # 디지트 인덱스 기준 마스킹 시작 (inclusive)
+    mask_end = digit_count - 2    # exclusive
+    out = []
+    di = 0
+    for c in s:
+        if c == "-":
+            out.append("-")
+            continue
+        out.append("*" if mask_start <= di < mask_end else c)
+        di += 1
+    return "".join(out)
+
 
 def mask_account_no(v: Any) -> str:
-    """`110-001-123456` → `110-001-****56` (뒤 2자만 노출)."""
-    s = str(v)
-    if len(s) <= 2:
-        return "*" * len(s)
-    return "*" * (len(s) - 2) + s[-2:]
+    """계좌번호 마스킹. 예: `110-001-123456` → `110-001-****56`."""
+    return _mask_middle(v)
 
 
 def mask_ssn(v: Any) -> str:
-    """`900101-1234567` → `900101-1******`."""
-    s = str(v)
-    if "-" in s:
-        head, _, tail = s.partition("-")
-        if not tail:
-            return s
-        return f"{head}-{tail[0]}" + "*" * (len(tail) - 1)
-    if len(s) <= 7:
-        return "*" * len(s)
-    return s[:7] + "*" * (len(s) - 7)
+    """주민등록번호 마스킹. 예: `900101-1234567` → `900101-1****67`."""
+    return _mask_middle(v)
+
+
+def mask_card_no(v: Any) -> str:
+    """카드번호 마스킹. 예: `1234-5678-9012-3456` → `1234-5678-90**-**56`."""
+    return _mask_middle(v)
 
 
 def mask_password(_: Any) -> str:
@@ -56,18 +81,6 @@ def mask_jwt(v: Any) -> str:
     if len(s) <= 3:
         return "***"
     return s[:3] + "***"
-
-
-def mask_card_no(v: Any) -> str:
-    """`1234-5678-9012-3456` → `1234-****-****-3456`."""
-    s = str(v)
-    if "-" in s:
-        parts = s.split("-")
-        if len(parts) == 4:
-            return f"{parts[0]}-****-****-{parts[3]}"
-    if len(s) <= 8:
-        return "*" * len(s)
-    return s[:4] + "*" * (len(s) - 8) + s[-4:]
 
 
 _KEY_MASKERS: dict[str, Callable[[Any], str]] = {

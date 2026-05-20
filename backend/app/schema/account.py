@@ -20,7 +20,9 @@ class AccountSummary(BaseModel):
     balance: int = Field(..., description="원화 KRW 정수. 외화는 별도 표현")
     status_cd: str
     hidden: bool = False
-    masked_account_no: str = Field(..., examples=["110-001-****01"])
+    # 본인 계좌 컨텍스트 — 평문 노출 (가이드 §3.9: 본인 화면은 평문).
+    # 거래 상대방 계좌는 MaskedAccount 스키마로 별도 표현.
+    account_no: str = Field(..., examples=["110-001-123456"])
 
 
 class AccountListResponse(BaseModel):
