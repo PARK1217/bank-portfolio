@@ -7,15 +7,23 @@
 
 from __future__ import annotations
 
+import base64
+import secrets
 from datetime import datetime
 
 import structlog
 from fastapi import APIRouter, Depends
 
 from ..db import get_pool
-from ..errors import E_UNAUTHORIZED
-from ..exceptions import AuthError
-from ..schema.auth import LoginRequest, LoginResponse, LogoutResponse
+from ..errors import E_UNAUTHORIZED, E_VALIDATION
+from ..exceptions import AuthError, BusinessError
+from ..schema.auth import (
+    LoginRequest,
+    LoginResponse,
+    LogoutResponse,
+    OtpSetupInitResponse,
+    OtpSetupVerifyRequest,
+)
 from ..service.account import fetch_accounts_for, issue_account_tokens
 from ..service.auth import (
     CurrentCustomer,
@@ -92,6 +100,49 @@ async def logout(
     revoked = await tokens.revoke_all_for_customer(user.customer_no)
     log.info("logout_success", revoked=revoked)
     return LogoutResponse(revoked_tokens=revoked)
+
+
+# ---------------------------------------------------------------------------
+# AU-010 OTP 등록 — TOTP 표준 (RFC 6238).
+# 운영은 pyotp 등으로 실시간 검증. 데모 단계는 secret 발급 + mock 6자리 검증.
+# secret/활성 상태는 in-memory — 운영은 CUSTOMER 테이블에 OTP_SECRET 컬럼 추가.
+# ---------------------------------------------------------------------------
+
+_otp_secrets: dict[int, dict] = {}
+
+
+def _gen_otp_secret() -> str:
+    return base64.b32encode(secrets.token_bytes(20)).decode().rstrip("=")
+
+
+@router.post("/otp/init", response_model=OtpSetupInitResponse)
+async def otp_init(
+    user: CurrentCustomer = Depends(current_customer),
+) -> OtpSetupInitResponse:
+    s = _gen_otp_secret()
+    _otp_secrets[user.customer_no] = {"secret": s, "active": False}
+    uri = (
+        f"otpauth://totp/bank-portfolio:{user.email}"
+        f"?secret={s}&issuer=bank-portfolio&algorithm=SHA1&digits=6&period=30"
+    )
+    log.info("otp_init", customer_no=user.customer_no)
+    return OtpSetupInitResponse(secret=s, otpauth_uri=uri)
+
+
+@router.post("/otp/verify")
+async def otp_verify(
+    req: OtpSetupVerifyRequest,
+    user: CurrentCustomer = Depends(current_customer),
+) -> dict:
+    entry = _otp_secrets.get(user.customer_no)
+    if entry is None:
+        raise BusinessError(E_VALIDATION, "먼저 OTP 등록을 시작해주세요.")
+    # 데모: 6자리 숫자 형식만 검증 (실 TOTP HOTP 계산은 운영에서).
+    if not (req.otp_code.isdigit() and len(req.otp_code) == 6):
+        raise BusinessError(E_VALIDATION, "6자리 OTP 코드가 올바르지 않습니다.")
+    entry["active"] = True
+    log.info("otp_active", customer_no=user.customer_no)
+    return {"active": True}
 
 
 @router.get("/me")
