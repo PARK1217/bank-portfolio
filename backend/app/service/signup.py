@@ -23,6 +23,7 @@ from ..errors import (
 )
 from ..exceptions import BusinessError, ConflictError, NotFoundError
 from .auth.passwords import hash_password
+from .notification import insert_notification as _insert_notification
 
 
 class SignupSessionData(TypedDict):
@@ -187,6 +188,23 @@ async def create_account(
             )
 
     _sessions.pop(verification_id, None)
+
+    # 가입 환영 알림 (실패해도 가입 응답에는 영향 X)
+    try:
+        await _insert_notification(
+            int(customer_no),
+            type_cd="SIGNUP",
+            title="가입을 환영합니다",
+            body=(
+                "본행에 가입해주셔서 감사합니다. 첫 계좌 개설로 시작하시거나, "
+                "왼쪽 메뉴에서 자주 쓰는 기능을 확인해보세요."
+            ),
+            reference_type="SIGNUP",
+        )
+    except Exception:
+        # signup.py 모듈에는 log 인스턴스가 없음 — silent skip.
+        pass
+
     return int(customer_no)
 
 
