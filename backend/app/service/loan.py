@@ -28,6 +28,7 @@ from ..errors import (
 )
 from ..exceptions import BusinessError, ConflictError, NotFoundError
 from .account import fetch_account
+from .notification import insert_notification as _insert_notification
 from .token import ResourceType, TokenService
 
 DSR_LIMIT_PCT = 40.0
@@ -269,6 +270,21 @@ async def sign_contract(
 
     loan_token = await tokens.issue(ResourceType.LOAN, contract_no, customer_no)
     monthly = _monthly_payment(amount, rate, period_months)
+
+    try:
+        await _insert_notification(
+            customer_no,
+            type_cd="LOAN",
+            title="대출 약정 완료",
+            body=(
+                f"{amount:,}원 대출 약정이 체결되었습니다. "
+                f"월 납입 예정 {monthly:,}원. 실행 화면에서 실행해주세요."
+            ),
+            reference_type="LOAN_CONTRACT",
+        )
+    except Exception:
+        log.exception("contract_notification_failed", contract_no=contract_no)
+
     return loan_token, contract_no, rate, monthly
 
 
@@ -410,6 +426,17 @@ async def execute_loan(
             await _create_repay_schedule(
                 conn, contract_no, principal, rate, period_months, now_dt
             )
+
+        try:
+            await _insert_notification(
+                customer_no,
+                type_cd="LOAN",
+                title="대출 실행 완료",
+                body=f"{principal:,}원 대출 자금이 입금 계좌로 지급되었습니다.",
+                reference_type="LOAN_EXEC",
+            )
+        except Exception:
+            log.exception("loan_exec_notification_failed", contract_no=contract_no)
 
         return int(next_seq), principal, int(tx_id), now_dt, False
 
