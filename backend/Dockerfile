@@ -8,8 +8,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # 의존성
+# torch CPU 휠을 받기 위해 PyTorch CPU 인덱스를 보조로 사용 (이미지 ~수백 MB 절감).
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir \
+        --extra-index-url https://download.pytorch.org/whl/cpu \
+        -r requirements.txt
 
 # 앱 코드 (volume으로 마운트되지만 빌드 시점에도 복사)
 COPY app/ ./app/

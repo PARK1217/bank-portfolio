@@ -8,3 +8,9 @@ bcrypt==4.2.0
 pyjwt==2.9.0
 python-multipart==0.0.10
 structlog==24.4.0
+httpx==0.27.2
+
+# RAG (가이드 §3.7) — 한국어 임베딩 + pgvector
+# torch 는 sentence-transformers 가 자동으로 가져온다 (Dockerfile에서 CPU 휠 인덱스 지정).
+sentence-transformers==3.2.1
+pgvector==0.3.6

@@ -1,6 +1,8 @@
 services:
   postgres:
-    image: postgres:16-alpine
+    # pgvector 확장이 사전 빌드된 공식 이미지 (Debian bookworm + pg16).
+    # 가이드 §3.7 RAG 의 벡터 유사도 검색은 pgvector `vector(768)` + `<=>` 코사인 거리에 의존.
+    image: pgvector/pgvector:pg16
     container_name: bank-portfolio-postgres
     restart: unless-stopped
     environment:
@@ -33,6 +35,11 @@ services:
       JWT_ALGORITHM: HS256
       JWT_EXPIRE_MINUTES: 60
       CORS_ORIGINS: http://localhost:3001
+      # LLM API (host `.env` 에서 보간, gitignore). 미설정 시 fallback 응답.
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      MISTRAL_API_KEY: ${MISTRAL_API_KEY:-}
+      HUGGINGFACE_API_KEY: ${HUGGINGFACE_API_KEY:-}
+      LLM_PROVIDER: ${LLM_PROVIDER:-groq}
     ports:
       - "8001:8000"  # 기존 banking 스택(8000)과 분리
     depends_on:
@@ -40,6 +47,7 @@ services:
         condition: service_healthy
     volumes:
       - ./backend/app:/app/app  # 핫리로드용
+      - ./data:/app/data:ro     # RAG 코퍼스 (FAQ·약관) read-only 마운트
 
   frontend:
     build:

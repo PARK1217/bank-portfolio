@@ -8,6 +8,13 @@ class Settings(BaseSettings):
     JWT_EXPIRE_MINUTES: int = 60
     CORS_ORIGINS: str = "http://localhost:3001"
 
+    # LLM API — `groq` 우선(가이드 §0 Llama 3.1 호환), `mistral`/`huggingface` fallback.
+    # 모든 키 비어있으면 챗봇은 키워드 기반 답변만 사용 (가이드 §3.7 환각 방지 그대로).
+    LLM_PROVIDER: str = "groq"
+    GROQ_API_KEY: str = ""
+    MISTRAL_API_KEY: str = ""
+    HUGGINGFACE_API_KEY: str = ""
+
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=True)
 
     @property

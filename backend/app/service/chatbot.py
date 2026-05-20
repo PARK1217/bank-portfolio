@@ -1,13 +1,18 @@
 """챗봇 3-tier RAG 백엔드 — CB-001/002/003/005/007.
 
-설계: LLM 호출 없이 키워드 기반 score 매칭으로 가이드 §3.7 환각 방지 패턴 그대로.
-- Tier 1 (KEYWORD): FAQ 질문 거의 일치 (score >= 0.9)
-- Tier 2 (FAQ): FAQ 의미 매칭 (0.7 ~ 0.9)
-- Tier 3 (VECTOR): 약관 본문 매칭 (>= 0.4)
+설계 (가이드 §3.7): 한국어 임베딩 + pgvector 코사인 거리로 RAG.
+- Tier 1 (KEYWORD): FAQ 카테고리 + 코사인 거리 ≤ 0.30 (score ≥ 0.70)
+- Tier 2 (FAQ):     FAQ 카테고리 + 코사인 거리 ≤ 0.50 (score 0.50~0.70)
+- Tier 3 (VECTOR):  TERMS 카테고리 또는 거리 ≤ 0.70 (score ≥ 0.30) + LLM 답변 합성
 - 그 외: "관련 정보를 찾지 못했습니다." (confidence=LOW)
 
-코퍼스: `data/seed-faq.md`, `data/seed-terms/*.md` 앱 시작 시 in-memory 로드.
-세션/메시지: in-memory dict — 운영은 AI_CHATBOT_SESSION/MESSAGE 테이블(v53)로 교체.
+인덱싱:
+    `python -m app.scripts.build_embeddings` → `data/*.md` 청크 → `AI_FAQ`(vector(768)).
+질의 시:
+    `jhgan/ko-sroberta-multitask` 로 쿼리 임베딩 → `AI_FAQ` `<=>` top-k.
+
+list_faq / search_terms 는 in-memory 코퍼스 (단순 목록·문자열 매칭, 시연용).
+세션/메시지는 in-memory dict — 운영은 AI_CHATBOT_SESSION/MESSAGE 로 이관.
 """
 
 from __future__ import annotations
@@ -17,9 +22,43 @@ from datetime import datetime
 from pathlib import Path
 from typing import TypedDict
 
+import structlog
+
+from ..db import get_pool
 from ..errors import E_NOT_FOUND
 from ..exceptions import NotFoundError
+from .llm import chat_completion as _llm_chat_completion
 from .token import ResourceType, TokenService
+
+log = structlog.get_logger("chatbot")
+
+
+# ---------------------------------------------------------------------------
+# 임베딩 모델 — lazy singleton (첫 호출 시 ~수 초 로드, 모델은 ~400MB)
+# ---------------------------------------------------------------------------
+
+_EMBED_MODEL = None
+_EMBED_MODEL_NAME = "jhgan/ko-sroberta-multitask"
+
+
+def _get_embed_model():
+    global _EMBED_MODEL
+    if _EMBED_MODEL is None:
+        from sentence_transformers import SentenceTransformer  # 지연 import (시작 시간 단축)
+
+        _EMBED_MODEL = SentenceTransformer(_EMBED_MODEL_NAME)
+    return _EMBED_MODEL
+
+
+def _vec_literal(vec) -> str:
+    return "[" + ",".join(f"{float(x):.6f}" for x in vec) + "]"
+
+
+def _embed_query(text: str) -> str:
+    """쿼리 텍스트 → pgvector 텍스트 리터럴 (정규화·L2)."""
+    model = _get_embed_model()
+    emb = model.encode([text], normalize_embeddings=True)[0]
+    return _vec_literal(emb)
 
 
 class FaqEntry(TypedDict):
@@ -205,59 +244,88 @@ async def chat_send(
     _NEXT_MESSAGE_ID[0] += 1
     sess["messages"].append(user_msg)
 
-    q = _tokenize(message)
+    # 벡터 검색 — 코사인 거리 작을수록 의미가 가까움 (`<=>` 0 = 동일).
+    query_vec = _embed_query(message)
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            'SELECT "FAQ_ID", "CATEGORY", "QUESTION", "ANSWER", '
+            '"EMBEDDING" <=> $1::vector AS distance '
+            'FROM public."AI_FAQ" '
+            'WHERE "STATUS_CD" = \'ACTIVE\' '
+            '  AND ("DELETE_YN" IS NULL OR "DELETE_YN" = \'N\') '
+            'ORDER BY distance LIMIT 5',
+            query_vec,
+        )
 
-    faq_ranked = sorted(
-        ((_score(q, f["question"]), f) for f in _FAQ_CORPUS),
-        key=lambda x: x[0],
-        reverse=True,
-    )
-    terms_ranked = sorted(
-        ((_score(q, c["clause"] + " " + c["body"][:500]), c) for c in _TERMS_CORPUS),
-        key=lambda x: x[0],
-        reverse=True,
-    )
+    faq_hits = [r for r in rows if r["CATEGORY"] != "TERMS"]
+    terms_hits = [r for r in rows if r["CATEGORY"] == "TERMS"]
+    top_faq = faq_hits[0] if faq_hits else None
+    top_terms = terms_hits[0] if terms_hits else None
+    top_faq_d = float(top_faq["distance"]) if top_faq else 999.0
+    top_terms_d = float(top_terms["distance"]) if top_terms else 999.0
 
-    top_faq = faq_ranked[0] if faq_ranked else (0.0, None)
-    top_terms = terms_ranked[0] if terms_ranked else (0.0, None)
+    def _to_score(d: float) -> float:
+        # 정규화 임베딩 — 코사인 거리 [0, 2], 실제 사용 범위 대략 [0, 1].
+        return max(0.0, 1.0 - float(d))
 
     tier: str | None
     sources: list[dict] = []
-    if top_faq[0] >= 0.7 and top_faq[1] is not None:
-        tier = "KEYWORD" if top_faq[0] >= 0.9 else "FAQ"
-        f = top_faq[1]
-        answer = f["answer"]
+    if top_faq is not None and top_faq_d <= 0.50:
+        tier = "KEYWORD" if top_faq_d <= 0.30 else "FAQ"
+        answer = top_faq["ANSWER"] or ""
         sources.append({
             "doc_token": await tokens.issue(
-                ResourceType.DOC, f"FAQ:{f['faq_id']}", customer_no
+                ResourceType.DOC, f"AI_FAQ:{top_faq['FAQ_ID']}", customer_no
             ),
             "doc_type": "FAQ",
-            "title": f["question"],
+            "title": top_faq["QUESTION"],
             "clause": None,
-            "snippet": f["answer"][:120],
-            "score": round(top_faq[0], 3),
+            "snippet": (top_faq["ANSWER"] or "")[:120],
+            "score": round(_to_score(top_faq_d), 3),
         })
-        confidence = "HIGH" if top_faq[0] >= 0.9 else "MEDIUM"
-    elif top_terms[0] >= 0.4 and top_terms[1] is not None:
+        confidence = "HIGH" if top_faq_d <= 0.30 else "MEDIUM"
+    elif top_terms is not None and top_terms_d <= 0.70:
         tier = "VECTOR"
-        c = top_terms[1]
-        answer = f"관련 약관 [{c['title']} · {c['clause']}] 을 확인하세요."
-        for s, cc in terms_ranked[:3]:
-            if s < 0.2 or cc is None:
+        top_term_rows = []
+        for r in terms_hits[:3]:
+            if float(r["distance"]) > 0.85:
                 break
+            top_term_rows.append(r)
+            title, _, clause = (r["QUESTION"] or "").partition(" · ")
             sources.append({
                 "doc_token": await tokens.issue(
-                    ResourceType.DOC,
-                    f"TERMS:{cc['terms_id']}:{cc['clause']}",
-                    customer_no,
+                    ResourceType.DOC, f"AI_FAQ:{r['FAQ_ID']}", customer_no
                 ),
                 "doc_type": "TERMS",
-                "title": cc["title"],
-                "clause": cc["clause"],
-                "snippet": cc["body"][:120],
-                "score": round(s, 3),
+                "title": title or r["QUESTION"],
+                "clause": clause or None,
+                "snippet": (r["ANSWER"] or "")[:120],
+                "score": round(_to_score(float(r["distance"])), 3),
             })
-        confidence = "MEDIUM" if top_terms[0] >= 0.5 else "LOW"
+        # LLM 자연어 답변 생성 시도 — 실패 시 약관 안내 fallback (가이드 §3.7).
+        llm_answer: str | None = None
+        try:
+            context = "\n\n".join(
+                f"[{r['QUESTION']}]\n{(r['ANSWER'] or '')[:800]}"
+                for r in top_term_rows
+            )
+            system_prompt = (
+                "당신은 한국 은행의 상담 챗봇입니다. 아래 약관/규정 발췌만을 근거로 "
+                "사용자 질문에 한국어로 간결하게(3문장 이내) 답변하세요. "
+                "발췌에 없는 내용은 추측하지 말고 '약관에서 확인되지 않습니다'라고 답하세요."
+            )
+            user_prompt = f"질문: {message}\n\n참고 약관:\n{context}"
+            llm_answer = await _llm_chat_completion(
+                system_prompt, user_prompt, max_tokens=400
+            )
+        except Exception:
+            log.exception("llm_answer_failed")
+        if llm_answer:
+            answer = llm_answer
+        else:
+            answer = f"관련 약관 [{top_terms['QUESTION']}] 을 확인하세요."
+        confidence = "MEDIUM" if top_terms_d <= 0.50 else "LOW"
     else:
         tier = None
         answer = "관련 정보를 찾지 못했습니다. 상담원 연결을 도와드릴까요?"
@@ -370,6 +438,31 @@ async def get_source(
             "version": 1,
             "effective_date": "20260101",
             "clauses": [{"clause": "답변", "body": f["answer"]}],
+        }
+    if kind == "AI_FAQ":
+        # 벡터 검색 결과 토큰 — AI_FAQ 통합 인덱스에서 DB 조회.
+        faq_id = int(parts[1])
+        pool = get_pool()
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                'SELECT "CATEGORY", "QUESTION", "ANSWER" FROM public."AI_FAQ" '
+                'WHERE "FAQ_ID" = $1 AND "STATUS_CD" = \'ACTIVE\'',
+                faq_id,
+            )
+        if row is None:
+            raise NotFoundError(E_NOT_FOUND, "출처를 찾을 수 없습니다.")
+        is_terms = row["CATEGORY"] == "TERMS"
+        if is_terms:
+            title, _, clause = (row["QUESTION"] or "").partition(" · ")
+        else:
+            title, clause = row["QUESTION"] or "", "답변"
+        return {
+            "doc_token": doc_token,
+            "terms_id": faq_id if is_terms else 0,
+            "title": title or row["QUESTION"] or "",
+            "version": 1,
+            "effective_date": "20260101",
+            "clauses": [{"clause": clause or "답변", "body": row["ANSWER"] or ""}],
         }
     raise NotFoundError(E_NOT_FOUND, "출처를 찾을 수 없습니다.")
 
