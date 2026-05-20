@@ -46,7 +46,7 @@ export default function Page() {
       const cred = (await navigator.credentials.create({
         publicKey: {
           challenge: challengeBytes,
-          rp: { name: "본행" },
+          rp: { name: "다온뱅크" },
           user: {
             id: userIdBytes,
             name: challenge.user_id,
@@ -123,7 +123,7 @@ export default function Page() {
               <>
                 <ul className="space-y-1 text-xs text-muted-foreground">
                   <li>· 이 기기·브라우저에만 등록되며 다른 기기로 전송되지 않습니다.</li>
-                  <li>· 생체 정보 자체는 본행 서버에 저장되지 않습니다 (FIDO 표준).</li>
+                  <li>· 생체 정보 자체는 다온뱅크 서버에 저장되지 않습니다 (FIDO 표준).</li>
                   <li>· 분실·기기 변경 시엔 본인 인증 후 재등록이 필요합니다.</li>
                 </ul>
                 <Button type="button" className="w-full" onClick={register} disabled={stage === "BUSY"}>

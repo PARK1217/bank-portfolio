@@ -17,7 +17,7 @@ import { showApiError } from "@/lib/toast";
 // ---------------------------------------------------------------------------
 
 const BANKS: { code: string; name: string }[] = [
-  { code: "020", name: "본행" },
+  { code: "020", name: "다온뱅크" },
   { code: "004", name: "KB국민" },
   { code: "088", name: "신한" },
   { code: "081", name: "하나" },

@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
  *
  * 처리 항목:
  *  - 만 14세 이상 확인 (14세 미만은 친권자 통한 자녀 통장 개설 흐름 안내)
- *  - 본행 기존 거래 안내 (창구 개설 후 비대면 첫 가입 케이스 안내)
+ *  - 다온뱅크 기존 거래 안내 (창구 개설 후 비대면 첫 가입 케이스 안내)
  *  - 외국인·법인은 별도 라우트로 분기
  *  - 본인 명의 가입 확인 (3-bind 자가 점검)
  */
@@ -45,7 +45,7 @@ export default function Page() {
           <div className="font-mono text-xs text-muted-foreground">회원가입 안내 · 사전 확인</div>
           <CardTitle className="mt-1">가입 자격 확인</CardTitle>
           <CardDescription>
-            가입을 진행하기 전 몇 가지 사항을 확인합니다. 이미 본행 회원이시라면 로그인을, 외국인·법인 가입자는 아래 별도 안내를 따라 주세요.
+            가입을 진행하기 전 몇 가지 사항을 확인합니다. 이미 다온뱅크 회원이시라면 로그인을, 외국인·법인 가입자는 아래 별도 안내를 따라 주세요.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
@@ -80,7 +80,7 @@ export default function Page() {
             </div>
             {age14plus === false ? (
               <div className="rounded-md bg-warning/10 p-3 text-xs">
-                만 14세 미만은 본인 가입이 불가합니다. 부모님(친권자)의 본행 회원가입 후{" "}
+                만 14세 미만은 본인 가입이 불가합니다. 부모님(친권자)의 다온뱅크 회원가입 후{" "}
                 <Link href="/products" className="font-medium text-primary hover:underline">
                   미성년 자녀 통장 개설
                 </Link>{" "}
@@ -91,9 +91,9 @@ export default function Page() {
 
           {/* 2. 기존 회원 안내 */}
           <section className="space-y-2">
-            <div className="text-sm font-medium">2. 본행 거래 경험</div>
+            <div className="text-sm font-medium">2. 다온뱅크 거래 경험</div>
             <ul className="space-y-1.5 text-xs text-muted-foreground">
-              <li>· 본행 첫 거래라면 — 그대로 진행하세요.</li>
+              <li>· 다온뱅크 첫 거래라면 — 그대로 진행하세요.</li>
               <li>· 영업점에서 계좌만 개설한 적이 있다면 — 본인 인증 단계에서 자동으로 기존 계좌와 연결됩니다.</li>
               <li>
                 · 이미 가입된 회원이신가요? →{" "}
@@ -113,7 +113,7 @@ export default function Page() {
                 checked={acknowledgeNewMember}
                 onChange={(e) => setAcknowledgeNewMember(e.target.checked)}
               />
-              <span>위 내용을 확인했으며, 본행에 가입된 회원이 아닙니다.</span>
+              <span>위 내용을 확인했으며, 다온뱅크에 가입된 회원이 아닙니다.</span>
             </label>
           </section>
 

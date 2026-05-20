@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 
 
 /**
- * 본행 메인 (로그인 전 진입화면).
+ * 다온뱅크 메인 (로그인 전 진입화면).
  * 시중 은행 사이트의 표준 구조 — 히어로 / 빠른 메뉴 / 추천 상품 / 이벤트·공지 / 고객센터 / 푸터.
  * 개발자 전체 화면 인덱스는 푸터 링크로 `/dev-testpage` 에서 접근.
  */
@@ -58,7 +58,7 @@ const FEATURED_PRODUCTS: {
 const NOTICES: { title: string; tag: string; date: string }[] = [
   { title: "신규 가입 고객 정기예금 우대금리 +0.5%p 이벤트", tag: "이벤트", date: "2026-05-15" },
   { title: "2026년 6월 자동이체 수수료 면제 안내", tag: "공지", date: "2026-05-10" },
-  { title: "본행 콜센터 운영시간 변경 안내", tag: "공지", date: "2026-05-08" },
+  { title: "다온뱅크 콜센터 운영시간 변경 안내", tag: "공지", date: "2026-05-08" },
 ];
 
 const QUICK_SERVICES: { href: string; icon: string; label: string; desc: string }[] = [
@@ -81,7 +81,7 @@ export default function Page() {
       {/* ----------------------------------------- 히어로 */}
       <section className="overflow-hidden rounded-xl border bg-gradient-to-br from-primary/10 via-card to-card px-6 py-10 sm:px-10 sm:py-14">
         <div className="font-mono text-xs uppercase tracking-wider text-muted-foreground">
-          본행 · Bank Portfolio
+          다온뱅크 · Daon Bank
         </div>
         <h1 className="mt-2 text-3xl font-bold leading-tight tracking-tight sm:text-4xl">
           가장 가까운 은행,
@@ -232,7 +232,7 @@ export default function Page() {
       {/* ----------------------------------------- 푸터 */}
       <footer className="border-t pt-6 text-xs text-muted-foreground">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-          <span className="font-semibold text-foreground">bank-portfolio</span>
+          <span className="font-semibold text-foreground">다온뱅크</span>
           <Link href="/terms" className="hover:text-foreground">약관</Link>
           <Link href="/terms/7" className="hover:text-foreground">개인정보처리방침</Link>
           <Link href="/terms/8" className="hover:text-foreground">마케팅 동의</Link>

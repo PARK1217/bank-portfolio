@@ -5,7 +5,7 @@ import { NavUser } from "@/components/nav-user";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "bank-portfolio",
+  title: "다온뱅크",
   description: "은행 도메인 포트폴리오 — FastAPI · Next.js · PostgreSQL",
 };
 
@@ -21,7 +21,7 @@ export default function RootLayout({
           <header className="border-b bg-card">
             <div className="container flex h-14 items-center justify-between">
               <Link href="/" className="text-sm font-semibold tracking-tight">
-                bank-portfolio
+                다온뱅크
               </Link>
               <nav className="flex items-center gap-4 text-xs text-muted-foreground">
                 <Link href="/dashboard" className="hover:text-foreground">대시보드</Link>

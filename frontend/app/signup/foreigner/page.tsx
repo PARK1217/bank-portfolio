@@ -203,7 +203,7 @@ export default function Page() {
               />
               <span>
                 I agree to the Terms of Service, Privacy Policy, and consent to credit information collection.
-                (본행 약관 동의)
+                (다온뱅크 약관 동의)
               </span>
             </label>
             <Button type="submit" className="w-full" disabled={!canSubmit}>

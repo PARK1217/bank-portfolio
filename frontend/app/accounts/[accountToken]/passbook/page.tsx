@@ -280,7 +280,7 @@ function PassbookContent({ token }: { token: string }) {
           ) : (
             <div className="overflow-hidden rounded-md border">
               <PassbookSvg
-                bankName="본행 통장"
+                bankName="다온뱅크 통장"
                 maskedAccountNo={data.account_token.slice(0, 12).toUpperCase()}
                 holderName="고객"
                 page={data.page}
