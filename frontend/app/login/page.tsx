@@ -1,14 +1,22 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { showApiError } from "@/lib/toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+
+/** 안전한 next path 검증 — open redirect 방지 (외부 도메인 / 스킴 / //path 차단). */
+function safeNextPath(raw: string | null): string {
+  if (!raw) return "/dashboard";
+  if (!raw.startsWith("/")) return "/dashboard";
+  if (raw.startsWith("//")) return "/dashboard";
+  return raw;
+}
 
 /** SCR-AU-001 로그인 응답 — backend/app/schema/auth.py LoginResponse 와 동일. */
 interface LoginResponse {
@@ -19,8 +27,9 @@ interface LoginResponse {
   account_tokens: string[];
 }
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { signIn } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -37,7 +46,8 @@ export default function LoginPage() {
         { token: null }, // 로그인 자체엔 기존 JWT 부착 X
       );
       signIn(res.access_token, res.customer_no);
-      router.push(res.requires_device_otp ? "/setup/otp" : "/dashboard");
+      const next = safeNextPath(searchParams.get("next"));
+      router.push(res.requires_device_otp ? "/setup/otp" : next);
     } catch (err) {
       showApiError(err, "로그인에 실패했습니다.");
     } finally {
@@ -46,8 +56,7 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="container max-w-md py-16 animate-fade-in">
-      <Card>
+    <Card>
         <CardHeader>
           <div className="font-mono text-xs text-muted-foreground">SCR-AU-001</div>
           <CardTitle className="mt-1">로그인</CardTitle>
@@ -100,6 +109,15 @@ export default function LoginPage() {
           </form>
         </CardContent>
       </Card>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <main className="container max-w-md py-16 animate-fade-in">
+      <Suspense fallback={<Card><CardHeader><CardTitle>로그인</CardTitle></CardHeader></Card>}>
+        <LoginForm />
+      </Suspense>
     </main>
   );
 }
