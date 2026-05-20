@@ -57,7 +57,7 @@ interface ProductDetailData {
 const TYPE_LABEL: Record<string, string> = {
   SAVING: "입출금",
   DEPOSIT: "정기예금",
-  INSTALLMENT: "적금",
+  INSTALL: "적금",     // DB PRODUCT_TYPE_CD varchar(8) 한도
   LOAN: "대출",
 };
 
@@ -67,7 +67,7 @@ function openCtaTarget(productId: number, type: string): { href: string; label: 
   switch (type) {
     case "SAVING":
     case "DEPOSIT":
-    case "INSTALLMENT":
+    case "INSTALL":      // DB varchar(8) 한도 — URL 슬러그는 그대로 /open-installment
       // 약관 동의를 거쳐 type-specific open 페이지로
       return { href: `/products/${productId}/terms`, label: "가입하기" };
     case "LOAN":

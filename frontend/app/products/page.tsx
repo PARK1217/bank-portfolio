@@ -31,14 +31,14 @@ const TYPE_FILTERS: { code: string; label: string }[] = [
   { code: "ALL", label: "전체" },
   { code: "SAVING", label: "입출금" },
   { code: "DEPOSIT", label: "정기예금" },
-  { code: "INSTALLMENT", label: "적금" },
+  { code: "INSTALL", label: "적금" },     // DB PRODUCT_TYPE_CD varchar(8) 한도
   { code: "LOAN", label: "대출" },
 ];
 
 const TYPE_LABEL: Record<string, string> = {
   SAVING: "입출금",
   DEPOSIT: "정기예금",
-  INSTALLMENT: "적금",
+  INSTALL: "적금",
   LOAN: "대출",
 };
 
