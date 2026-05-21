@@ -16,7 +16,7 @@ from datetime import datetime
 
 import pyotp
 import structlog
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Path
 from pydantic import BaseModel, Field
 
 from ..db import get_pool
@@ -197,7 +197,8 @@ async def list_fds_alerts(
 
 @router.post("/fds-alerts/{fds_id}/confirm")
 async def confirm_fds_alert(
-    fds_id: int,
+    # FDS_DETECTION.DETECT_SEQ 가 smallint(int16) 라 32767 초과 시 asyncpg DataError.
+    fds_id: int = Path(..., ge=1, le=32767),
     user: CurrentCustomer = Depends(current_customer),
 ) -> dict:
     await confirm_alert(user.customer_no, fds_id)
@@ -206,7 +207,7 @@ async def confirm_fds_alert(
 
 @router.post("/fds-alerts/{fds_id}/report")
 async def report_fds_alert(
-    fds_id: int,
+    fds_id: int = Path(..., ge=1, le=32767),
     user: CurrentCustomer = Depends(current_customer),
 ) -> dict:
     await report_alert(user.customer_no, fds_id)
