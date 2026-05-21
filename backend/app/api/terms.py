@@ -70,14 +70,20 @@ def _yyyymmdd_to_iso(s: str | None) -> str:
 
 
 def _load_body_for(terms_id: int) -> str | None:
-    """data/seed-terms/{NN}-*.md 파일에서 본문 로드. frontmatter 제거."""
+    """data/seed-terms/{NN..}-*.md 파일에서 본문 로드. frontmatter 제거.
+
+    파일명 prefix 규약:
+      - 공통약관 (terms_id 1~9): `01-credit-basic.md`, `02-household-loan.md` ... (zero-pad 2자리)
+      - 상품특약 (terms_id 1101~1408 = 1000 + product_id): `1101-saving-basic.md` ... (패딩 없음)
+    """
     if not _SEED_TERMS_DIR.exists():
         return None
-    prefix = f"{terms_id:02d}-"
-    for fp in _SEED_TERMS_DIR.iterdir():
-        if fp.name.startswith(prefix) and fp.suffix == ".md":
-            text = fp.read_text(encoding="utf-8")
-            return _FRONTMATTER_RE.sub("", text).strip()
+    # 두 가지 prefix 모두 시도 (공통약관 호환)
+    for prefix in (f"{terms_id:02d}-", f"{terms_id}-"):
+        for fp in _SEED_TERMS_DIR.iterdir():
+            if fp.name.startswith(prefix) and fp.suffix == ".md":
+                text = fp.read_text(encoding="utf-8")
+                return _FRONTMATTER_RE.sub("", text).strip()
     return None
 
 
