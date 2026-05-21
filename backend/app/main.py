@@ -6,11 +6,13 @@ from fastapi.responses import JSONResponse
 
 from .api.account import router as account_router
 from .api.account_open import router as account_open_router
+from .api.admin_loan import router as admin_loan_router
 from .api.auth import router as auth_router, setup_router
 from .api.auto_transfer import router as auto_transfer_router
 from .api.chatbot import router as chatbot_router
 from .api.favorite_account import router as favorite_account_router
 from .api.dashboard import router as dashboard_router
+from .api.device import router as device_router
 from .api.limit_change import router as limit_change_router
 from .api.loan import router as loan_router
 from .api.notice import router as notice_router
@@ -153,6 +155,7 @@ api = APIRouter(prefix="/api")
 api.include_router(auth_router)
 api.include_router(setup_router)
 api.include_router(security_router)
+api.include_router(device_router)
 api.include_router(password_router)
 api.include_router(signup_router)
 api.include_router(account_router)
@@ -176,6 +179,7 @@ api.include_router(favorite_account_router)
 api.include_router(auto_transfer_router)
 api.include_router(transfer_router)
 api.include_router(loan_router)
+api.include_router(admin_loan_router)
 api.include_router(chatbot_router)
 api.include_router(notification_router)
 api.include_router(notice_router)
