@@ -378,6 +378,101 @@ async def open_foreign(
 # 공동명의 개설 (JOINT)
 # ---------------------------------------------------------------------------
 
+# UI 위임 권한 코드 → DELEGATION 컬럼 매핑. 정의되지 않은 코드는 무시.
+_JOINT_POWER_COLUMN = {
+    "INQUIRY": "INQUIRY_PERM",
+    "WITHDRAW": "WITHDRAW_PERM",
+    "TRANSFER": "TRANSFER_PERM",
+    "CLOSE": "CLOSE_PERM",
+    "LIMIT_CHANGE": "LIMIT_CHANGE_PERM",
+}
+
+
+async def _persist_joint_participants(
+    conn,
+    *,
+    account_no: str,
+    primary_customer_no: int,
+    co_owners: list[JointOwner],
+) -> dict:
+    """CONTRACT_PARTICIPANT 행을 본인+공동명의자 만큼, DELEGATION 행을 권한 있는 공동명의자마다 INSERT."""
+    primary_party = await conn.fetchval(
+        'SELECT "PARTY_ID" FROM public."CUSTOMER" WHERE "CUSTOMER_NO" = $1',
+        primary_customer_no,
+    )
+    if primary_party is None:
+        raise BusinessError(E_VALIDATION, "본인 고객 정보가 확인되지 않습니다.")
+
+    if primary_customer_no in {o.customer_no for o in co_owners}:
+        raise BusinessError(E_VALIDATION, "본인은 공동명의자 목록에 포함할 수 없어요.")
+
+    co_party_rows = await conn.fetch(
+        'SELECT "CUSTOMER_NO", "PARTY_ID" FROM public."CUSTOMER" '
+        'WHERE "CUSTOMER_NO" = ANY($1::bigint[]) AND "PARTY_ID" IS NOT NULL',
+        [o.customer_no for o in co_owners],
+    )
+    co_party_map = {int(r["CUSTOMER_NO"]): int(r["PARTY_ID"]) for r in co_party_rows}
+    missing = [o.customer_no for o in co_owners if o.customer_no not in co_party_map]
+    if missing:
+        raise BusinessError(
+            E_VALIDATION, f"공동명의자 고객번호를 찾을 수 없어요: {missing}"
+        )
+
+    today = date.today().strftime("%Y%m%d")
+    total = 1 + len(co_owners)
+    share = round(1.0 / total, 4)
+
+    participant_sql = (
+        'INSERT INTO public."CONTRACT_PARTICIPANT" '
+        '("CONTRACT_NO","PARTY_ID","ROLE_TYPE_ID","PARTICIPANT_SEQ","SHARE_RATIO",'
+        ' "PARTICIPATE_START_DATE","PARTICIPATE_STATUS_CD","JOINT_LIABILITY_YN","CREATED_BY") '
+        "VALUES ($1,$2,$3,$4,$5,$6,'ACTIVE','Y','SYSTEM')"
+    )
+    await conn.execute(
+        participant_sql, account_no, primary_party, "OWNER", 1, share, today
+    )
+    for idx, owner in enumerate(co_owners, start=2):
+        await conn.execute(
+            participant_sql,
+            account_no,
+            co_party_map[owner.customer_no],
+            "JOINT",
+            idx,
+            share,
+            today,
+        )
+
+    delegations = 0
+    for owner in co_owners:
+        codes = [c for c in owner.delegation_power_codes if c in _JOINT_POWER_COLUMN]
+        if not codes:
+            continue
+        codes_set = set(codes)
+        perm = lambda key: "Y" if key in codes_set else "N"  # noqa: E731
+        next_id = await conn.fetchval(
+            'SELECT COALESCE(MAX("DELEGATION_ID"), 30000) + 1 FROM public."DELEGATION"'
+        )
+        await conn.execute(
+            'INSERT INTO public."DELEGATION" '
+            '("DELEGATION_ID","TARGET_CUST_NO","AGENT_CUST_NO","ROLE_TYPE_CD",'
+            ' "INQUIRY_PERM","WITHDRAW_PERM","TRANSFER_PERM","CLOSE_PERM",'
+            ' "LIMIT_CHANGE_PERM","DELEG_START_DATE","NOTARIZE_YN","CREATED_BY") '
+            "VALUES ($1,$2,$3,'JOINT',$4,$5,$6,$7,$8,$9,'N','SYSTEM')",
+            int(next_id),
+            primary_customer_no,
+            owner.customer_no,
+            perm("INQUIRY"),
+            perm("WITHDRAW"),
+            perm("TRANSFER"),
+            perm("CLOSE"),
+            perm("LIMIT_CHANGE"),
+            today,
+        )
+        delegations += 1
+
+    return {"participants": total, "delegations": delegations, "share_ratio": share}
+
+
 @router.post("/{product_id}/open-joint", response_model=OpenAccountResponse)
 async def open_joint(
     product_id: int,
@@ -401,6 +496,12 @@ async def open_joint(
                 password_plain=None,
                 alias=req.alias,
             )
+            persist_stats = await _persist_joint_participants(
+                conn,
+                account_no=account_no,
+                primary_customer_no=user.customer_no,
+                co_owners=req.co_owners,
+            )
 
     account_token = await tokens.issue("ACCOUNT", account_no, user.customer_no)
     log.info(
@@ -410,8 +511,10 @@ async def open_joint(
         account_no=account_no,
         co_owners=[(o.customer_no, o.role_cd, o.delegation_power_codes) for o in req.co_owners],
         attachments=req.attachment_ids,
+        participants=persist_stats["participants"],
+        delegations=persist_stats["delegations"],
+        share_ratio=persist_stats["share_ratio"],
     )
-    # ACCOUNT_PARTY_ROLE / PARTY_ROLE 실 INSERT 는 후속 작업 (DB 스키마 매핑 확인 필요).
     return OpenAccountResponse(account_token=account_token)
 
 
