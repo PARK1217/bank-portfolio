@@ -2,23 +2,43 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ApiError, api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { Button } from "@/components/ui/button";
 import { IdleCountdown } from "@/components/idle-countdown";
 
 /**
- * 우측 상단 인증 상태 + 로그아웃.
- * 미로그인  → "로그인" 링크
- * 로그인 됨 → "고객 #N · 로그아웃"
+ * 우측 상단 사용자 메뉴 — 드롭다운.
+ *   미로그인 → "로그인" 링크
+ *   로그인   → "고객 #N ▾" 클릭 시 드롭다운 (보안설정 / 상품 / 알림 / 공지·이벤트 / 로그아웃)
+ *
+ * 의존성 최소화: radix/headless ui 없이 useState + outside-click + Escape 닫힘.
  */
 export function NavUser() {
   const { isAuthenticated, customerNo, signOut, isReady } = useAuth();
   const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+
+  // 외부 클릭/포커스/Escape 시 닫기.
+  useEffect(() => {
+    if (!open) return;
+    function onClickAway(e: MouseEvent) {
+      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false);
+    }
+    function onEsc(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("mousedown", onClickAway);
+    document.addEventListener("keydown", onEsc);
+    return () => {
+      document.removeEventListener("mousedown", onClickAway);
+      document.removeEventListener("keydown", onEsc);
+    };
+  }, [open]);
 
   if (!isReady) {
-    // localStorage 초기 동기화 전 — 잠시 비워둠 (깜빡임 방지)
     return <div className="h-7 w-20" aria-hidden />;
   }
 
@@ -31,7 +51,7 @@ export function NavUser() {
   }
 
   async function onLogout() {
-    // 서버 측 기기접속이력 UPDATE — 실패해도 클라이언트 폐기는 계속
+    setOpen(false);
     try {
       await api.post("/api/auth/logout", null);
     } catch (err) {
@@ -47,12 +67,69 @@ export function NavUser() {
   return (
     <div className="flex items-center gap-2 text-xs">
       <IdleCountdown />
-      <span className="text-muted-foreground">
-        고객 <span className="font-mono">#{customerNo ?? "-"}</span>
-      </span>
-      <Button variant="ghost" size="sm" onClick={onLogout}>
-        로그아웃
-      </Button>
+      <div ref={wrapRef} className="relative">
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-haspopup="menu"
+          aria-expanded={open}
+          className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+        >
+          <span>
+            고객 <span className="font-mono">#{customerNo ?? "-"}</span>
+          </span>
+          <span aria-hidden className="text-[0.65rem]">▾</span>
+        </button>
+        {open ? (
+          <div
+            role="menu"
+            className="absolute right-0 z-50 mt-1 w-48 overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md"
+          >
+            <MenuLink href="/security" onClick={() => setOpen(false)}>
+              보안 설정
+            </MenuLink>
+            <MenuLink href="/products" onClick={() => setOpen(false)}>
+              상품 카탈로그
+            </MenuLink>
+            <MenuLink href="/notifications" onClick={() => setOpen(false)}>
+              알림 센터
+            </MenuLink>
+            <MenuLink href="/notices" onClick={() => setOpen(false)}>
+              공지사항 · 이벤트
+            </MenuLink>
+            <div className="my-1 border-t" />
+            <button
+              type="button"
+              role="menuitem"
+              onClick={onLogout}
+              className="block w-full px-3 py-2 text-left text-sm hover:bg-accent"
+            >
+              로그아웃
+            </button>
+          </div>
+        ) : null}
+      </div>
     </div>
+  );
+}
+
+function MenuLink({
+  href,
+  onClick,
+  children,
+}: {
+  href: string;
+  onClick?: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <Link
+      href={href}
+      role="menuitem"
+      onClick={onClick}
+      className="block px-3 py-2 text-sm hover:bg-accent"
+    >
+      {children}
+    </Link>
   );
 }
