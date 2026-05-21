@@ -13,7 +13,10 @@ import { useFetch } from "@/lib/use-fetch";
 import { showApiError } from "@/lib/toast";
 
 
-/** SCR-TR-008 예약 이체 — AUTO_TRANSFER(cycle=ONCE) 1회성. 예약일=과거 거부. */
+/** SCR-TR-008 1회 예약 이체 — AUTO_TRANSFER(cycle=ONCE) 1회성.
+ * 사용자는 날짜만 선택. 백엔드 전송 시 현재 시각을 더해 datetime 으로 보낸다
+ * (오늘 선택 = 즉시 실행 의도, 미래 선택 = 그 날짜의 같은 시각).
+ */
 
 interface AccountSummary {
   account_token: string;
@@ -77,24 +80,17 @@ function ScheduledForm() {
     if (accounts.length && !fromToken) setFromToken(accounts[0].account_token);
   }, [accounts, fromToken]);
 
-  // 기본 예약 시각 = 1시간 후
+  // 기본 예약 날짜 = 오늘
   useEffect(() => {
-    if (!scheduledAt) {
-      const d = new Date(Date.now() + 60 * 60 * 1000);
-      d.setSeconds(0, 0);
-      // datetime-local 입력은 로컬 시간 (YYYY-MM-DDTHH:mm)
-      const pad = (n: number) => String(n).padStart(2, "0");
-      const value = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(
-        d.getHours(),
-      )}:${pad(d.getMinutes())}`;
-      setScheduledAt(value);
-    }
+    if (!scheduledAt) setScheduledAt(new Date().toISOString().slice(0, 10));
   }, [scheduledAt]);
 
   const amountN = parseInt(amount.replace(/[^0-9]/g, ""), 10) || 0;
+  // 날짜 기반 비교 — 선택 날짜가 오늘 이전이면 과거.
   const isPast = useMemo(() => {
     if (!scheduledAt) return false;
-    return new Date(scheduledAt).getTime() <= Date.now();
+    const today = new Date().toISOString().slice(0, 10);
+    return scheduledAt < today;
   }, [scheduledAt]);
 
   // 입금 계좌 verify — 즉시이체와 동일한 흐름. ok 외엔 등록 차단.
@@ -148,6 +144,20 @@ function ScheduledForm() {
     if (submitting || !fromToken || !toAccount || amountN <= 0 || isPast || verifyBlocks) return;
     setSubmitting(true);
     try {
+      // 사용자 입력: "YYYY-MM-DD". 백엔드는 datetime 요구 →
+      // 선택 날짜에 현재 시각을 합쳐 ISO8601 로 변환.
+      // 오늘 선택 → 거의 즉시 실행 (워커 다음 tick 1분 내).
+      // 미래 선택 → 그 날짜의 현재 시각 (예: 3일 뒤 오후 2:30).
+      const [y, m, d] = scheduledAt.split("-").map(Number);
+      const now = new Date();
+      const dt = new Date(
+        y,
+        m - 1,
+        d,
+        now.getHours(),
+        now.getMinutes(),
+        now.getSeconds() + 30,
+      );
       const res = await api.post<ScheduledTransferResponse>(
         "/api/transfer/scheduled",
         {
@@ -156,7 +166,7 @@ function ScheduledForm() {
           to_account_no: verifiedAccountNo || toAccount,
           to_holder_name: toHolder || null,
           amount_krw: amountN,
-          scheduled_at: new Date(scheduledAt).toISOString(),
+          scheduled_at: dt.toISOString(),
           memo: memo || null,
         },
         { idempotent: true },
@@ -184,8 +194,8 @@ function ScheduledForm() {
     <Card>
       <CardHeader>
         <div className="font-mono text-xs text-muted-foreground">SCR-TR-008</div>
-        <CardTitle className="mt-1">예약 이체</CardTitle>
-        <CardDescription>지정한 일시에 1회 실행됩니다. 자동이체 목록에서 함께 관리됩니다.</CardDescription>
+        <CardTitle className="mt-1">1회 예약 이체</CardTitle>
+        <CardDescription>지정한 날짜에 1회 실행됩니다. 자동이체 목록에서 함께 관리됩니다.</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={onSubmit} className="space-y-4">
@@ -267,16 +277,21 @@ function ScheduledForm() {
             />
           </Field>
 
-          <Field label="실행 일시" required>
+          <Field label="실행 날짜" required>
             <Input
-              type="datetime-local"
+              type="date"
               value={scheduledAt}
+              min={new Date().toISOString().slice(0, 10)}
               onChange={(e) => setScheduledAt(e.target.value)}
               required
             />
             {isPast ? (
-              <p className="mt-1 text-xs text-destructive">과거 시각은 예약할 수 없습니다.</p>
-            ) : null}
+              <p className="mt-1 text-xs text-destructive">과거 날짜는 예약할 수 없습니다.</p>
+            ) : (
+              <p className="mt-1 text-xs text-muted-foreground">
+                선택한 날짜에 1회 실행됩니다. 오늘 선택 시 곧바로 실행됩니다.
+              </p>
+            )}
           </Field>
 
           <Field label="메모 (선택)">
@@ -292,7 +307,7 @@ function ScheduledForm() {
               ? "등록 중…"
               : verifyStatus === "loading"
               ? "예금주 확인 중…"
-              : "예약 등록"}
+              : "1회 예약 등록"}
           </Button>
         </form>
       </CardContent>
@@ -328,16 +343,19 @@ export default function Page() {
           <Link href="/transfer" className="hover:text-foreground">
             즉시이체
           </Link>
-          <Link href="/transfer/auto" className="hover:text-foreground">
+          <Link href="/transfer/auto" className="font-medium text-foreground">
             자동이체
-          </Link>
-          <Link href="/transfer/scheduled" className="font-medium text-foreground">
-            예약이체
           </Link>
           <Link href="/transfer/favorites" className="hover:text-foreground">
             자주 쓰는 계좌
           </Link>
         </nav>
+        <Link
+          href="/transfer/auto"
+          className="mb-2 inline-block text-xs text-muted-foreground hover:text-foreground"
+        >
+          ← 자동이체 목록
+        </Link>
         <ScheduledForm />
       </main>
     </Protected>

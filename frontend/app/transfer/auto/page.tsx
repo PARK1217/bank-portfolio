@@ -210,9 +210,6 @@ export default function Page() {
           <Link href="/transfer/auto" className="font-medium text-foreground">
             자동이체
           </Link>
-          <Link href="/transfer/scheduled" className="hover:text-foreground">
-            예약이체
-          </Link>
           <Link href="/transfer/favorites" className="hover:text-foreground">
             자주 쓰는 계좌
           </Link>
