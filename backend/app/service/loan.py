@@ -280,6 +280,7 @@ async def sign_contract(
                 f"{amount:,}원 대출 약정이 체결되었습니다. "
                 f"월 납입 예정 {monthly:,}원. 실행 화면에서 실행해주세요."
             ),
+            link_url="/loans",
             reference_type="LOAN_CONTRACT",
         )
     except Exception:
@@ -433,6 +434,7 @@ async def execute_loan(
                 type_cd="LOAN",
                 title="대출 실행 완료",
                 body=f"{principal:,}원 대출 자금이 입금 계좌로 지급되었습니다.",
+                link_url="/loans",
                 reference_type="LOAN_EXEC",
             )
         except Exception:

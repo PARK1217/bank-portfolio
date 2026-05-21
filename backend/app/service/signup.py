@@ -199,6 +199,7 @@ async def create_account(
                 "본행에 가입해주셔서 감사합니다. 첫 계좌 개설로 시작하시거나, "
                 "왼쪽 메뉴에서 자주 쓰는 기능을 확인해보세요."
             ),
+            link_url="/products",
             reference_type="SIGNUP",
         )
     except Exception:
