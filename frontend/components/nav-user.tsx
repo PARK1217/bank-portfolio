@@ -88,14 +88,8 @@ export function NavUser() {
             <MenuLink href="/security" onClick={() => setOpen(false)}>
               보안 설정
             </MenuLink>
-            <MenuLink href="/products" onClick={() => setOpen(false)}>
-              상품 카탈로그
-            </MenuLink>
             <MenuLink href="/notifications" onClick={() => setOpen(false)}>
               알림 센터
-            </MenuLink>
-            <MenuLink href="/notices" onClick={() => setOpen(false)}>
-              공지사항 · 이벤트
             </MenuLink>
             <div className="my-1 border-t" />
             <button
