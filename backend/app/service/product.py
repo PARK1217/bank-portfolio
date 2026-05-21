@@ -95,10 +95,16 @@ async def fetch_product_detail(product_id: int) -> ProductDetailResponse:
         if prod is None:
             raise NotFoundError(E_NOT_FOUND, "상품을 찾을 수 없습니다.")
 
+        # PERIOD_ID = PERIOD_SEQ 매핑 규약 (db/02_seed.sql §11) 으로 기간별 금리 left-join
         periods = await conn.fetch(
-            'SELECT "MIN_MONTHS", "MAX_MONTHS" FROM public."PRODUCT_PERIOD" '
-            'WHERE "PRODUCT_ID" = $1 AND "DELETE_YN" = \'N\' '
-            'ORDER BY "PERIOD_SEQ"',
+            'SELECT pp."MIN_MONTHS", pp."MAX_MONTHS", rp."APPLY_RATE" '
+            'FROM public."PRODUCT_PERIOD" pp '
+            'LEFT JOIN public."PRODUCT_RATE_POLICY" rp '
+            '  ON rp."PRODUCT_ID" = pp."PRODUCT_ID" '
+            ' AND rp."PERIOD_ID" = pp."PERIOD_SEQ" '
+            ' AND rp."DELETE_YN" = \'N\' '
+            'WHERE pp."PRODUCT_ID" = $1 AND pp."DELETE_YN" = \'N\' '
+            'ORDER BY pp."PERIOD_SEQ"',
             product_id,
         )
         rate_rows = await conn.fetch(
@@ -132,7 +138,7 @@ async def fetch_product_detail(product_id: int) -> ProductDetailResponse:
             ProductPeriodEntry(
                 # MIN_MONTHS 대표값(범위는 명세 시트 확정 후 분리)
                 period_months=int(p["MIN_MONTHS"] or 0),
-                rate=0.0,  # PERIOD-별 rate는 RATE_POLICY.PERIOD_ID join 명세 확정 후 채움
+                rate=float(p["APPLY_RATE"] or 0.0),  # PERIOD_ID join 결과; 없으면 0
             )
             for p in periods
         ],
