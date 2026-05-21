@@ -35,7 +35,7 @@ interface ScheduledTransferResponse {
 }
 
 const BANKS: { code: string; name: string }[] = [
-  { code: "020", name: "다온뱅크" },
+  { code: "098", name: "다온뱅크" },
   { code: "004", name: "KB국민" },
   { code: "088", name: "신한" },
   { code: "081", name: "하나" },
@@ -59,7 +59,7 @@ function ScheduledForm() {
   );
 
   const [fromToken, setFromToken] = useState("");
-  const [toBank, setToBank] = useState("020");
+  const [toBank, setToBank] = useState("098");
   const [toAccount, setToAccount] = useState("");
   const [toHolder, setToHolder] = useState("");
   const [amount, setAmount] = useState("");

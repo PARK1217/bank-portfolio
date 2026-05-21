@@ -1,23 +1,24 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Protected } from "@/components/protected";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
+import { api } from "@/lib/api";
 import { useFetch } from "@/lib/use-fetch";
 import { setTransferDraft } from "@/lib/transfer-session";
 import { showApiError } from "@/lib/toast";
 
 
 // ---------------------------------------------------------------------------
-// 은행 마스터 — 추후 GET /api/banks 로 대체. 020 = 당행(우리은행 가정).
+// 은행 마스터 — 추후 GET /api/banks 로 대체. 098 = 다온뱅크(당행).
 // ---------------------------------------------------------------------------
 
 const BANKS: { code: string; name: string }[] = [
-  { code: "020", name: "다온뱅크" },
+  { code: "098", name: "다온뱅크" },
   { code: "004", name: "KB국민" },
   { code: "088", name: "신한" },
   { code: "081", name: "하나" },
@@ -72,11 +73,21 @@ function TransferForm() {
   );
 
   const [fromToken, setFromToken] = useState<string>("");
-  const [toBank, setToBank] = useState<string>(prefillToBank || "020");
-  const [toAccount, setToAccount] = useState<string>(prefillToAccount);
+  const [toBank, setToBank] = useState<string>(prefillToBank || "098");
+  const [toAccount, setToAccount] = useState<string>(prefillToAccount.replace(/-/g, ""));
   const [toHolder, setToHolder] = useState<string>(prefillToHolder);
   const [amount, setAmount] = useState<string>("");
   const [memo, setMemo] = useState<string>("");
+
+  // 입금 계좌 verify — 당행 즉시 DB / 타행 Kafka request-reply 3s.
+  // 응답에 따라 예금주 자동 표시 + 미존재 시 "다음" 버튼 차단.
+  type VerifyStatus = "idle" | "loading" | "ok" | "not_found" | "error";
+  const [verifyStatus, setVerifyStatus] = useState<VerifyStatus>("idle");
+  const [verifyMessage, setVerifyMessage] = useState<string>("");
+  // verify ok 시 백엔드가 돌려준 정규형 account_no (예: "110-001-999992").
+  // confirm/execute_transfer 호출 시 이걸로 보내야 DB ACCOUNT_NO 와 매치된다.
+  const [verifiedAccountNo, setVerifiedAccountNo] = useState<string>("");
+  const verifySeqRef = useRef(0);
 
   // accounts 로딩 후 prefill 적용.
   // account_token 은 매번 새로 발급되는 in-memory 토큰이라 계좌 상세에서 받아온
@@ -99,9 +110,57 @@ function TransferForm() {
     if (accountsError) showApiError(accountsError, "계좌 목록을 불러오지 못했습니다.");
   }, [accountsError]);
 
+  // toBank / toAccount 가 충분히 채워지면 디바운스 600ms 후 verify.
+  // 입력 도중 toAccount 가 바뀌면 verifySeqRef 로 stale 응답 무시.
+  useEffect(() => {
+    setToHolder("");
+    setVerifyMessage("");
+    setVerifiedAccountNo("");
+    if (toAccount.length < 6) {
+      setVerifyStatus("idle");
+      return;
+    }
+    setVerifyStatus("loading");
+    const seq = ++verifySeqRef.current;
+    const timer = setTimeout(async () => {
+      try {
+        const res = await api.post<{
+          exists: boolean;
+          holder_name: string | null;
+          account_no: string;
+          error: string | null;
+        }>("/api/transfer/verify-account", {
+          to_bank_cd: toBank,
+          to_account_no: toAccount,
+        });
+        if (seq !== verifySeqRef.current) return;
+        if (res.exists) {
+          setToHolder(res.holder_name ?? "");
+          setVerifyStatus("ok");
+          setVerifyMessage(res.holder_name ?? "확인됨");
+          setVerifiedAccountNo(res.account_no);
+        } else if (res.error === "VERIFY_TIMEOUT" || res.error === "VERIFY_BROKER_DOWN") {
+          setVerifyStatus("error");
+          setVerifyMessage("타행 응답이 늦어 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+        } else {
+          setVerifyStatus("not_found");
+          setVerifyMessage("실존하지 않는 계좌입니다. 은행과 계좌번호를 다시 확인해 주세요.");
+        }
+      } catch {
+        if (seq !== verifySeqRef.current) return;
+        setVerifyStatus("error");
+        setVerifyMessage("계좌 확인 중 오류가 발생했습니다.");
+      }
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [toBank, toAccount]);
+
   const fromAccount = accounts.find((a) => a.account_token === fromToken) ?? null;
   const amountNum = parseInt(amount.replace(/[^0-9]/g, ""), 10) || 0;
   const overBalance = fromAccount != null && amountNum > fromAccount.balance;
+  // 계좌 검증은 무조건 선행. ok 외에는(loading/not_found/error/idle) 모두 차단.
+  // 엉뚱한 계좌로 이체되는 사고를 막기 위해 사용자 직접 우회도 허용하지 않는다.
+  const verifyBlocks = verifyStatus !== "ok";
 
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -118,7 +177,7 @@ function TransferForm() {
       from_account_no: fromAccount.account_no,
       to_bank_cd: toBank,
       to_bank_name: bank?.name,
-      to_account_no: toAccount,
+      to_account_no: verifiedAccountNo || toAccount,
       to_holder_name: toHolder || null,
       amount_krw: amountNum,
       memo: memo || null,
@@ -184,21 +243,42 @@ function TransferForm() {
             <Field label="입금 계좌번호" required>
               <Input
                 inputMode="numeric"
-                placeholder="숫자만"
+                placeholder="숫자만 입력 (- 자동 제거)"
                 value={toAccount}
-                onChange={(e) => setToAccount(e.target.value.replace(/[^0-9-]/g, ""))}
+                onChange={(e) => setToAccount(e.target.value.replace(/[^0-9]/g, ""))}
                 required
               />
             </Field>
           </div>
 
-          <Field label="예금주명 (선택)">
+          <Field label="예금주명">
             <Input
-              placeholder="예: 홍길동"
+              placeholder={
+                verifyStatus === "loading"
+                  ? "예금주 확인 중…"
+                  : "은행과 계좌번호를 입력하면 자동으로 표시됩니다"
+              }
               maxLength={20}
               value={toHolder}
               onChange={(e) => setToHolder(e.target.value)}
+              readOnly
             />
+            {verifyMessage ? (
+              <p
+                className={`mt-1 text-xs ${
+                  verifyStatus === "ok"
+                    ? "text-success"
+                    : verifyStatus === "not_found"
+                    ? "text-destructive"
+                    : verifyStatus === "error"
+                    ? "text-warning"
+                    : "text-muted-foreground"
+                }`}
+              >
+                {verifyStatus === "ok" ? "확인됨 · 예금주 " : ""}
+                {verifyMessage}
+              </p>
+            ) : null}
           </Field>
 
           <Field label="금액 (원)" required>
@@ -229,8 +309,18 @@ function TransferForm() {
             />
           </Field>
 
-          <Button type="submit" className="w-full" disabled={!fromAccount || amountNum <= 0 || overBalance}>
-            다음
+          <Button
+            type="submit"
+            className="w-full"
+            disabled={
+              !fromAccount ||
+              amountNum <= 0 ||
+              overBalance ||
+              !toAccount ||
+              verifyBlocks
+            }
+          >
+            {verifyStatus === "loading" ? "예금주 확인 중…" : "다음"}
           </Button>
         </form>
       </CardContent>

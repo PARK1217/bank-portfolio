@@ -33,7 +33,7 @@ const SETTLEMENT_TYPE_LABEL: Record<string, string> = {
 const LARGE_AMOUNT_THRESHOLD = 1_000_000_000; // 10억
 
 function predictSettlementType(draft: TransferDraft): string {
-  if (draft.to_bank_cd === "020") return "INTRA_BANK";
+  if (draft.to_bank_cd === "098") return "INTRA_BANK";
   if (draft.amount_krw >= LARGE_AMOUNT_THRESHOLD) return "BOK_LARGE";
   return "KFTC_SMALL";
 }

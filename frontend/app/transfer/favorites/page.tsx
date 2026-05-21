@@ -30,7 +30,7 @@ interface FavoriteListResponse {
 }
 
 const BANKS: { code: string; name: string }[] = [
-  { code: "020", name: "다온뱅크" },
+  { code: "098", name: "다온뱅크" },
   { code: "004", name: "KB국민" },
   { code: "088", name: "신한" },
   { code: "081", name: "하나" },
@@ -51,7 +51,7 @@ function FavoritesContent() {
   const { data, error, loading, refetch } = useFetch<FavoriteListResponse>("/api/transfer/favorites");
 
   const [alias, setAlias] = useState("");
-  const [bank, setBank] = useState("020");
+  const [bank, setBank] = useState("098");
   const [accountNo, setAccountNo] = useState("");
   const [holder, setHolder] = useState("");
   const [submitting, setSubmitting] = useState(false);

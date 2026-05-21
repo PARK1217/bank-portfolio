@@ -56,12 +56,14 @@ async def verify_account(to_bank_cd: str, to_account_no: str) -> dict:
 # ---------------------------------------------------------------------------
 
 async def _verify_intra_bank(to_account_no: str) -> dict:
+    # 사용자 입력이 dash 유무 어느 쪽이든 DB 컬럼(dash 포함)과 매치되도록 양쪽 정규화.
     pool = get_pool()
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
             'SELECT "ACCOUNT_NO", "ACCOUNT_HOLDER_NAME", "ACCOUNT_STATUS_CD" '
             'FROM public."ACCOUNT" '
-            'WHERE "ACCOUNT_NO" = $1 AND "DELETE_YN" = \'N\'',
+            'WHERE REPLACE("ACCOUNT_NO", \'-\', \'\') = REPLACE($1, \'-\', \'\') '
+            "  AND \"DELETE_YN\" = 'N'",
             to_account_no,
         )
     if row is None:
@@ -72,12 +74,14 @@ async def _verify_intra_bank(to_account_no: str) -> dict:
             "bank_cd": OWN_BANK_CODE,
             "account_no": to_account_no,
         }
+    # 응답의 account_no 는 DB 컬럼 그대로(정규형) 반환 — 후속 confirm 단계가
+    # 같은 정규형으로 처리되도록.
     return {
         "exists": True,
         "holder_name": row["ACCOUNT_HOLDER_NAME"],
         "source": "INTRA_BANK",
         "bank_cd": OWN_BANK_CODE,
-        "account_no": to_account_no,
+        "account_no": row["ACCOUNT_NO"],
         "status_cd": row["ACCOUNT_STATUS_CD"],
     }
 
