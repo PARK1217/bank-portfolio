@@ -60,6 +60,19 @@ const krw = new Intl.NumberFormat("ko-KR");
 const fmt = (n: number) => `${krw.format(n)}원`;
 
 
+interface FavoriteItem {
+  id: number;
+  alias: string;
+  bank_cd: string;
+  account_no: string;
+  masked_account_no: string;
+  account_holder_name: string;
+}
+
+// 자동이체 입금 대상으로 받을 수 있는 내 계좌 타입.
+// DEPOSIT(정기예금)·LOAN(대출)은 추가 입금 불가 → 제외.
+const INCOMING_TYPES = new Set(["SAVING", "INSTALL", "FOREIGN"]);
+
 function NewAutoTransferForm() {
   const router = useRouter();
   const { data: accountsData, loading: accountsLoading } = useFetch<AccountListData>("/api/accounts");
@@ -67,6 +80,7 @@ function NewAutoTransferForm() {
     () => (accountsData?.accounts ?? []).filter((a) => !a.hidden && a.currency === "KRW"),
     [accountsData],
   );
+  const { data: favorites } = useFetch<FavoriteItem[]>("/api/transfer/favorites");
 
   const [fromToken, setFromToken] = useState("");
   const [toBank, setToBank] = useState("098");
@@ -143,6 +157,32 @@ function NewAutoTransferForm() {
 
   const verifyBlocks = verifyStatus !== "ok";
 
+  // 빠른 선택 — "MY:account_no" 또는 "FAV:id" 형식 value 로 인코딩.
+  // 선택 시 입금 은행·계좌·예금주 자동 채움 → useEffect 가 verify 자동 트리거.
+  const fromAccount = accounts.find((a) => a.account_token === fromToken) ?? null;
+  const incomingMyAccounts = accounts.filter(
+    (a) =>
+      INCOMING_TYPES.has(a.account_type_cd) &&
+      a.account_no !== fromAccount?.account_no, // 출금=입금 같은 계좌 막기
+  );
+  function onQuickPick(v: string) {
+    if (!v) return;
+    if (v.startsWith("MY:")) {
+      const no = v.slice(3);
+      const a = accounts.find((x) => x.account_no === no);
+      if (!a) return;
+      setToBank("098");
+      setToAccount(a.account_no);
+      // toHolder 는 verify 응답으로 채워지므로 set 안 함
+    } else if (v.startsWith("FAV:")) {
+      const id = Number(v.slice(4));
+      const f = (favorites ?? []).find((x) => x.id === id);
+      if (!f) return;
+      setToBank(f.bank_cd);
+      setToAccount(f.account_no);
+    }
+  }
+
   const amountN = parseInt(amount.replace(/[^0-9]/g, ""), 10) || 0;
 
   async function onSubmit(e: React.FormEvent) {
@@ -217,6 +257,36 @@ function NewAutoTransferForm() {
               ))}
             </select>
           </Field>
+
+          {incomingMyAccounts.length || (favorites && favorites.length) ? (
+            <Field label="빠른 선택">
+              <select
+                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                value=""
+                onChange={(e) => onQuickPick(e.target.value)}
+              >
+                <option value="">직접 입력</option>
+                {incomingMyAccounts.length ? (
+                  <optgroup label="내 계좌 (자유입출금 / 적금 / 외화)">
+                    {incomingMyAccounts.map((a) => (
+                      <option key={`MY-${a.account_no}`} value={`MY:${a.account_no}`}>
+                        {(a.alias ?? a.account_type_cd) + " · " + a.account_no}
+                      </option>
+                    ))}
+                  </optgroup>
+                ) : null}
+                {favorites && favorites.length ? (
+                  <optgroup label="자주 쓰는 계좌">
+                    {favorites.map((f) => (
+                      <option key={`FAV-${f.id}`} value={`FAV:${f.id}`}>
+                        {`${f.alias} · ${f.masked_account_no} · ${f.account_holder_name}`}
+                      </option>
+                    ))}
+                  </optgroup>
+                ) : null}
+              </select>
+            </Field>
+          ) : null}
 
           <div className="grid grid-cols-[140px_1fr] gap-2">
             <Field label="입금 은행" required>
