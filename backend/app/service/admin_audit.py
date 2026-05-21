@@ -43,6 +43,7 @@ _EXPLICIT_ACTIONS: dict[tuple[str, str], str] = {
     ("POST", "/api/admin/loans/decisions/:id/review"):         "LOAN_HUMAN_REVIEW",
     ("GET",  "/api/admin/customers/overdue"):                  "OVERDUE_LIST",
     ("GET",  "/api/admin/customers/:id/overdue"):              "OVERDUE_DETAIL",
+    ("GET",  "/api/admin/health/external"):                    "HEALTH_EXTERNAL_LIST",
 }
 
 # ---------------------------------------------------------------------------
@@ -58,6 +59,8 @@ _TARGET_TABLE_RULES: list[tuple[re.Pattern[str], str, int | None]] = [
     (re.compile(r"^/api/admin/auth/(login|logout|me)$"),             "ADMIN_SESSION",    None),
     (re.compile(r"^/api/admin/customers/(\d+)/overdue$"),            "CUSTOMER",         1),
     (re.compile(r"^/api/admin/customers/overdue$"),                  "CUSTOMER",         None),
+    (re.compile(r"^/api/admin/health/external/([^/]+)$"),            "EXTERNAL_API_HEALTH", 1),
+    (re.compile(r"^/api/admin/health/external$"),                    "EXTERNAL_API_HEALTH", None),
 ]
 
 
@@ -66,6 +69,12 @@ _TARGET_TABLE_RULES: list[tuple[re.Pattern[str], str, int | None]] = [
 # ---------------------------------------------------------------------------
 
 _ID_SEG = re.compile(r"^(\d+|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$", re.I)
+
+# prefix 기반 매핑 — enum/string path param(`/health/external/{api_name}`) 처럼
+# `_normalize_path` 의 :id 치환으로 못 잡는 경우 사용.
+_PREFIX_ACTIONS: list[tuple[str, str, str]] = [
+    ("GET", "/api/admin/health/external/", "HEALTH_EXTERNAL_DETAIL"),
+]
 
 
 def _normalize_path(path: str) -> str:
@@ -76,13 +85,17 @@ def _normalize_path(path: str) -> str:
 
 
 def derive_action_cd(method: str, path: str) -> str:
-    key = (method.upper(), _normalize_path(path))
+    m = method.upper()
+    key = (m, _normalize_path(path))
     if key in _EXPLICIT_ACTIONS:
         return _EXPLICIT_ACTIONS[key]
+    for pm, pp, action in _PREFIX_ACTIONS:
+        if m == pm and path.startswith(pp):
+            return action
     # 폴백 — 마지막 의미 segment 2 개로 합성
     segs = [s for s in path.split("/") if s and not _ID_SEG.match(s) and s != "api"]
     tail = "_".join(segs[-2:]).upper() if segs else "UNKNOWN"
-    return f"{method.upper()}_{tail}"[:30]
+    return f"{m}_{tail}"[:30]
 
 
 def derive_target(path: str) -> tuple[str | None, str | None]:

@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 from .api.account import router as account_router
 from .api.account_open import router as account_open_router
 from .api.admin_auth import router as admin_auth_router
+from .api.admin_health import router as admin_health_router
 from .api.admin_loan import router as admin_loan_router
 from .api.admin_overdue import router as admin_overdue_router
 from .api.auth import router as auth_router, setup_router
@@ -99,17 +100,21 @@ async def lifespan(app: FastAPI):
     # 자동이체 실행 워커 — AUTO_TRANSFER ACTIVE 스캔 + AUTO_TRANSFER_EXEC 적재.
     import asyncio as _asyncio
 
-    from .service import auto_transfer_worker
+    from .service import admin_health, auto_transfer_worker
 
     auto_transfer_task = _asyncio.create_task(auto_transfer_worker.run())
+    # 외부 통신망 헬스 스냅 워커 — EXTERNAL_API_HEALTH 5분 적재 (Phase 6 §9.2.3).
+    external_health_task = _asyncio.create_task(admin_health.worker_loop())
 
     yield
 
     auto_transfer_task.cancel()
-    try:
-        await auto_transfer_task
-    except _asyncio.CancelledError:
-        pass
+    external_health_task.cancel()
+    for _t in (auto_transfer_task, external_health_task):
+        try:
+            await _t
+        except _asyncio.CancelledError:
+            pass
     await kafka_svc.stop_consumers()
     await kafka_svc.stop_producer()
     await close_pool()
@@ -203,6 +208,7 @@ api.include_router(loan_router)
 api.include_router(admin_auth_router)
 api.include_router(admin_loan_router)
 api.include_router(admin_overdue_router)
+api.include_router(admin_health_router)
 api.include_router(chatbot_router)
 api.include_router(notification_router)
 api.include_router(notice_router)
