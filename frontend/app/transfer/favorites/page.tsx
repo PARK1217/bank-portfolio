@@ -26,9 +26,8 @@ interface FavoriteItem {
   last_used_at: string | null;
 }
 
-interface FavoriteListResponse {
-  items: FavoriteItem[];
-}
+// 백엔드 `GET /api/transfer/favorites` 는 raw array 반환 (response_model=list[...]).
+// 다른 list endpoint(예: auto-transfer)는 {items} 래퍼라 일관성은 별개로 인계.
 
 const BANKS: { code: string; name: string }[] = [
   { code: "098", name: "다온뱅크" },
@@ -49,7 +48,7 @@ function bankName(code: string): string {
 
 function FavoritesContent() {
   const router = useRouter();
-  const { data, error, loading, refetch } = useFetch<FavoriteListResponse>("/api/transfer/favorites");
+  const { data, error, loading, refetch } = useFetch<FavoriteItem[]>("/api/transfer/favorites");
 
   const [alias, setAlias] = useState("");
   const [bank, setBank] = useState("098");
@@ -162,13 +161,13 @@ function FavoritesContent() {
         <h2 className="mb-2 text-sm font-semibold">목록</h2>
         {loading && !data ? (
           <Spinner label="불러오는 중…" />
-        ) : !data || data.items.length === 0 ? (
+        ) : !data || data.length === 0 ? (
           <p className="rounded-md border border-dashed bg-muted/30 p-6 text-center text-sm text-muted-foreground">
             등록된 자주 쓰는 계좌가 없습니다.
           </p>
         ) : (
           <ul className="divide-y rounded-md border bg-card">
-            {data.items.map((f) => (
+            {data.map((f) => (
               <li key={f.id} className="flex items-center gap-3 p-3 text-sm">
                 <div className="min-w-0 flex-1">
                   <div className="font-medium">{f.alias}</div>
