@@ -123,7 +123,7 @@ function ChatScreen() {
     setInput("");
 
     try {
-      const res = await api.post<ChatSendResponse>("/api/chatbot/message", {
+      const res = await api.post<ChatSendResponse>("/api/chatbot/messages", {
         session_id: sessionId,
         message: text,
       });
