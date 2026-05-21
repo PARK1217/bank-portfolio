@@ -83,7 +83,7 @@ export function NavUser() {
         {open ? (
           <div
             role="menu"
-            className="absolute right-0 z-50 mt-1 w-48 overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md"
+            className="absolute right-0 top-full z-50 mt-1 w-48 overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md"
           >
             <MenuLink href="/security" onClick={() => setOpen(false)}>
               보안 설정
