@@ -21,6 +21,7 @@ const MENUS: MenuItem[] = [
   { href: "/security/devices", title: "기기 관리", desc: "등록된 기기 목록·접속 이력 조회" },
   { href: "/security/devices/new", title: "기기 등록", desc: "현재 기기를 신뢰 기기로 등록" },
   { href: "/security/transfer-limit", title: "이체 한도 관리", desc: "계좌별 1일·1회 이체 한도 조정" },
+  { href: "/security/withdraw-unlock", title: "출금 제한 해제", desc: "OTP 등록으로 기본 일일 한도 30만 → 5천만 상향" },
   { href: "/security/fds-alerts", title: "의심 거래 확인", desc: "FDS 탐지된 거래 확인·신고", badge: "FDS" },
 ];
 
