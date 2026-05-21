@@ -29,6 +29,7 @@ export default function RootLayout({
                 <Link href="/transfer" className="hover:text-foreground">이체</Link>
                 <Link href="/loans" className="hover:text-foreground">대출</Link>
                 <Link href="/chatbot" className="hover:text-foreground">챗봇</Link>
+                <Link href="/notices" className="hover:text-foreground">공지·이벤트</Link>
                 <NavUser />
               </nav>
             </div>

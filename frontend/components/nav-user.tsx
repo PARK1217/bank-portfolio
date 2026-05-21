@@ -91,6 +91,9 @@ export function NavUser() {
             <MenuLink href="/notifications" onClick={() => setOpen(false)}>
               알림 센터
             </MenuLink>
+            <MenuLink href="/notices" onClick={() => setOpen(false)}>
+              공지·이벤트
+            </MenuLink>
             <div className="my-1 border-t" />
             <button
               type="button"
