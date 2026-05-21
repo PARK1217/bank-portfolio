@@ -30,6 +30,9 @@ TOPIC_SETTLEMENT_REQUESTED = "transfer.settlement.requested"
 TOPIC_SETTLEMENT_COMPLETED = "transfer.settlement.completed"
 TOPIC_CHATBOT_LLM_CALLS = "chatbot.llm.calls"
 TOPIC_CHATBOT_RAG_EVALS = "chatbot.rag.evaluations"
+# 계좌 검증 — 타행 예금주 조회용 request-reply 패턴.
+TOPIC_ACCOUNT_VERIFY_REQ = "transfer.account.verify.requested"
+TOPIC_ACCOUNT_VERIFY_REPLY = "transfer.account.verify.replies"
 
 _BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP", "kafka:9092")
 _GROUP_PREFIX = os.getenv("KAFKA_GROUP_PREFIX", "bank-portfolio")
@@ -129,6 +132,45 @@ async def start_consumer(
 
     task = asyncio.create_task(_loop(), name=f"kafka-consumer-{topic}")
     _consumer_tasks.append(task)
+
+
+# ---------------------------------------------------------------------------
+# Request-Reply (correlation_id 기반 in-memory Future map)
+# ---------------------------------------------------------------------------
+#
+# 사용 패턴 (호출자):
+#     correlation_id = await register_reply(future)
+#     await send_event(REQ_TOPIC, {..., "correlation_id": correlation_id})
+#     try:
+#         reply = await asyncio.wait_for(future, timeout=3)
+#     except asyncio.TimeoutError:
+#         unregister_reply(correlation_id)
+#
+# 리플라이 컨슈머는 메시지 받으면 `resolve_reply(correlation_id, payload)`.
+
+_pending_replies: dict[str, asyncio.Future] = {}
+
+
+def register_reply() -> tuple[str, asyncio.Future]:
+    """correlation_id 와 await 대상 Future 생성·등록."""
+    import uuid
+
+    cid = uuid.uuid4().hex
+    fut: asyncio.Future = asyncio.get_event_loop().create_future()
+    _pending_replies[cid] = fut
+    return cid, fut
+
+
+def resolve_reply(correlation_id: str, payload: dict[str, Any]) -> None:
+    """리플라이 컨슈머가 메시지 도착 시 호출. 대응 Future 가 없으면 무시."""
+    fut = _pending_replies.pop(correlation_id, None)
+    if fut is not None and not fut.done():
+        fut.set_result(payload)
+
+
+def unregister_reply(correlation_id: str) -> None:
+    """타임아웃·취소 시 정리."""
+    _pending_replies.pop(correlation_id, None)
 
 
 async def stop_consumers() -> None:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import structlog
 from fastapi import APIRouter, Depends, Header
+from pydantic import BaseModel, Field
 
 from ..errors import E_VALIDATION
 from ..exceptions import BusinessError
@@ -21,6 +22,7 @@ from ..service.account import (
     resolve_account_token,
     resolve_tx_token,
 )
+from ..service.account_verify import verify_account
 from ..service.auth import CurrentCustomer, current_customer, get_token_service
 from ..service.token import TokenService
 from ..service.transfer import (
@@ -29,6 +31,20 @@ from ..service.transfer import (
     execute_transfer,
     fetch_transfer_by_tx,
 )
+
+
+class VerifyAccountRequest(BaseModel):
+    to_bank_cd: str = Field(..., min_length=3, max_length=3, examples=["098", "088"])
+    to_account_no: str = Field(..., min_length=6, max_length=20, examples=["110-001-100001"])
+
+
+class VerifyAccountResponse(BaseModel):
+    exists: bool
+    holder_name: str | None
+    source: str = Field(..., description="INTRA_BANK | KFTC")
+    bank_cd: str
+    account_no: str
+    error: str | None = Field(None, description="VERIFY_TIMEOUT | VERIFY_BROKER_DOWN")
 
 router = APIRouter(prefix="/transfer", tags=["transfer"])
 log = structlog.get_logger("transfer_api")
@@ -49,6 +65,23 @@ async def init_transfer(
         daily_remaining_limit=row.daily_transfer_limit or 0,
         once_limit=row.daily_withdraw_limit or 0,
     )
+
+
+@router.post("/verify-account", response_model=VerifyAccountResponse)
+async def verify_account_endpoint(
+    req: VerifyAccountRequest,
+    user: CurrentCustomer = Depends(current_customer),  # noqa: ARG001 — 인증 게이트
+) -> VerifyAccountResponse:
+    """입금 계좌·예금주 검증 — 당행 즉시 DB / 타행 Kafka request-reply (가이드 §2.4)."""
+    result = await verify_account(req.to_bank_cd, req.to_account_no)
+    return VerifyAccountResponse(**{
+        "exists": result["exists"],
+        "holder_name": result.get("holder_name"),
+        "source": result["source"],
+        "bank_cd": result["bank_cd"],
+        "account_no": result["account_no"],
+        "error": result.get("error"),
+    })
 
 
 @router.post("", response_model=TransferConfirmResponse)

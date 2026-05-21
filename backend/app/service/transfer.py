@@ -180,6 +180,31 @@ async def execute_transfer(
     # 3. 출금계좌 본인 검증
     from_acct = await fetch_account(from_account_no, user_customer_no)
 
+    # 3-1. 입금계좌·예금주 사전 검증 (당행은 즉시, 타행은 Kafka request-reply / §2.4).
+    #      미존재면 422 거부. 타행 검증 타임아웃·브로커 다운 시는 진행 허용
+    #      (UX: 비동기 결제망에서 추후 reverse 되도록 — 기존 흐름 유지).
+    from .account_verify import verify_account as _verify_to_account
+
+    verify_res = await _verify_to_account(to_bank_cd, to_account_no)
+    if not verify_res["exists"] and verify_res.get("error") is None:
+        raise BusinessError(
+            E_VALIDATION,
+            "입금 계좌를 찾을 수 없습니다. 은행·계좌번호를 다시 확인해 주세요.",
+        )
+    # 예금주 입력값과 회신값 불일치 시 경고만 — 실제 차단은 클라이언트 confirm 화면.
+    if (
+        verify_res["exists"]
+        and to_holder_name
+        and verify_res.get("holder_name")
+        and to_holder_name.strip() != verify_res["holder_name"]
+    ):
+        log.warning(
+            "transfer_holder_name_mismatch",
+            entered=to_holder_name,
+            verified=verify_res["holder_name"],
+            bank=to_bank_cd,
+        )
+
     # 4. 결제 채널 3-tier 분기 (가이드 §2.1).
     if to_bank_cd == OWN_BANK_CODE:
         settlement_type = "INTRA_BANK"

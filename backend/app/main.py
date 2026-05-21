@@ -53,6 +53,10 @@ async def lifespan(app: FastAPI):
     # Kafka (가이드 §2.4) — producer + consumer 백그라운드 등록.
     # 브로커 미가동 시 send_event 는 no-op 으로 graceful degrade.
     from .service import kafka as kafka_svc
+    from .service.account_verify import (
+        handle_external_bank_verify,
+        handle_verify_reply,
+    )
     from .service.chatbot import handle_llm_call_trace
     from .service.transfer import handle_settlement_requested
 
@@ -64,6 +68,17 @@ async def lifespan(app: FastAPI):
     await kafka_svc.start_consumer(
         kafka_svc.TOPIC_CHATBOT_LLM_CALLS,
         handle_llm_call_trace,
+    )
+    # 타행 계좌검증 — 외부 은행 시뮬 consumer (req 토픽) + 호출자 측 reply consumer.
+    await kafka_svc.start_consumer(
+        kafka_svc.TOPIC_ACCOUNT_VERIFY_REQ,
+        handle_external_bank_verify,
+        group_id="external-bank-simulator",
+    )
+    await kafka_svc.start_consumer(
+        kafka_svc.TOPIC_ACCOUNT_VERIFY_REPLY,
+        handle_verify_reply,
+        group_id="verify-reply-consumer",
     )
 
     yield
