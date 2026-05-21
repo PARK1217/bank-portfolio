@@ -54,6 +54,11 @@ def _vec_literal(vec) -> str:
     return "[" + ",".join(f"{float(x):.6f}" for x in vec) + "]"
 
 
+# Kafka `chatbot.llm.calls` 컨슈머 핸들러는 `llm_log.handle_llm_call` 에 위임.
+# main.py 가 historically `chatbot.handle_llm_call_trace` 이름으로 import 하므로 alias 유지.
+from .llm_log import handle_llm_call as handle_llm_call_trace  # noqa: E402,F401
+
+
 def _embed_query(text: str) -> str:
     """쿼리 텍스트 → pgvector 텍스트 리터럴 (정규화·L2)."""
     model = _get_embed_model()
@@ -319,6 +324,29 @@ async def chat_send(
             llm_answer = await _llm_chat_completion(
                 system_prompt, user_prompt, max_tokens=400
             )
+            # LLM 호출이 성공했으면 사용량 메타를 Kafka 토픽으로 발행 (가이드 §2.4 + §3.7).
+            # consumer 가 AI_LLM_CALL_LOG 에 INSERT — Phase 6 Phoenix 트레이스와 연동 후보.
+            if llm_answer:
+                import uuid
+
+                from .llm import get_last_usage
+                from . import kafka as kafka_svc
+
+                usage_meta = get_last_usage()
+                if usage_meta:
+                    trace_id = uuid.uuid4().hex
+                    await kafka_svc.send_event(
+                        kafka_svc.TOPIC_CHATBOT_LLM_CALLS,
+                        {
+                            "trace_id": trace_id,
+                            "model_name": usage_meta["model_name"],
+                            "purpose_cd": "CHATBOT_RAG",
+                            "prompt_tokens": usage_meta["prompt_tokens"],
+                            "completion_tokens": usage_meta["completion_tokens"],
+                            "status_cd": "OK",
+                        },
+                        key=trace_id,
+                    )
         except Exception:
             log.exception("llm_answer_failed")
         if llm_answer:

@@ -144,7 +144,19 @@ def _extract_openai_text(data: dict[str, Any]) -> str | None:
         return None
 
 
+_LAST_USAGE: dict[str, Any] | None = None
+
+
+def get_last_usage() -> dict[str, Any] | None:
+    """호출 직후 마지막 usage 메타 조회 (chatbot 의 Kafka trace 발행용).
+
+    동일 이벤트 루프 컨텍스트 내에서만 의미가 있다 (멀티 워커 X).
+    """
+    return _LAST_USAGE
+
+
 def _log_usage(provider: str, data: dict[str, Any]) -> None:
+    global _LAST_USAGE
     usage = data.get("usage") if isinstance(data, dict) else None
     if usage:
         log.info(
@@ -154,3 +166,17 @@ def _log_usage(provider: str, data: dict[str, Any]) -> None:
             completion_tokens=usage.get("completion_tokens"),
             total_tokens=usage.get("total_tokens"),
         )
+        model_map = {
+            "groq": "llama-3.1-8b-instant",
+            "mistral": "mistral-small",
+            "huggingface": "router-default",
+        }
+        _LAST_USAGE = {
+            "provider": provider,
+            "model_name": model_map.get(provider, provider),
+            "prompt_tokens": usage.get("prompt_tokens"),
+            "completion_tokens": usage.get("completion_tokens"),
+            "total_tokens": usage.get("total_tokens"),
+        }
+    else:
+        _LAST_USAGE = None

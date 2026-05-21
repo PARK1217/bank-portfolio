@@ -254,6 +254,7 @@ async def _post_transfer_hooks(
         type_cd="TRANSFER",
         title=title,
         body=body,
+        link_url="/dashboard",
         reference_id=result.transfer_id,
         reference_type="TRANSFER",
     )
@@ -532,12 +533,25 @@ async def _process_inter_bank(
                 from_account_no,
             )
 
-    # 트랜잭션 커밋 후 background settle 시뮬레이션 발행 (가이드 §3.3 트랜잭션 경계).
-    asyncio.create_task(
-        _settle_simulation(
-            int(transfer_id), from_account_no, amount_krw, settlement_type, customer_no
-        )
+    # 트랜잭션 커밋 후 Kafka 결제망 토픽 발행 (가이드 §2.4 / §3.3 트랜잭션 경계).
+    # Kafka 미가동 시 send_event 가 False 리턴 → 즉시 in-process fallback (데모 안정성).
+    from . import kafka as kafka_svc
+
+    event_payload = {
+        "transfer_id": int(transfer_id),
+        "from_account_no": from_account_no,
+        "amount_krw": amount_krw,
+        "settlement_type": settlement_type,
+        "customer_no": customer_no,
+        "requested_at": now_str,
+    }
+    sent = await kafka_svc.send_event(
+        kafka_svc.TOPIC_SETTLEMENT_REQUESTED,
+        event_payload,
+        key=str(transfer_id),
     )
+    if not sent:
+        asyncio.create_task(handle_settlement_requested(event_payload))
 
     log.info(
         "inter_bank_transfer_pending",
@@ -557,14 +571,17 @@ async def _process_inter_bank(
     )
 
 
-async def _settle_simulation(
-    transfer_id: int,
-    from_account_no: str,
-    amount_krw: int,
-    settlement_type: str,
-    customer_no: int,
-) -> None:
-    """외부 결제망(KFTC/BOK) 정산 시뮬레이션 — sleep + 성공률 + 후속 알림."""
+async def handle_settlement_requested(event: dict) -> None:
+    """Kafka `transfer.settlement.requested` 컨슈머 핸들러.
+
+    외부 결제망(KFTC/BOK) 정산 시뮬레이션 — sleep + 성공률 + 후속 알림.
+    같은 함수가 Kafka 미가동 시 in-process fallback 으로도 호출된다 (graceful).
+    """
+    transfer_id = int(event["transfer_id"])
+    from_account_no = event["from_account_no"]
+    amount_krw = int(event["amount_krw"])
+    settlement_type = event["settlement_type"]
+    customer_no = int(event["customer_no"])
     delay_range = KFTC_DELAY_MS if settlement_type == "KFTC_SMALL" else BOK_DELAY_MS
     success_rate = (
         KFTC_SUCCESS_RATE if settlement_type == "KFTC_SMALL" else BOK_SUCCESS_RATE
@@ -583,6 +600,7 @@ async def _settle_simulation(
                     type_cd="TRANSFER",
                     title="이체 완료",
                     body=f"{amount_krw:,}원 이체가 정산 완료되었습니다.",
+                    link_url="/dashboard",
                     reference_id=transfer_id,
                     reference_type="TRANSFER",
                 )
@@ -598,6 +616,7 @@ async def _settle_simulation(
                     title="이체 실패 — 자금 반환",
                     body=f"{amount_krw:,}원 이체가 외부 결제망 거절로 실패했습니다. "
                          "출금액은 자동 복원되었습니다.",
+                    link_url="/dashboard",
                     reference_id=transfer_id,
                     reference_type="TRANSFER",
                 )
