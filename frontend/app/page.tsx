@@ -1,7 +1,9 @@
 "use client";
 
+import { useMemo } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth";
+import { useFetch } from "@/lib/use-fetch";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -55,11 +57,14 @@ const FEATURED_PRODUCTS: {
   },
 ];
 
-const NOTICES: { title: string; tag: string; date: string }[] = [
-  { title: "신규 가입 고객 정기예금 우대금리 +0.5%p 이벤트", tag: "이벤트", date: "2026-05-15" },
-  { title: "2026년 6월 자동이체 수수료 면제 안내", tag: "공지", date: "2026-05-10" },
-  { title: "다온뱅크 콜센터 운영시간 변경 안내", tag: "공지", date: "2026-05-08" },
-];
+interface BoardBrief {
+  id: number;
+  title: string;
+  published_at: string;
+}
+interface BoardListResponse {
+  items: BoardBrief[];
+}
 
 const QUICK_SERVICES: { href: string; icon: string; label: string; desc: string }[] = [
   { href: "/products", icon: "💰", label: "상품 카탈로그", desc: "예금·적금·대출" },
@@ -75,6 +80,20 @@ const QUICK_SERVICES: { href: string; icon: string; label: string; desc: string 
 
 export default function Page() {
   const { isAuthenticated, isReady } = useAuth();
+  const { data: noticeData } = useFetch<BoardListResponse>("/api/notices?size=3");
+  const { data: eventData } = useFetch<BoardListResponse>("/api/events?size=3");
+
+  const boardItems = useMemo(() => {
+    const evts = (eventData?.items ?? []).slice(0, 2).map((e) => ({
+      ...e,
+      kind: "event" as const,
+    }));
+    const ntcs = (noticeData?.items ?? []).slice(0, 3).map((n) => ({
+      ...n,
+      kind: "notice" as const,
+    }));
+    return [...evts, ...ntcs].slice(0, 5);
+  }, [noticeData, eventData]);
 
   return (
     <main className="container max-w-5xl animate-fade-in space-y-12 py-8">
@@ -175,22 +194,44 @@ export default function Page() {
       <section>
         <div className="flex items-baseline justify-between">
           <h2 className="text-lg font-semibold">이벤트·공지</h2>
+          <div className="flex gap-3 text-xs">
+            <Link href="/events" className="text-primary hover:underline">
+              이벤트 전체 →
+            </Link>
+            <Link href="/notices" className="text-primary hover:underline">
+              공지 전체 →
+            </Link>
+          </div>
         </div>
         <ul className="mt-3 divide-y rounded-md border bg-card">
-          {NOTICES.map((n, i) => (
-            <li key={i} className="flex items-center gap-3 p-3 text-sm">
-              <span
-                className={cn(
-                  "rounded px-1.5 py-0.5 text-[10px]",
-                  n.tag === "이벤트" ? "bg-warning/15 text-warning" : "bg-muted text-muted-foreground",
-                )}
+          {boardItems.map((it) => (
+            <li key={`${it.kind}-${it.id}`}>
+              <Link
+                href={`/${it.kind === "event" ? "events" : "notices"}/${it.id}`}
+                className="flex items-center gap-3 p-3 text-sm transition-colors hover:bg-accent"
               >
-                {n.tag}
-              </span>
-              <span className="min-w-0 flex-1 truncate">{n.title}</span>
-              <span className="font-mono text-xs text-muted-foreground">{n.date}</span>
+                <span
+                  className={cn(
+                    "rounded px-1.5 py-0.5 text-[10px]",
+                    it.kind === "event"
+                      ? "bg-warning/15 text-warning"
+                      : "bg-muted text-muted-foreground",
+                  )}
+                >
+                  {it.kind === "event" ? "이벤트" : "공지"}
+                </span>
+                <span className="min-w-0 flex-1 truncate">{it.title}</span>
+                <span className="font-mono text-xs text-muted-foreground">
+                  {new Date(it.published_at).toLocaleDateString("ko-KR")}
+                </span>
+              </Link>
             </li>
           ))}
+          {boardItems.length === 0 && (
+            <li className="p-3 text-center text-xs text-muted-foreground">
+              불러오는 중…
+            </li>
+          )}
         </ul>
       </section>
 
