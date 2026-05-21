@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from .api.account import router as account_router
-from .api.auth import router as auth_router
+from .api.auth import router as auth_router, setup_router
 from .api.auto_transfer import router as auto_transfer_router
 from .api.chatbot import router as chatbot_router
 from .api.favorite_account import router as favorite_account_router
@@ -46,7 +46,22 @@ async def lifespan(app: FastAPI):
         log.info("chatbot_corpora_loaded", **corpora_stats())
     else:
         log.warning("chatbot_corpora_missing", data_dir=str(data_dir))
+
+    # Kafka (가이드 §2.4) — producer + consumer 백그라운드 등록.
+    # 브로커 미가동 시 send_event 는 no-op 으로 graceful degrade.
+    from .service import kafka as kafka_svc
+    from .service.transfer import handle_settlement_requested
+
+    await kafka_svc.start_producer()
+    await kafka_svc.start_consumer(
+        kafka_svc.TOPIC_SETTLEMENT_REQUESTED,
+        handle_settlement_requested,
+    )
+
     yield
+
+    await kafka_svc.stop_consumers()
+    await kafka_svc.stop_producer()
     await close_pool()
     log.info("app_shutdown")
 
@@ -106,6 +121,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 # prefix 없이 그대로 둔다.
 api = APIRouter(prefix="/api")
 api.include_router(auth_router)
+api.include_router(setup_router)
 api.include_router(signup_router)
 api.include_router(account_router)
 api.include_router(transactions_router)

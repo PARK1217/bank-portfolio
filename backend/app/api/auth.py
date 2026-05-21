@@ -158,3 +158,26 @@ async def me(user: CurrentCustomer = Depends(current_customer)) -> dict:
         "grade_cd": user.grade_cd,
         "status_cd": user.status_cd,
     }
+
+
+# ---------------------------------------------------------------------------
+# /setup/* alias — 프론트엔드 `/setup/otp` 화면이 호출하는 path 정합.
+#   화면(`frontend/app/setup/otp/page.tsx`):
+#     POST /api/setup/otp/init  → 시크릿/QR URI 발급
+#     POST /api/setup/otp       → 6자리 코드 검증·활성
+#   동일 핸들러를 그대로 재사용하므로 동작·응답 형식은 `/auth/otp/*` 와 같다.
+# ---------------------------------------------------------------------------
+
+setup_router = APIRouter(prefix="/setup", tags=["setup"])
+
+setup_router.add_api_route(
+    "/otp/init",
+    otp_init,
+    methods=["POST"],
+    response_model=OtpSetupInitResponse,
+)
+setup_router.add_api_route(
+    "/otp",
+    otp_verify,
+    methods=["POST"],
+)
