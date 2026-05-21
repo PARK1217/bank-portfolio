@@ -17,12 +17,13 @@
  *   B. **서버 401 인터셉트** (lib/api.ts onAuthExpired)
  *      - 응답 코드 E_TOKEN_EXPIRED / E_TOKEN_INVALID 시 자동 signOut + /auto-logout?reason=expired|invalid
  *      - A 가 먼저 트리거되면 B 는 중복 진입 방지 (현재 path 가 /auto-logout 이면 skip)
- *   C. **활동 기반 silent refresh**
- *      - 명시적 사용자 액션만 활동으로 인정 — `keydown` / `click` / `touchstart` + 라우트 변경(`usePathname` 변동)
- *        마우스 호버(`mousemove`)와 스크롤은 의도 없는 신호로 보고 제외. 페이지 새로고침은 Provider remount 로 자동 카운트.
- *      - 만료 임박(`SILENT_REFRESH_THRESHOLD_SEC`) 시점에 최근 활동(`SILENT_REFRESH_ACTIVITY_WINDOW_MS`)
- *        이 있으면 자동으로 `/api/auth/refresh` 호출 → 토큰 교체 + 카운트다운 재시작 (silent, 토스트 없음)
- *      - 이 갱신이 성공하면 만료 60초 전 경고도 새 토큰의 exp 기준으로 다시 계산
+ *   C. **활동 즉시 silent refresh**
+ *      - 명시적 사용자 액션이 들어오는 즉시 `/api/auth/refresh` 호출 → 카운트다운 30분 재시작
+ *      - 인정 액션: `keydown` / `click` / `touchstart` + 라우트 변경(`usePathname` 변동)
+ *        마우스 호버(`mousemove`)와 스크롤은 의도 없는 신호로 보고 제외. 페이지 새로고침은 Provider remount 시 1회 호출.
+ *      - 서버 부하 방지를 위해 마지막 갱신 후 `ACTIVITY_REFRESH_THROTTLE_MS` 안에 들어온 활동은 skip
+ *      - 토스트 없음 (silent). 수동 "연장" 버튼만 토스트 표시.
+ *      - 활동이 전혀 없으면 토큰은 정직하게 만료 → 60초 전 경고 + 만료 시 자동 로그아웃
  */
 
 import {
@@ -51,8 +52,7 @@ import {
 
 const TICK_MS = 1000;                  // 1초 tick
 const WARN_BEFORE_SEC = 60;            // 만료 60초 전 토스트 경고
-const SILENT_REFRESH_THRESHOLD_SEC = 120;        // 만료 2분 남으면 활동 체크 시작
-const SILENT_REFRESH_ACTIVITY_WINDOW_MS = 60_000; // 최근 60초 내 활동 있어야 자동 갱신
+const ACTIVITY_REFRESH_THROTTLE_MS = 30_000; // 활동 기반 자동 갱신 최소 간격 (30초)
 
 
 // ---------------------------------------------------------------------------
@@ -131,8 +131,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [idleRemainingSec, setIdleRemainingSec] = useState<number | null>(null);
   // 1회 경고 토스트 발화 여부 (token 단위로 reset 됨)
   const warnedRef = useRef<boolean>(false);
-  // 활동 기반 silent refresh — 최근 활동 시각 + 중복 호출 방지
-  const lastActivityRef = useRef<number>(Date.now());
+  // 활동 즉시 silent refresh — 마지막 갱신 시각(throttle) + 중복 호출 방지
+  const lastRefreshAtRef = useRef<number>(0);
   const refreshingRef = useRef<boolean>(false);
 
   // ---- 초기 localStorage 동기화 -----------------------------------------
@@ -173,6 +173,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const performRefresh = useCallback(async (opts: { silent: boolean }) => {
     if (refreshingRef.current) return;
+    // silent(활동 기반) 호출만 throttle. 수동 "연장" 버튼은 항상 통과.
+    if (opts.silent && Date.now() - lastRefreshAtRef.current < ACTIVITY_REFRESH_THROTTLE_MS) {
+      return;
+    }
     refreshingRef.current = true;
     try {
       const res = await api.post<{ access_token: string; expires_in: number }>(
@@ -181,6 +185,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       );
       setStoredToken(res.access_token);
       warnedRef.current = false;  // 새 토큰 → 경고 재시작
+      lastRefreshAtRef.current = Date.now();
       setState((s) => ({
         ...s,
         token: res.access_token,
@@ -232,16 +237,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const remainingSec = Math.max(0, Math.ceil(remainingMs / 1000));
       setIdleRemainingSec(remainingSec);
 
-      // 활동 기반 silent refresh — 만료 2분 전 + 최근 60초 내 활동 있으면 자동 갱신
-      if (
-        remainingSec > 0 &&
-        remainingSec <= SILENT_REFRESH_THRESHOLD_SEC &&
-        Date.now() - lastActivityRef.current <= SILENT_REFRESH_ACTIVITY_WINDOW_MS &&
-        !refreshingRef.current
-      ) {
-        void performRefresh({ silent: true });
-      }
-
       // 만료 60초 전 — 1회만 경고
       if (remainingSec <= WARN_BEFORE_SEC && remainingSec > 0 && !warnedRef.current) {
         warnedRef.current = true;
@@ -271,26 +266,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [state.isAuthenticated, state.token, signOut, router, performRefresh]);
 
-  // ---- Layer C : 사용자 활동 시각 기록 (활동 기반 silent refresh 입력) ------
+  // ---- Layer C : 사용자 활동 즉시 silent refresh ---------------------------
   // mousemove(호버)·scroll 같은 의도 없는 신호는 제외. 명시적 입력만 카운트.
+  // throttle 은 performRefresh 내부의 lastRefreshAtRef 가 담당 — 30초 안에 들어온 활동은 skip.
   useEffect(() => {
     if (!state.isAuthenticated) return;
-    const markActivity = () => {
-      lastActivityRef.current = Date.now();
+    const onActivity = () => {
+      void performRefresh({ silent: true });
     };
     const evts: (keyof WindowEventMap)[] = ["keydown", "click", "touchstart"];
-    evts.forEach((e) => window.addEventListener(e, markActivity, { passive: true }));
+    evts.forEach((e) => window.addEventListener(e, onActivity, { passive: true }));
     return () => {
-      evts.forEach((e) => window.removeEventListener(e, markActivity));
+      evts.forEach((e) => window.removeEventListener(e, onActivity));
     };
-  }, [state.isAuthenticated]);
+  }, [state.isAuthenticated, performRefresh]);
 
-  // ---- Layer C-2 : 라우트 변경(클라이언트 네비) 시에도 활동으로 인정 ---------
-  // 새로고침은 Provider 가 remount 되며 lastActivityRef 초기값(Date.now())이 이 역할.
+  // ---- Layer C-2 : 라우트 변경(클라이언트 네비) 시에도 즉시 갱신 -----------
+  // 새로고침은 Provider 가 remount 되며 이 effect 첫 실행이 그 역할.
   useEffect(() => {
     if (!state.isAuthenticated) return;
-    lastActivityRef.current = Date.now();
-  }, [pathname, state.isAuthenticated]);
+    void performRefresh({ silent: true });
+  }, [pathname, state.isAuthenticated, performRefresh]);
 
   return (
     <AuthContext.Provider
