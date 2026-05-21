@@ -16,6 +16,7 @@ from .api.notice import router as notice_router
 from .api.notification import router as notification_router
 from .api.password import router as password_router
 from .api.product import router as product_router
+from .api.product_open import router as product_open_router
 from .api.security import router as security_router
 from .api.signup import router as signup_router
 from .api.terms import router as terms_router
@@ -155,6 +156,9 @@ api.include_router(account_router)
 api.include_router(limit_change_router)
 api.include_router(transactions_router)
 api.include_router(dashboard_router)
+# product_open_router 가 `/products/{id}/terms`, `/products/{id}/open-*`, `/products/complete/{token}`
+# 같이 더 구체적인 path 를 가지므로 product_router(`/{product_id}` 동적 path) 보다 먼저 등록.
+api.include_router(product_open_router)
 api.include_router(product_router)
 api.include_router(terms_router)
 # auto_transfer / favorite_account 라우터는 transfer_router 보다 먼저 등록 —
