@@ -6,6 +6,7 @@ from fastapi.responses import JSONResponse
 
 from .api.account import router as account_router
 from .api.account_open import router as account_open_router
+from .api.admin_auth import router as admin_auth_router
 from .api.admin_loan import router as admin_loan_router
 from .api.auth import router as auth_router, setup_router
 from .api.auto_transfer import router as auto_transfer_router
@@ -191,6 +192,7 @@ api.include_router(favorite_account_router)
 api.include_router(auto_transfer_router)
 api.include_router(transfer_router)
 api.include_router(loan_router)
+api.include_router(admin_auth_router)
 api.include_router(admin_loan_router)
 api.include_router(chatbot_router)
 api.include_router(notification_router)
