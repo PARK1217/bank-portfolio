@@ -18,3 +18,8 @@ pyotp==2.9.0
 
 # Kafka (가이드 §2.4) — 타행이체 결제망 시뮬·챗봇 LLM 호출 trace
 aiokafka==0.11.0
+
+# ML 대출 자동 승인 PoC (가이드 §9.2.6) — UCI German Credit + 합성 학습
+ucimlrepo==0.0.7
+xgboost==2.1.1
+joblib==1.4.2

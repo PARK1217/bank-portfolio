@@ -1,0 +1,50 @@
+{
+  "version": "v1",
+  "trained_rows": 10000,
+  "feature_order": [
+    "credit_score",
+    "overdue_days_24m",
+    "overdue_ratio",
+    "deposit_balance",
+    "annual_income",
+    "request_ratio"
+  ],
+  "threshold_high": 0.85,
+  "threshold_low": 0.3,
+  "metrics": {
+    "logistic": {
+      "auc": 0.9375249772330284,
+      "precision": 0.9387947269303202,
+      "recall": 0.8692240627724499,
+      "f1": 0.9026708918062472
+    },
+    "xgboost": {
+      "auc": 0.9902538964483526,
+      "precision": 0.9393680614859095,
+      "recall": 0.9590235396687009,
+      "f1": 0.9490940465918896
+    }
+  },
+  "decision_distribution": {
+    "logistic": {
+      "auto_approve_pct": 24.9,
+      "auto_reject_pct": 32.6,
+      "human_review_pct": 42.5,
+      "total": 2000
+    },
+    "xgboost": {
+      "auto_approve_pct": 50.5,
+      "auto_reject_pct": 38.4,
+      "human_review_pct": 11.1,
+      "total": 2000
+    }
+  },
+  "feature_importances": {
+    "credit_score": 0.6265181303024292,
+    "overdue_days_24m": 0.10890380293130875,
+    "overdue_ratio": 0.0,
+    "deposit_balance": 0.06381445378065109,
+    "annual_income": 0.0315527617931366,
+    "request_ratio": 0.16921085119247437
+  }
+}
