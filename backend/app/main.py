@@ -90,8 +90,20 @@ async def lifespan(app: FastAPI):
         group_id="verify-reply-consumer",
     )
 
+    # 자동이체 실행 워커 — AUTO_TRANSFER ACTIVE 스캔 + AUTO_TRANSFER_EXEC 적재.
+    import asyncio as _asyncio
+
+    from .service import auto_transfer_worker
+
+    auto_transfer_task = _asyncio.create_task(auto_transfer_worker.run())
+
     yield
 
+    auto_transfer_task.cancel()
+    try:
+        await auto_transfer_task
+    except _asyncio.CancelledError:
+        pass
     await kafka_svc.stop_consumers()
     await kafka_svc.stop_producer()
     await close_pool()

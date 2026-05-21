@@ -59,8 +59,8 @@ const CYCLE_LABEL: Record<string, string> = {
 const STATUS_LABEL: Record<string, { label: string; color: string }> = {
   ACTIVE: { label: "정상", color: "text-success" },
   PAUSED: { label: "일시정지", color: "text-warning" },
-  CANCELED: { label: "취소", color: "text-muted-foreground" },
-  COMPLETED: { label: "종료", color: "text-muted-foreground" },
+  CANCEL: { label: "취소", color: "text-muted-foreground" },
+  COMPLETE: { label: "종료", color: "text-muted-foreground" },
 };
 
 const LINKED_LABEL: Record<string, string> = {
@@ -115,7 +115,7 @@ function AutoTransferList() {
             const isActive = it.auto_status_cd === "ACTIVE";
             const isPaused = it.auto_status_cd === "PAUSED";
             const isTerminal =
-              it.auto_status_cd === "CANCELED" || it.auto_status_cd === "COMPLETED";
+              it.auto_status_cd === "CANCEL" || it.auto_status_cd === "COMPLETE";
 
             return (
               <li key={it.auto_token}>
