@@ -19,6 +19,7 @@ E_UNAUTHORIZED = "E_UNAUTHORIZED"                # 401
 # 공통 비즈니스
 E_NOT_FOUND = "E_NOT_FOUND"                      # 404 (본인 외 자원 접근 포함)
 E_IDEMPOTENCY_CONFLICT = "E_IDEMPOTENCY_CONFLICT"  # 409
+E_OTP_ALREADY_ACTIVE = "E_OTP_ALREADY_ACTIVE"    # 409 (이미 활성화된 OTP — 재등록은 /security/otp 흐름)
 
 # 이체 도메인
 E_BALANCE_INSUFFICIENT = "E_BALANCE_INSUFFICIENT"  # 422

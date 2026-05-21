@@ -15,8 +15,8 @@ import structlog
 from fastapi import APIRouter, Depends
 
 from ..db import get_pool
-from ..errors import E_UNAUTHORIZED, E_VALIDATION
-from ..exceptions import AuthError, BusinessError
+from ..errors import E_OTP_ALREADY_ACTIVE, E_UNAUTHORIZED, E_VALIDATION
+from ..exceptions import AuthError, BusinessError, ConflictError
 from ..schema.auth import (
     LoginRequest,
     LoginResponse,
@@ -121,6 +121,12 @@ def _gen_otp_secret() -> str:
 async def otp_init(
     user: CurrentCustomer = Depends(current_customer),
 ) -> OtpSetupInitResponse:
+    # 이미 활성화된 사용자가 재호출하면 기존 secret 이 덮어쓰여 기존 OTP 가 무효화되므로 거부.
+    # 재발급/변경은 별도 흐름(`/security/otp`)에서 기존 secret 해제 후 다시 init 한다.
+    existing = _otp_secrets.get(user.customer_no)
+    if existing and existing.get("active"):
+        raise ConflictError(E_OTP_ALREADY_ACTIVE, "이미 OTP가 등록되어 있어요.")
+
     s = _gen_otp_secret()
     _otp_secrets[user.customer_no] = {"secret": s, "active": False}
     # pyotp.TOTP(s).provisioning_uri(...) 로 자동 생성 가능
@@ -152,11 +158,13 @@ async def otp_verify(
 
 @router.get("/me")
 async def me(user: CurrentCustomer = Depends(current_customer)) -> dict:
+    entry = _otp_secrets.get(user.customer_no)
     return {
         "customer_no": user.customer_no,
         "email": user.email,
         "grade_cd": user.grade_cd,
         "status_cd": user.status_cd,
+        "otp_active": bool(entry and entry.get("active")),
     }
 
 

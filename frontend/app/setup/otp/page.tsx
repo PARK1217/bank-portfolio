@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Protected } from "@/components/protected";
@@ -31,6 +31,12 @@ interface OtpInitResponse {
 const QR_BASE = "https://api.qrserver.com/v1/create-qr-code/";
 
 
+interface MeResponse {
+  customer_no: number;
+  email: string;
+  otp_active?: boolean;
+}
+
 function OtpSetupContent() {
   const router = useRouter();
   const [stage, setStage] = useState<"INIT" | "VERIFY" | "DONE">("INIT");
@@ -38,6 +44,31 @@ function OtpSetupContent() {
   const [otpauthUri, setOtpauthUri] = useState<string>("");
   const [otpCode, setOtpCode] = useState("");
   const [loading, setLoading] = useState(false);
+  const [checking, setChecking] = useState(true);
+
+  // 이미 OTP 가 등록된 사용자가 진입하면 기존 secret 이 무효화되지 않도록
+  // 즉시 보안(OTP 재발급) 화면으로 보낸다.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const me = await api.get<MeResponse>("/api/auth/me");
+        if (cancelled) return;
+        if (me.otp_active) {
+          toast.info("이미 OTP가 등록되어 있어요. 재발급 화면으로 이동할게요.");
+          router.replace("/security/otp");
+          return;
+        }
+      } catch {
+        // me 조회 실패 시 화면은 그대로 두고 시작 버튼 단계로 진행 — start() 호출 시 백엔드 가드가 한 번 더 막는다.
+      } finally {
+        if (!cancelled) setChecking(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
 
   async function start() {
     if (loading) return;
@@ -90,7 +121,13 @@ function OtpSetupContent() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
-        {stage === "INIT" ? (
+        {checking ? (
+          <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
+            <Spinner />
+            <span>등록 상태 확인 중…</span>
+          </div>
+        ) : null}
+        {!checking && stage === "INIT" ? (
           <>
             <ol className="space-y-1 text-sm text-muted-foreground">
               <li>1. 스마트폰에 TOTP 앱(Authenticator) 을 설치합니다.</li>
