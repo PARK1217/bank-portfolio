@@ -50,12 +50,17 @@ async def lifespan(app: FastAPI):
     # Kafka (가이드 §2.4) — producer + consumer 백그라운드 등록.
     # 브로커 미가동 시 send_event 는 no-op 으로 graceful degrade.
     from .service import kafka as kafka_svc
+    from .service.chatbot import handle_llm_call_trace
     from .service.transfer import handle_settlement_requested
 
     await kafka_svc.start_producer()
     await kafka_svc.start_consumer(
         kafka_svc.TOPIC_SETTLEMENT_REQUESTED,
         handle_settlement_requested,
+    )
+    await kafka_svc.start_consumer(
+        kafka_svc.TOPIC_CHATBOT_LLM_CALLS,
+        handle_llm_call_trace,
     )
 
     yield
