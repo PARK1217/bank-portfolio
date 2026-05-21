@@ -102,6 +102,20 @@ async def logout(
     return LogoutResponse(revoked_tokens=revoked)
 
 
+@router.post("/refresh")
+async def refresh(
+    user: CurrentCustomer = Depends(current_customer),
+) -> dict:
+    """현재 유효 JWT 를 검증 후 새 JWT 재발급 (silent refresh / 명시적 시간 연장).
+
+    프론트엔드 시간 연장 버튼 또는 silent refresh 흐름에서 호출.
+    기존 JWT 가 유효해야만 통과 — 만료 후엔 다시 로그인 필요.
+    """
+    token, expires_in = issue_access_token(user.customer_no)
+    log.info("token_refresh", customer_no=user.customer_no)
+    return {"access_token": token, "expires_in": expires_in}
+
+
 import pyotp
 
 # ---------------------------------------------------------------------------

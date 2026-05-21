@@ -28,19 +28,28 @@ export function IdleCountdown() {
         : "text-muted-foreground";
 
   return (
-    <button
-      type="button"
-      onClick={refreshIdle}
-      title="세션 만료까지 남은 시간 — 만료 시 자동 로그아웃됩니다."
-      className={cn(
-        "num-tabular font-mono text-xs tabular-nums",
-        "rounded-md px-2 py-1 hover:bg-accent transition-colors",
-        colorCls,
-      )}
-      aria-label={`세션 만료까지 ${mm}분 ${ss}초 남음.`}
-    >
-      <span aria-hidden className="mr-1 opacity-60">⏱</span>
-      {mm}:{ss}
-    </button>
+    <div className="flex items-center gap-1">
+      <span
+        title="세션 만료까지 남은 시간 — 만료 시 자동 로그아웃됩니다."
+        className={cn(
+          "num-tabular font-mono text-xs tabular-nums",
+          "rounded-md px-2 py-1",
+          colorCls,
+        )}
+        aria-label={`세션 만료까지 ${mm}분 ${ss}초 남음.`}
+      >
+        <span aria-hidden className="mr-1 opacity-60">⏱</span>
+        {mm}:{ss}
+      </span>
+      <button
+        type="button"
+        onClick={refreshIdle}
+        title="세션을 30분 더 연장합니다."
+        className="rounded-md border border-input bg-background px-2 py-1 text-[10px] text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+        aria-label="세션 30분 연장"
+      >
+        연장
+      </button>
+    </div>
   );
 }

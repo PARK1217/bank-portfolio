@@ -161,11 +161,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setState({ token: null, customerNo: null, isAuthenticated: false, isReady: true });
   }, []);
 
-  const refreshIdle = useCallback(() => {
-    // 백엔드 refresh endpoint 미구현 — 사용자 시도 시 안내만.
-    toast.info("자동 연장은 현재 지원하지 않습니다. 만료 후 다시 로그인해 주세요.", {
-      duration: 4000,
-    });
+  const refreshIdle = useCallback(async () => {
+    // 백엔드 `/api/auth/refresh` 호출 → 새 JWT 받기 → storage 갱신 → 카운트다운 자동 재시작.
+    try {
+      const res = await api.post<{ access_token: string; expires_in: number }>(
+        "/api/auth/refresh",
+        null,
+      );
+      setStoredToken(res.access_token);
+      warnedRef.current = false;  // 새 토큰 → 경고 재시작
+      setState((s) => ({
+        ...s,
+        token: res.access_token,
+        customerNo: decodeJwt(res.access_token).customerNo ?? s.customerNo,
+      }));
+      toast.success("세션이 연장되었습니다.", { duration: 2500 });
+    } catch {
+      // 401 인터셉트가 별도로 동작하므로 별도 토스트 불필요
+    }
   }, []);
 
   // ---- Layer B : 서버 인증 만료 응답 자동 처리 -----------------------------
@@ -252,4 +265,4 @@ export function useAuth(): AuthContextValue {
 }
 
 /** UI 안내용 — 백엔드 JWT_EXPIRE_MINUTES 와 일치해야 함 (`backend/app/config.py`). */
-export const IDLE_TIMEOUT_MINUTES = 60;
+export const IDLE_TIMEOUT_MINUTES = 30;

@@ -5,7 +5,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str
     JWT_SECRET: str
     JWT_ALGORITHM: str = "HS256"
-    JWT_EXPIRE_MINUTES: int = 60
+    JWT_EXPIRE_MINUTES: int = 30  # 은행 도메인 표준 idle. 프론트엔드 카운트다운과 일치.
     CORS_ORIGINS: str = "http://localhost:3001"
 
     # LLM API — `groq` 우선(가이드 §0 Llama 3.1 호환), `mistral`/`huggingface` fallback.

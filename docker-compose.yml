@@ -33,7 +33,7 @@ services:
       DATABASE_URL: postgresql://bank:bank1234@postgres:5432/bank
       JWT_SECRET: dev-secret-change-in-production-please-12345
       JWT_ALGORITHM: HS256
-      JWT_EXPIRE_MINUTES: 60
+      JWT_EXPIRE_MINUTES: 30
       CORS_ORIGINS: http://localhost:3001
       # LLM API (host `.env` 에서 보간, gitignore). 미설정 시 fallback 응답.
       GROQ_API_KEY: ${GROQ_API_KEY:-}
