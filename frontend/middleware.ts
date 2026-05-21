@@ -28,6 +28,7 @@ const PUBLIC_PATHS: (string | RegExp)[] = [
   "/login",
   "/auto-logout",
   /^\/signup(\/|$)/,
+  /^\/password\/reset(\/|$)/,
   /^\/terms(\/|$)/,
   /^\/products(\/|$)/,
   /^\/notices(\/|$)/,

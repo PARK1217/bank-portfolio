@@ -10,9 +10,11 @@ from .api.auto_transfer import router as auto_transfer_router
 from .api.chatbot import router as chatbot_router
 from .api.favorite_account import router as favorite_account_router
 from .api.dashboard import router as dashboard_router
+from .api.limit_change import router as limit_change_router
 from .api.loan import router as loan_router
 from .api.notice import router as notice_router
 from .api.notification import router as notification_router
+from .api.password import router as password_router
 from .api.product import router as product_router
 from .api.security import router as security_router
 from .api.signup import router as signup_router
@@ -129,8 +131,13 @@ api = APIRouter(prefix="/api")
 api.include_router(auth_router)
 api.include_router(setup_router)
 api.include_router(security_router)
+api.include_router(password_router)
 api.include_router(signup_router)
 api.include_router(account_router)
+# limit_change_router 는 account_router(prefix="/accounts") 와 prefix 공유 —
+# `/accounts/{no}/limit-change*` 가 account_router 의 동적 path 와 충돌하지 않도록
+# account_router 다음에 별도 mount.
+api.include_router(limit_change_router)
 api.include_router(transactions_router)
 api.include_router(dashboard_router)
 api.include_router(product_router)

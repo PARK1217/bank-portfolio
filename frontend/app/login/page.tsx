@@ -105,6 +105,10 @@ function LoginForm() {
               <Link href="/signup" className="text-primary hover:underline">
                 회원가입
               </Link>
+              {" · "}
+              <Link href="/password/reset" className="text-primary hover:underline">
+                비밀번호를 잊으셨나요?
+              </Link>
             </p>
           </form>
         </CardContent>
