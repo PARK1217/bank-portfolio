@@ -12,6 +12,8 @@ CUSTOMER.SIMPLE_PIN 은 고객 단위 1개이지만 잠금 카운터는 ACCOUNT 
 
 from __future__ import annotations
 
+from datetime import datetime
+
 import pyotp
 import structlog
 from fastapi import APIRouter, Depends
@@ -20,8 +22,10 @@ from pydantic import BaseModel, Field
 from ..db import get_pool
 from ..errors import E_NOT_FOUND, E_VALIDATION
 from ..exceptions import BusinessError, NotFoundError
-from ..service.auth import CurrentCustomer, current_customer
+from ..service.auth import CurrentCustomer, current_customer, get_token_service
 from ..service.auth.passwords import hash_password, verify_password
+from ..service.fds import confirm_alert, list_alerts, report_alert
+from ..service.token import TokenService
 
 # auth.py 의 in-memory secret store 를 그대로 공유.
 # (운영은 CUSTOMER.OTP_SECRET 영구화 — 별도 작업)
@@ -161,3 +165,49 @@ async def simple_pin_reset(
         unlocked_accounts=unlocked,
     )
     return SimplePinResetResponse(success=True, unlocked_accounts=unlocked)
+
+
+# ---------------------------------------------------------------------------
+# SCR-SC-007 의심 거래 (FDS_DETECTION)
+# ---------------------------------------------------------------------------
+
+class FdsAlertItem(BaseModel):
+    fds_id: int
+    detected_at: datetime
+    tx_token: str | None = None
+    amount_krw: int = 0
+    to_masked: str | None = None
+    score: int = 0
+    reasons: list[str] = Field(default_factory=list)
+    status_cd: str = Field(..., description="PENDING / CONFIRMED_OK / REPORTED")
+
+
+class FdsAlertListResponse(BaseModel):
+    items: list[FdsAlertItem]
+
+
+@router.get("/fds-alerts", response_model=FdsAlertListResponse)
+async def list_fds_alerts(
+    user: CurrentCustomer = Depends(current_customer),
+    tokens: TokenService = Depends(get_token_service),
+) -> FdsAlertListResponse:
+    items = await list_alerts(user.customer_no, tokens)
+    return FdsAlertListResponse(items=[FdsAlertItem(**i) for i in items])
+
+
+@router.post("/fds-alerts/{fds_id}/confirm")
+async def confirm_fds_alert(
+    fds_id: int,
+    user: CurrentCustomer = Depends(current_customer),
+) -> dict:
+    await confirm_alert(user.customer_no, fds_id)
+    return {"success": True, "status_cd": "CONFIRMED_OK"}
+
+
+@router.post("/fds-alerts/{fds_id}/report")
+async def report_fds_alert(
+    fds_id: int,
+    user: CurrentCustomer = Depends(current_customer),
+) -> dict:
+    await report_alert(user.customer_no, fds_id)
+    return {"success": True, "status_cd": "REPORTED"}
