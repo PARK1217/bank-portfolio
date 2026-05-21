@@ -16,6 +16,7 @@ interface MenuItem {
 
 const MENUS: MenuItem[] = [
   { href: "/security/password", title: "비밀번호 변경", desc: "현재 비밀번호 확인 후 새 비밀번호로 변경" },
+  { href: "/security/simple-pin/reset", title: "계좌 비밀번호 재설정", desc: "OTP 인증으로 6자리 PIN 변경 · 5회 오류 잠금도 함께 해제" },
   { href: "/setup/otp", title: "OTP 등록", desc: "Authenticator 앱과 연결해 일회용 비밀번호 등록", badge: "권장" },
   { href: "/security/otp", title: "OTP 재발급·변경", desc: "기존 OTP 재발급 또는 변경" },
   { href: "/security/devices", title: "기기 관리", desc: "등록된 기기 목록·접속 이력 조회" },

@@ -14,6 +14,7 @@ from .api.loan import router as loan_router
 from .api.notice import router as notice_router
 from .api.notification import router as notification_router
 from .api.product import router as product_router
+from .api.security import router as security_router
 from .api.signup import router as signup_router
 from .api.terms import router as terms_router
 from .api.transactions import router as transactions_router
@@ -127,6 +128,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 api = APIRouter(prefix="/api")
 api.include_router(auth_router)
 api.include_router(setup_router)
+api.include_router(security_router)
 api.include_router(signup_router)
 api.include_router(account_router)
 api.include_router(transactions_router)

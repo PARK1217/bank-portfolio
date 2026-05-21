@@ -151,9 +151,26 @@ async def otp_verify(
         # 6자리 숫자 형식만 맞는다고 통과시키던 mock 검증 우회 픽스 (2026-05-20)
         raise BusinessError(E_VALIDATION, "OTP 코드가 올바르지 않습니다.")
 
+    was_active = bool(entry.get("active"))
     entry["active"] = True
-    log.info("otp_active", customer_no=user.customer_no)
-    return {"active": True}
+
+    # 첫 등록 시 본인 보유 계좌의 일일 출금 한도를 5천만으로 상향(이미 더 큰 한도면 유지).
+    # 디폴트 30만 제한을 OTP 등록으로 비대면 해제하는 정책 (SCR-SC-008).
+    raised_count = 0
+    if not was_active:
+        pool = get_pool()
+        async with pool.acquire() as conn:
+            status = await conn.execute(
+                'UPDATE public."ACCOUNT" '
+                'SET "DAILY_WITHDRAW_LIMIT" = GREATEST(COALESCE("DAILY_WITHDRAW_LIMIT", 0), 50000000) '
+                'WHERE "CUSTOMER_NO" = $1 AND "DELETE_YN" = \'N\'',
+                user.customer_no,
+            )
+            if status and status.startswith("UPDATE "):
+                raised_count = int(status.split()[-1])
+
+    log.info("otp_active", customer_no=user.customer_no, raised_accounts=raised_count)
+    return {"active": True, "raised_accounts": raised_count}
 
 
 @router.get("/me")
