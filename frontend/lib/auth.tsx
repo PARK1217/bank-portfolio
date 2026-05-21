@@ -18,7 +18,8 @@
  *      - 응답 코드 E_TOKEN_EXPIRED / E_TOKEN_INVALID 시 자동 signOut + /auto-logout?reason=expired|invalid
  *      - A 가 먼저 트리거되면 B 는 중복 진입 방지 (현재 path 가 /auto-logout 이면 skip)
  *   C. **활동 기반 silent refresh**
- *      - mousemove/keydown/click/scroll 감지 시 `lastActivityRef` 갱신 (throttled)
+ *      - 명시적 사용자 액션만 활동으로 인정 — `keydown` / `click` / `touchstart` + 라우트 변경(`usePathname` 변동)
+ *        마우스 호버(`mousemove`)와 스크롤은 의도 없는 신호로 보고 제외. 페이지 새로고침은 Provider remount 로 자동 카운트.
  *      - 만료 임박(`SILENT_REFRESH_THRESHOLD_SEC`) 시점에 최근 활동(`SILENT_REFRESH_ACTIVITY_WINDOW_MS`)
  *        이 있으면 자동으로 `/api/auth/refresh` 호출 → 토큰 교체 + 카운트다운 재시작 (silent, 토스트 없음)
  *      - 이 갱신이 성공하면 만료 60초 전 경고도 새 토큰의 exp 기준으로 다시 계산
@@ -33,7 +34,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   api,
@@ -120,6 +121,7 @@ function decodeJwt(token: string): DecodedJwt {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [state, setState] = useState<AuthState>({
     token: null,
     customerNo: null,
@@ -270,17 +272,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [state.isAuthenticated, state.token, signOut, router, performRefresh]);
 
   // ---- Layer C : 사용자 활동 시각 기록 (활동 기반 silent refresh 입력) ------
+  // mousemove(호버)·scroll 같은 의도 없는 신호는 제외. 명시적 입력만 카운트.
   useEffect(() => {
     if (!state.isAuthenticated) return;
     const markActivity = () => {
       lastActivityRef.current = Date.now();
     };
-    const evts: (keyof WindowEventMap)[] = ["mousemove", "keydown", "click", "scroll", "touchstart"];
+    const evts: (keyof WindowEventMap)[] = ["keydown", "click", "touchstart"];
     evts.forEach((e) => window.addEventListener(e, markActivity, { passive: true }));
     return () => {
       evts.forEach((e) => window.removeEventListener(e, markActivity));
     };
   }, [state.isAuthenticated]);
+
+  // ---- Layer C-2 : 라우트 변경(클라이언트 네비) 시에도 활동으로 인정 ---------
+  // 새로고침은 Provider 가 remount 되며 lastActivityRef 초기값(Date.now())이 이 역할.
+  useEffect(() => {
+    if (!state.isAuthenticated) return;
+    lastActivityRef.current = Date.now();
+  }, [pathname, state.isAuthenticated]);
 
   return (
     <AuthContext.Provider
