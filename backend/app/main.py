@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from .api.account import router as account_router
+from .api.account_open import router as account_open_router
 from .api.auth import router as auth_router, setup_router
 from .api.auto_transfer import router as auto_transfer_router
 from .api.chatbot import router as chatbot_router
@@ -59,6 +60,7 @@ async def lifespan(app: FastAPI):
         handle_verify_reply,
     )
     from .service.chatbot import handle_llm_call_trace
+    from .service.rag_eval_log import handle_rag_evaluation
     from .service.transfer import handle_settlement_requested
 
     await kafka_svc.start_producer()
@@ -69,6 +71,10 @@ async def lifespan(app: FastAPI):
     await kafka_svc.start_consumer(
         kafka_svc.TOPIC_CHATBOT_LLM_CALLS,
         handle_llm_call_trace,
+    )
+    await kafka_svc.start_consumer(
+        kafka_svc.TOPIC_CHATBOT_RAG_EVALS,
+        handle_rag_evaluation,
     )
     # 타행 계좌검증 — 외부 은행 시뮬 consumer (req 토픽) + 호출자 측 reply consumer.
     await kafka_svc.start_consumer(
@@ -158,7 +164,9 @@ api.include_router(transactions_router)
 api.include_router(dashboard_router)
 # product_open_router 가 `/products/{id}/terms`, `/products/{id}/open-*`, `/products/complete/{token}`
 # 같이 더 구체적인 path 를 가지므로 product_router(`/{product_id}` 동적 path) 보다 먼저 등록.
+# account_open_router 는 OP-009 적금 가입 → 자동이체 자동 등록 통합 (`/products/{id}/open-installment`).
 api.include_router(product_open_router)
+api.include_router(account_open_router)
 api.include_router(product_router)
 api.include_router(terms_router)
 # auto_transfer / favorite_account 라우터는 transfer_router 보다 먼저 등록 —

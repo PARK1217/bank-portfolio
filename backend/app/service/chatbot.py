@@ -347,6 +347,18 @@ async def chat_send(
                         },
                         key=trace_id,
                     )
+                    # RAG 응답 품질 추적 — 같은 trace_id 로 발행, consumer 가 AI_RAG_EVALUATION INSERT (§3.7).
+                    # 정량 지표(faithfulness/answer_relevancy 등)는 Phoenix/Ragas 통합 후 채움.
+                    await kafka_svc.send_event(
+                        kafka_svc.TOPIC_CHATBOT_RAG_EVALS,
+                        {
+                            "trace_id": trace_id,
+                            "question": message,
+                            "retrieved_docs": sources,
+                            "answer": llm_answer,
+                        },
+                        key=trace_id,
+                    )
         except Exception:
             log.exception("llm_answer_failed")
         if llm_answer:
