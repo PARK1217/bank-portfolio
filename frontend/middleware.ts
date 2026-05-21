@@ -29,6 +29,9 @@ const PUBLIC_PATHS: (string | RegExp)[] = [
   "/auto-logout",
   /^\/signup(\/|$)/,
   /^\/terms(\/|$)/,
+  /^\/products(\/|$)/,
+  /^\/notices(\/|$)/,
+  /^\/events(\/|$)/,
 ];
 
 function isPublicPath(pathname: string): boolean {

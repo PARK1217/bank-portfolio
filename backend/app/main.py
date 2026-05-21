@@ -11,9 +11,11 @@ from .api.chatbot import router as chatbot_router
 from .api.favorite_account import router as favorite_account_router
 from .api.dashboard import router as dashboard_router
 from .api.loan import router as loan_router
+from .api.notice import router as notice_router
 from .api.notification import router as notification_router
 from .api.product import router as product_router
 from .api.signup import router as signup_router
+from .api.terms import router as terms_router
 from .api.transactions import router as transactions_router
 from .api.transfer import router as transfer_router
 from .config import settings
@@ -109,6 +111,7 @@ api.include_router(account_router)
 api.include_router(transactions_router)
 api.include_router(dashboard_router)
 api.include_router(product_router)
+api.include_router(terms_router)
 # auto_transfer / favorite_account 라우터는 transfer_router 보다 먼저 등록 —
 # transfer_router 의 `/{tx_token}` catch-all 이 `/transfer/auto`, `/transfer/favorites`,
 # `/transfer/scheduled` 등을 가로채는 것을 방지.
@@ -118,6 +121,7 @@ api.include_router(transfer_router)
 api.include_router(loan_router)
 api.include_router(chatbot_router)
 api.include_router(notification_router)
+api.include_router(notice_router)
 app.include_router(api)
 
 
