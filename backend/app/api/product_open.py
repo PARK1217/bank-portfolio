@@ -60,6 +60,41 @@ class OpenSavingRequest(BaseModel):
     withdraw_password: str = Field(..., min_length=4, max_length=4, pattern=r"^\d{4}$")
 
 
+class OpenDepositRequest(BaseModel):
+    amount_krw: int = Field(..., gt=0, le=10_000_000_000)
+    period_months: int = Field(..., ge=1, le=120)
+    interest_payment_cd: str = Field(..., description="MATURITY / MONTHLY 등")
+    withdraw_account_token: str = Field(..., description="만기 시 입금받을 자유입출금 계좌 토큰")
+    password: str = Field(..., min_length=4, max_length=4, pattern=r"^\d{4}$")
+
+
+class OpenForeignRequest(BaseModel):
+    currency: str = Field(..., min_length=3, max_length=3)
+    foreign_amount: float | None = None
+    krw_amount: int | None = None
+    password: str = Field(..., min_length=4, max_length=4, pattern=r"^\d{4}$")
+
+
+class JointOwner(BaseModel):
+    customer_no: int
+    role_cd: str = "JOINT_OWNER"
+    delegation_power_codes: list[str] = Field(default_factory=list)
+
+
+class OpenJointRequest(BaseModel):
+    alias: str | None = Field(None, max_length=50)
+    initial_deposit_krw: int = Field(0, ge=0, le=10_000_000_000)
+    co_owners: list[JointOwner] = Field(default_factory=list)
+    attachment_ids: list[int] = Field(default_factory=list)
+
+
+class OpenMinorRequest(BaseModel):
+    child_party_id: int
+    guardian_customer_no: int
+    delegation_power_codes: list[str] = Field(default_factory=list)
+    attachment_ids: list[int] = Field(default_factory=list)
+
+
 class OpenAccountResponse(BaseModel):
     account_token: str
 
@@ -83,7 +118,48 @@ _TYPE_LABEL = {
     "INSTALLMENT": "적금 통장",
     "FOREIGN": "외화 통장",
     "LOAN": "대출",
+    "JOINT": "공동명의 통장",
+    "MINOR": "어린이 통장",
 }
+
+
+async def _insert_account_row(
+    conn,
+    *,
+    customer_no: int,
+    account_no: str,
+    account_type_cd: str,
+    holder_name: str,
+    withdraw_pwd_hash: str | None,
+    balance_krw: int,
+    alias: str | None,
+    daily_w: int,
+    daily_t: int,
+) -> None:
+    today = date.today().strftime("%Y%m%d")
+    await conn.execute(
+        'INSERT INTO public."ACCOUNT" ('
+        '  "ACCOUNT_NO", "CUSTOMER_NO", "ACCOUNT_TYPE_CD", "OPEN_DATE", '
+        '  "BALANCE", "PENDING_WITHDRAW", "ACCOUNT_STATUS_CD", '
+        '  "ACCOUNT_HOLDER_NAME", "WITHDRAW_PWD_HASH", '
+        '  "DAILY_WITHDRAW_LIMIT", "DAILY_TRANSFER_LIMIT", '
+        '  "LIFETIME_ACCOUNT_NO", "ACCOUNT_ALIAS", '
+        '  "PWD_ERROR_COUNT", "LIMITED_ACCOUNT_YN", '
+        '  "PRIMARY_ACCOUNT_YN", "HIDDEN_YN", "DELETE_YN", '
+        '  "CREATED_AT") VALUES ('
+        '  $1, $2, $3, $4, $5, 0, \'NORMAL\', '
+        "  $6, $7, $8, $9, $1, $10, 0, 'N', 'N', 'N', 'N', NOW())",
+        account_no,
+        customer_no,
+        account_type_cd,
+        today,
+        balance_krw,
+        holder_name,
+        withdraw_pwd_hash,
+        daily_w,
+        daily_t,
+        alias,
+    )
 
 
 async def _generate_account_no(conn) -> str:
@@ -145,6 +221,49 @@ async def post_product_terms(
 # 자유입출금 개설 (SAVING)
 # ---------------------------------------------------------------------------
 
+async def _fetch_and_validate_product(conn, product_id: int, expected_type: str) -> dict:
+    product = await conn.fetchrow(
+        'SELECT "PRODUCT_ID", "PRODUCT_NAME", "PRODUCT_TYPE_CD" '
+        'FROM public."PRODUCT" WHERE "PRODUCT_ID" = $1 AND "DELETE_YN" = \'N\'',
+        product_id,
+    )
+    if not product:
+        raise NotFoundError(E_NOT_FOUND, "상품을 찾을 수 없습니다.")
+    if product["PRODUCT_TYPE_CD"] != expected_type:
+        raise BusinessError(E_VALIDATION, f"{_TYPE_LABEL.get(expected_type, expected_type)} 상품이 아닙니다.")
+    return product
+
+
+async def _open_common(
+    conn,
+    *,
+    product,
+    customer_no: int,
+    account_type_cd: str,
+    balance_krw: int,
+    password_plain: str | None,
+    alias: str | None,
+) -> str:
+    """타입 공통 ACCOUNT INSERT — 신규 account_no 생성·홀더 조회·한도 정책."""
+    daily_w, daily_t = _default_limits(customer_no)
+    account_no = await _generate_account_no(conn)
+    holder = await _holder_name(conn, customer_no)
+    await _insert_account_row(
+        conn,
+        customer_no=customer_no,
+        account_no=account_no,
+        account_type_cd=account_type_cd,
+        holder_name=holder,
+        withdraw_pwd_hash=hash_password(password_plain) if password_plain else None,
+        balance_krw=balance_krw,
+        alias=alias,
+        daily_w=daily_w,
+        daily_t=daily_t,
+    )
+    _account_product[account_no] = int(product["PRODUCT_ID"])
+    return account_no
+
+
 @router.post("/{product_id}/open-saving", response_model=OpenAccountResponse)
 async def open_saving(
     product_id: int,
@@ -152,49 +271,20 @@ async def open_saving(
     user: CurrentCustomer = Depends(current_customer),
     tokens: TokenService = Depends(get_token_service),
 ) -> OpenAccountResponse:
-    daily_w, daily_t = _default_limits(user.customer_no)
-
     pool = get_pool()
     async with pool.acquire() as conn:
-        product = await conn.fetchrow(
-            'SELECT "PRODUCT_ID", "PRODUCT_NAME", "PRODUCT_TYPE_CD" '
-            'FROM public."PRODUCT" WHERE "PRODUCT_ID" = $1 AND "DELETE_YN" = \'N\'',
-            product_id,
-        )
-        if not product:
-            raise NotFoundError(E_NOT_FOUND, "상품을 찾을 수 없습니다.")
-        if product["PRODUCT_TYPE_CD"] != "SAVING":
-            raise BusinessError(E_VALIDATION, "자유입출금 상품이 아닙니다.")
-
+        product = await _fetch_and_validate_product(conn, product_id, "SAVING")
         async with conn.transaction():
-            account_no = await _generate_account_no(conn)
-            holder = await _holder_name(conn, user.customer_no)
-            today = date.today().strftime("%Y%m%d")
-            await conn.execute(
-                'INSERT INTO public."ACCOUNT" ('
-                '  "ACCOUNT_NO", "CUSTOMER_NO", "ACCOUNT_TYPE_CD", "OPEN_DATE", '
-                '  "BALANCE", "PENDING_WITHDRAW", "ACCOUNT_STATUS_CD", '
-                '  "ACCOUNT_HOLDER_NAME", "WITHDRAW_PWD_HASH", '
-                '  "DAILY_WITHDRAW_LIMIT", "DAILY_TRANSFER_LIMIT", '
-                '  "LIFETIME_ACCOUNT_NO", "ACCOUNT_ALIAS", '
-                '  "PWD_ERROR_COUNT", "LIMITED_ACCOUNT_YN", '
-                '  "PRIMARY_ACCOUNT_YN", "HIDDEN_YN", "DELETE_YN", '
-                '  "CREATED_AT") VALUES ('
-                '  $1, $2, $3, $4, $5, 0, \'NORMAL\', '
-                "  $6, $7, $8, $9, $1, $10, 0, 'N', 'N', 'N', 'N', NOW())",
-                account_no,
-                user.customer_no,
-                product["PRODUCT_TYPE_CD"],
-                today,
-                req.initial_deposit_krw,
-                holder,
-                hash_password(req.withdraw_password),
-                daily_w,
-                daily_t,
-                req.alias,
+            account_no = await _open_common(
+                conn,
+                product=product,
+                customer_no=user.customer_no,
+                account_type_cd="SAVING",
+                balance_krw=req.initial_deposit_krw,
+                password_plain=req.withdraw_password,
+                alias=req.alias,
             )
 
-    _account_product[account_no] = int(product["PRODUCT_ID"])
     account_token = await tokens.issue("ACCOUNT", account_no, user.customer_no)
     log.info(
         "product_open_saving",
@@ -202,6 +292,166 @@ async def open_saving(
         customer_no=user.customer_no,
         account_no=account_no,
         initial=req.initial_deposit_krw,
+    )
+    return OpenAccountResponse(account_token=account_token)
+
+
+# ---------------------------------------------------------------------------
+# 정기예금 개설 (DEPOSIT) — 만기일·이자지급 주기 메타는 로깅만
+# ---------------------------------------------------------------------------
+
+@router.post("/{product_id}/open-deposit", response_model=OpenAccountResponse)
+async def open_deposit(
+    product_id: int,
+    req: OpenDepositRequest,
+    user: CurrentCustomer = Depends(current_customer),
+    tokens: TokenService = Depends(get_token_service),
+) -> OpenAccountResponse:
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        product = await _fetch_and_validate_product(conn, product_id, "DEPOSIT")
+        async with conn.transaction():
+            account_no = await _open_common(
+                conn,
+                product=product,
+                customer_no=user.customer_no,
+                account_type_cd="DEPOSIT",
+                balance_krw=req.amount_krw,
+                password_plain=req.password,
+                alias=None,
+            )
+
+    account_token = await tokens.issue("ACCOUNT", account_no, user.customer_no)
+    log.info(
+        "product_open_deposit",
+        product_id=product_id,
+        customer_no=user.customer_no,
+        account_no=account_no,
+        amount=req.amount_krw,
+        period_months=req.period_months,
+        interest_payment_cd=req.interest_payment_cd,
+    )
+    return OpenAccountResponse(account_token=account_token)
+
+
+# ---------------------------------------------------------------------------
+# 외화 개설 (FOREIGN)
+# ---------------------------------------------------------------------------
+
+@router.post("/{product_id}/open-foreign", response_model=OpenAccountResponse)
+async def open_foreign(
+    product_id: int,
+    req: OpenForeignRequest,
+    user: CurrentCustomer = Depends(current_customer),
+    tokens: TokenService = Depends(get_token_service),
+) -> OpenAccountResponse:
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        product = await _fetch_and_validate_product(conn, product_id, "FOREIGN")
+        # 외화 잔액은 별도 테이블/컬럼이 정의되지 않아 BALANCE(원화)에 0 으로 INSERT,
+        # 환전·잔액 영구화는 후속 작업.
+        async with conn.transaction():
+            account_no = await _open_common(
+                conn,
+                product=product,
+                customer_no=user.customer_no,
+                account_type_cd="FOREIGN",
+                balance_krw=0,
+                password_plain=req.password,
+                alias=req.currency,
+            )
+
+    account_token = await tokens.issue("ACCOUNT", account_no, user.customer_no)
+    log.info(
+        "product_open_foreign",
+        product_id=product_id,
+        customer_no=user.customer_no,
+        account_no=account_no,
+        currency=req.currency,
+        foreign_amount=req.foreign_amount,
+        krw_amount=req.krw_amount,
+    )
+    return OpenAccountResponse(account_token=account_token)
+
+
+# ---------------------------------------------------------------------------
+# 공동명의 개설 (JOINT)
+# ---------------------------------------------------------------------------
+
+@router.post("/{product_id}/open-joint", response_model=OpenAccountResponse)
+async def open_joint(
+    product_id: int,
+    req: OpenJointRequest,
+    user: CurrentCustomer = Depends(current_customer),
+    tokens: TokenService = Depends(get_token_service),
+) -> OpenAccountResponse:
+    if not req.co_owners:
+        raise BusinessError(E_VALIDATION, "공동명의자 1명 이상을 지정해 주세요.")
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        # 공동명의는 SAVING 상품 베이스의 변형으로 화면이 호출 — 상품 타입은 SAVING 으로 가정.
+        product = await _fetch_and_validate_product(conn, product_id, "SAVING")
+        async with conn.transaction():
+            account_no = await _open_common(
+                conn,
+                product=product,
+                customer_no=user.customer_no,
+                account_type_cd="SAVING",
+                balance_krw=req.initial_deposit_krw,
+                password_plain=None,
+                alias=req.alias,
+            )
+
+    account_token = await tokens.issue("ACCOUNT", account_no, user.customer_no)
+    log.info(
+        "product_open_joint",
+        product_id=product_id,
+        customer_no=user.customer_no,
+        account_no=account_no,
+        co_owners=[(o.customer_no, o.role_cd, o.delegation_power_codes) for o in req.co_owners],
+        attachments=req.attachment_ids,
+    )
+    # ACCOUNT_PARTY_ROLE / PARTY_ROLE 실 INSERT 는 후속 작업 (DB 스키마 매핑 확인 필요).
+    return OpenAccountResponse(account_token=account_token)
+
+
+# ---------------------------------------------------------------------------
+# 어린이(미성년) 개설 (MINOR) — 친권자 위임 + 첨부서류
+# ---------------------------------------------------------------------------
+
+@router.post("/{product_id}/open-minor", response_model=OpenAccountResponse)
+async def open_minor(
+    product_id: int,
+    req: OpenMinorRequest,
+    user: CurrentCustomer = Depends(current_customer),
+    tokens: TokenService = Depends(get_token_service),
+) -> OpenAccountResponse:
+    if req.guardian_customer_no != user.customer_no:
+        raise BusinessError(E_VALIDATION, "친권자 정보가 본인과 일치하지 않습니다.")
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        # 미성년 통장도 SAVING 상품 베이스로 등록 (전용 상품 타입이 정의되어 있지 않음).
+        product = await _fetch_and_validate_product(conn, product_id, "SAVING")
+        async with conn.transaction():
+            account_no = await _open_common(
+                conn,
+                product=product,
+                customer_no=user.customer_no,
+                account_type_cd="SAVING",
+                balance_krw=0,
+                password_plain=None,
+                alias="어린이 통장",
+            )
+
+    account_token = await tokens.issue("ACCOUNT", account_no, user.customer_no)
+    log.info(
+        "product_open_minor",
+        product_id=product_id,
+        customer_no=user.customer_no,
+        account_no=account_no,
+        child_party_id=req.child_party_id,
+        delegation_power_codes=req.delegation_power_codes,
+        attachments=req.attachment_ids,
     )
     return OpenAccountResponse(account_token=account_token)
 
