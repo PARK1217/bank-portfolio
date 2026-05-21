@@ -196,9 +196,12 @@ async def require_admin(
     structlog.contextvars.bind_contextvars(
         admin_employee_no=employee_no, admin_session_id=session_id,
     )
-    return CurrentAdmin(
+    current = CurrentAdmin(
         employee_no=row["EMPLOYEE_NO"],
         name=row["NAME"] or "",
         auth_level_cd=row["AUTH_LEVEL_CD"] or "ADMIN",
         session_id=session_id,
     )
+    # AdminAuditMiddleware 가 응답 후 EMPLOYEE_NO 채울 때 사용.
+    request.state.admin = current
+    return current

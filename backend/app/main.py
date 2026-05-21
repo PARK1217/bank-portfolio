@@ -30,7 +30,11 @@ from .config import settings
 from .db import close_pool, get_pool, init_pool
 from .exceptions import BankingException
 from .logging_setup import get_logger, setup_logging
-from .middleware import REQUEST_ID_HEADER, RequestContextMiddleware
+from .middleware import (
+    REQUEST_ID_HEADER,
+    AdminAuditMiddleware,
+    RequestContextMiddleware,
+)
 from .service.token import InMemoryTokenStore, TokenService
 
 setup_logging()
@@ -121,6 +125,9 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=[REQUEST_ID_HEADER],
 )
+# /api/admin/* 자동 감사. RequestContextMiddleware 보다 먼저 add → 실행 순서는 나중 (Starlette LIFO),
+# 즉 request_id 가 binding 된 다음에 감사 미들웨어가 돌도록 한다.
+app.add_middleware(AdminAuditMiddleware)
 app.add_middleware(RequestContextMiddleware)
 
 
