@@ -242,6 +242,10 @@ async def create_scheduled(
     tokens: TokenService,
 ) -> tuple[str, datetime]:
     await fetch_account(from_account_no, customer_no)
+    # 프론트가 ISO8601(Z suffix UTC) 로 보내면 tz-aware datetime 으로 파싱됨.
+    # datetime.now() 는 naive 라 직접 비교하면 TypeError. tz 있으면 로컬로 변환 후 naive 화.
+    if scheduled_at.tzinfo is not None:
+        scheduled_at = scheduled_at.astimezone().replace(tzinfo=None)
     if scheduled_at < datetime.now():
         raise BusinessError(E_VALIDATION, "과거 시각으로 예약할 수 없습니다.")
 

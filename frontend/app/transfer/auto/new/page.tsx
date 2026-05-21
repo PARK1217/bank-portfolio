@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Protected } from "@/components/protected";
 import { Button } from "@/components/ui/button";
@@ -73,6 +73,12 @@ function NewAutoTransferForm() {
   const [toAccount, setToAccount] = useState("");
   const [toHolder, setToHolder] = useState("");
   const [amount, setAmount] = useState("");
+  // 입금 계좌 verify — 즉시이체와 동일한 흐름. ok 외엔 등록 차단.
+  type VerifyStatus = "idle" | "loading" | "ok" | "not_found" | "error";
+  const [verifyStatus, setVerifyStatus] = useState<VerifyStatus>("idle");
+  const [verifyMessage, setVerifyMessage] = useState("");
+  const [verifiedAccountNo, setVerifiedAccountNo] = useState("");
+  const verifySeqRef = useRef(0);
   const [cycle, setCycle] = useState<"DAILY" | "WEEKLY" | "MONTHLY">("MONTHLY");
   const [monthlyDay, setMonthlyDay] = useState("25");
   const [dayOfWeek, setDayOfWeek] = useState("MON");
@@ -91,11 +97,57 @@ function NewAutoTransferForm() {
     if (!startDate) setStartDate(new Date().toISOString().slice(0, 10));
   }, [startDate]);
 
+  // 입금 계좌 verify (디바운스 600ms). 응답 정규형 account_no 를 등록 body 로 사용.
+  useEffect(() => {
+    setToHolder("");
+    setVerifyMessage("");
+    setVerifiedAccountNo("");
+    if (toAccount.length < 6) {
+      setVerifyStatus("idle");
+      return;
+    }
+    setVerifyStatus("loading");
+    const seq = ++verifySeqRef.current;
+    const timer = setTimeout(async () => {
+      try {
+        const res = await api.post<{
+          exists: boolean;
+          holder_name: string | null;
+          account_no: string;
+          error: string | null;
+        }>("/api/transfer/verify-account", {
+          to_bank_cd: toBank,
+          to_account_no: toAccount,
+        });
+        if (seq !== verifySeqRef.current) return;
+        if (res.exists) {
+          setToHolder(res.holder_name ?? "");
+          setVerifyStatus("ok");
+          setVerifyMessage(res.holder_name ?? "확인됨");
+          setVerifiedAccountNo(res.account_no);
+        } else if (res.error === "VERIFY_TIMEOUT" || res.error === "VERIFY_BROKER_DOWN") {
+          setVerifyStatus("error");
+          setVerifyMessage("타행 응답이 늦어 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+        } else {
+          setVerifyStatus("not_found");
+          setVerifyMessage("실존하지 않는 계좌입니다. 은행과 계좌번호를 다시 확인해 주세요.");
+        }
+      } catch {
+        if (seq !== verifySeqRef.current) return;
+        setVerifyStatus("error");
+        setVerifyMessage("계좌 확인 중 오류가 발생했습니다.");
+      }
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [toBank, toAccount]);
+
+  const verifyBlocks = verifyStatus !== "ok";
+
   const amountN = parseInt(amount.replace(/[^0-9]/g, ""), 10) || 0;
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (submitting || !fromToken || !toAccount || amountN <= 0) return;
+    if (submitting || !fromToken || !toAccount || amountN <= 0 || verifyBlocks) return;
 
     let monthly_exec_day: number | null = null;
     let schedule_rule: Record<string, unknown> | null = null;
@@ -109,7 +161,7 @@ function NewAutoTransferForm() {
         {
           from_account_token: fromToken,
           to_bank_cd: toBank,
-          to_account_no: toAccount,
+          to_account_no: verifiedAccountNo || toAccount,
           to_holder_name: toHolder || null,
           amount_krw: amountN,
           cycle_type_cd: cycle,
@@ -183,15 +235,42 @@ function NewAutoTransferForm() {
             <Field label="입금 계좌번호" required>
               <Input
                 inputMode="numeric"
+                placeholder="숫자만 입력 (- 자동 제거)"
                 value={toAccount}
-                onChange={(e) => setToAccount(e.target.value.replace(/[^0-9-]/g, ""))}
+                onChange={(e) => setToAccount(e.target.value.replace(/[^0-9]/g, ""))}
                 required
               />
             </Field>
           </div>
 
-          <Field label="예금주 (선택)">
-            <Input maxLength={20} value={toHolder} onChange={(e) => setToHolder(e.target.value)} />
+          <Field label="예금주">
+            <Input
+              placeholder={
+                verifyStatus === "loading"
+                  ? "예금주 확인 중…"
+                  : "은행과 계좌번호를 입력하면 자동으로 표시됩니다"
+              }
+              maxLength={20}
+              value={toHolder}
+              onChange={(e) => setToHolder(e.target.value)}
+              readOnly
+            />
+            {verifyMessage ? (
+              <p
+                className={`mt-1 text-xs ${
+                  verifyStatus === "ok"
+                    ? "text-success"
+                    : verifyStatus === "not_found"
+                    ? "text-destructive"
+                    : verifyStatus === "error"
+                    ? "text-warning"
+                    : "text-muted-foreground"
+                }`}
+              >
+                {verifyStatus === "ok" ? "확인됨 · 예금주 " : ""}
+                {verifyMessage}
+              </p>
+            ) : null}
           </Field>
 
           <Field label="이체 금액 (원)" required>
@@ -287,8 +366,16 @@ function NewAutoTransferForm() {
             <Input maxLength={100} value={memo} onChange={(e) => setMemo(e.target.value)} />
           </Field>
 
-          <Button type="submit" className="w-full" disabled={submitting}>
-            {submitting ? "등록 중…" : "자동이체 등록"}
+          <Button
+            type="submit"
+            className="w-full"
+            disabled={submitting || verifyBlocks || amountN <= 0}
+          >
+            {submitting
+              ? "등록 중…"
+              : verifyStatus === "loading"
+              ? "예금주 확인 중…"
+              : "자동이체 등록"}
           </Button>
         </form>
       </CardContent>
