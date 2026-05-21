@@ -2,7 +2,6 @@
 
 import { useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Protected } from "@/components/protected";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import { api } from "@/lib/api";
@@ -149,11 +148,10 @@ export default function Page() {
   const params = useParams<{ productId: string }>();
   const pid = parseInt(params.productId, 10);
   if (!pid) return null;
+  // 비로그인 공개 (가입 전 약관 미리 보기). 동의 처리는 가입 흐름에서 인증 후.
   return (
-    <Protected>
-      <main className="container max-w-md py-8 animate-fade-in">
-        <TermsContent productId={pid} />
-      </main>
-    </Protected>
+    <main className="container max-w-md py-8 animate-fade-in">
+      <TermsContent productId={pid} />
+    </main>
   );
 }

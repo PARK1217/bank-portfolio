@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Protected } from "@/components/protected";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import { useFetch } from "@/lib/use-fetch";
@@ -137,15 +136,14 @@ function ProductsContent() {
 }
 
 export default function Page() {
+  // 비로그인 공개 (가입 흐름 open-* 는 별도 인증 필요).
   return (
-    <Protected>
-      <main className="container max-w-4xl py-8 animate-fade-in">
-        <div className="mb-4">
-          <h1 className="text-xl font-semibold">상품 카탈로그</h1>
-          <p className="text-xs text-muted-foreground">판매 중인 상품을 모아 보여드립니다.</p>
-        </div>
-        <ProductsContent />
-      </main>
-    </Protected>
+    <main className="container max-w-4xl py-8 animate-fade-in">
+      <div className="mb-4">
+        <h1 className="text-xl font-semibold">상품 카탈로그</h1>
+        <p className="text-xs text-muted-foreground">판매 중인 상품을 모아 보여드립니다.</p>
+      </div>
+      <ProductsContent />
+    </main>
   );
 }

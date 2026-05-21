@@ -3,7 +3,6 @@
 import { useEffect } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { Protected } from "@/components/protected";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import { buttonVariants } from "@/components/ui/button";
@@ -256,17 +255,16 @@ function DetailContent({ productId }: { productId: string }) {
 }
 
 export default function Page() {
+  // 비로그인 공개 (가입 흐름은 open-* 별도 라우트에서 인증 강제).
   const params = useParams<{ productId: string }>();
   return (
-    <Protected>
-      <main className="container max-w-3xl py-8 animate-fade-in">
-        <div className="mb-4">
-          <Link href="/products" className="text-xs text-muted-foreground hover:text-foreground">
-            ← 상품 카탈로그
-          </Link>
-        </div>
-        <DetailContent productId={params.productId} />
-      </main>
-    </Protected>
+    <main className="container max-w-3xl py-8 animate-fade-in">
+      <div className="mb-4">
+        <Link href="/products" className="text-xs text-muted-foreground hover:text-foreground">
+          ← 상품 카탈로그
+        </Link>
+      </div>
+      <DetailContent productId={params.productId} />
+    </main>
   );
 }
