@@ -27,6 +27,7 @@ import structlog
 from ..db import get_pool
 from ..errors import E_NOT_FOUND
 from ..exceptions import NotFoundError
+from .chatbot_suggestions import follow_up_questions
 from .llm import chat_completion as _llm_chat_completion
 from .token import ResourceType, TokenService
 
@@ -276,8 +277,12 @@ async def chat_send(
 
     tier: str | None
     sources: list[dict] = []
+    matched_category: str | None = None
+    matched_faq_id: int | None = None
     if top_faq is not None and top_faq_d <= 0.50:
         tier = "KEYWORD" if top_faq_d <= 0.30 else "FAQ"
+        matched_category = top_faq["CATEGORY"]
+        matched_faq_id = int(top_faq["FAQ_ID"])
         answer = top_faq["ANSWER"] or ""
         sources.append({
             "doc_token": await tokens.issue(
@@ -371,6 +376,14 @@ async def chat_send(
         answer = "관련 정보를 찾지 못했습니다. 상담원 연결을 도와드릴까요?"
         confidence = "LOW"
 
+    # 연계 질문 — 매칭 카테고리가 있으면 그 안에서, 없으면 사용자 질문 토큰 overlap 으로 top-3
+    follow_ups = await follow_up_questions(
+        user_question=message,
+        matched_category=matched_category,
+        matched_faq_id=matched_faq_id,
+        k=3,
+    )
+
     assistant_msg = {
         "message_id": _NEXT_MESSAGE_ID[0],
         "role_cd": "ASSISTANT",
@@ -378,6 +391,7 @@ async def chat_send(
         "rag_tier_cd": tier,
         "sources": sources,
         "confidence": confidence,
+        "follow_up_questions": follow_ups,
         "created_at": datetime.now(),
     }
     _NEXT_MESSAGE_ID[0] += 1

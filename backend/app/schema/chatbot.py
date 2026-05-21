@@ -28,6 +28,10 @@ class ChatMessageItem(BaseModel):
     )
     sources: list[ChatSourceRef] = Field(default_factory=list)
     confidence: str | None = Field(None, description="HIGH/MEDIUM/LOW")
+    follow_up_questions: list[str] = Field(
+        default_factory=list,
+        description="ASSISTANT 메시지 아래 표시할 연계 질문 후보 (k=3)",
+    )
     created_at: datetime
 
 
@@ -134,3 +138,17 @@ class ChatFeedbackRequest(BaseModel):
     message_id: int
     rating: int = Field(..., description="1=👎 / 5=👍")
     comment: str | None = Field(None, max_length=1000)
+
+
+# ----------------------------------------------------------------------
+# 추천 질문 (EmptyState 개인화)
+# ----------------------------------------------------------------------
+
+class ChatSuggestionItem(BaseModel):
+    faq_id: int
+    category: str
+    question: str
+
+
+class ChatSuggestionsResponse(BaseModel):
+    items: list[ChatSuggestionItem]

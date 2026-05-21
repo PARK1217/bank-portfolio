@@ -39,7 +39,14 @@ interface ChatMessageItem {
   rag_tier_cd: "KEYWORD" | "FAQ" | "VECTOR" | null;
   sources: ChatSourceRef[];
   confidence: "HIGH" | "MEDIUM" | "LOW" | null;
+  follow_up_questions: string[];
   created_at: string;
+}
+
+interface ChatSuggestionItem {
+  faq_id: number;
+  category: string;
+  question: string;
 }
 
 interface ChatSendResponse {
@@ -117,6 +124,7 @@ function ChatScreen() {
       rag_tier_cd: null,
       sources: [],
       confidence: null,
+      follow_up_questions: [],
       created_at: new Date().toISOString(),
     };
     setMessages((m) => [...m, optimistic]);
@@ -193,6 +201,8 @@ function ChatScreen() {
               msg={m}
               feedback={feedbackGiven[m.message_id]}
               onFeedback={sendFeedback}
+              onFollowUp={(q) => void send(q)}
+              sending={sending}
             />
           ))
         )}
@@ -230,28 +240,80 @@ function ChatScreen() {
 }
 
 
+const CATEGORY_LABEL: Record<string, string> = {
+  ACCOUNT: "계좌",
+  AUTO_TRANSFER: "자동이체",
+  LOAN: "대출",
+  PRODUCT: "상품",
+  SECURITY: "보안",
+  SIGNUP: "가입",
+  TRANSFER: "이체",
+  OTHER: "기타",
+};
+
+const FALLBACK_SAMPLES = [
+  "정기예금 만기 자동 재예치는 어떻게 설정하나요?",
+  "타행 이체 한도가 어떻게 되나요?",
+  "공동명의 통장 개설 절차가 궁금합니다",
+  "신용대출 중도상환수수료는 얼마인가요?",
+];
+
 function EmptyState({ onPick }: { onPick: (q: string) => void }) {
-  const samples = [
-    "정기예금 만기 자동 재예치는 어떻게 설정하나요?",
-    "타행 이체 한도가 어떻게 되나요?",
-    "공동명의 통장 개설 절차가 궁금합니다",
-    "신용대출 중도상환수수료는 얼마인가요?",
-  ];
+  const [items, setItems] = useState<ChatSuggestionItem[] | null>(null);
+  const [errored, setErrored] = useState(false);
+
+  useEffect(() => {
+    let canceled = false;
+    (async () => {
+      try {
+        const res = await api.get<{ items: ChatSuggestionItem[] }>(
+          "/api/chatbot/suggestions?limit=4",
+        );
+        if (!canceled) setItems(res.items);
+      } catch {
+        if (!canceled) setErrored(true);
+      }
+    })();
+    return () => {
+      canceled = true;
+    };
+  }, []);
+
+  const showFallback = errored || items === null;
   return (
     <div className="px-2 py-8">
-      <p className="text-sm text-muted-foreground">예시 질문을 클릭해 시작할 수 있어요.</p>
+      <p className="text-sm text-muted-foreground">
+        {showFallback
+          ? "예시 질문을 클릭해 시작할 수 있어요."
+          : "보유 상품·자동이체 패턴에 맞춰 추천한 질문이에요."}
+      </p>
       <ul className="mt-3 space-y-1.5">
-        {samples.map((s) => (
-          <li key={s}>
-            <button
-              type="button"
-              onClick={() => onPick(s)}
-              className="rounded-md border bg-background px-3 py-2 text-left text-sm hover:bg-accent"
-            >
-              {s}
-            </button>
-          </li>
-        ))}
+        {showFallback
+          ? FALLBACK_SAMPLES.map((s) => (
+              <li key={s}>
+                <button
+                  type="button"
+                  onClick={() => onPick(s)}
+                  className="rounded-md border bg-background px-3 py-2 text-left text-sm hover:bg-accent"
+                >
+                  {s}
+                </button>
+              </li>
+            ))
+          : items.map((it) => (
+              <li key={it.faq_id}>
+                <button
+                  type="button"
+                  onClick={() => onPick(it.question)}
+                  className="flex w-full items-start gap-2 rounded-md border bg-background px-3 py-2 text-left text-sm hover:bg-accent"
+                >
+                  <span className="mt-0.5 shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                    {CATEGORY_LABEL[it.category] ?? it.category}
+                  </span>
+                  <span>{it.question}</span>
+                </button>
+              </li>
+            ))}
       </ul>
     </div>
   );
@@ -262,10 +324,14 @@ function MessageBubble({
   msg,
   feedback,
   onFeedback,
+  onFollowUp,
+  sending,
 }: {
   msg: ChatMessageItem;
   feedback?: number;
   onFeedback: (id: number, rating: 1 | 5) => void;
+  onFollowUp: (q: string) => void;
+  sending: boolean;
 }) {
   const isUser = msg.role_cd === "USER";
   return (
@@ -280,7 +346,44 @@ function MessageBubble({
           <CardContent className="px-3 py-2.5">{msg.content}</CardContent>
         </Card>
 
-        {!isUser ? <AssistantMeta msg={msg} feedback={feedback} onFeedback={onFeedback} /> : null}
+        {!isUser ? (
+          <>
+            <AssistantMeta msg={msg} feedback={feedback} onFeedback={onFeedback} />
+            {msg.follow_up_questions?.length > 0 ? (
+              <FollowUpChips items={msg.follow_up_questions} onPick={onFollowUp} disabled={sending} />
+            ) : null}
+          </>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+
+function FollowUpChips({
+  items,
+  onPick,
+  disabled,
+}: {
+  items: string[];
+  onPick: (q: string) => void;
+  disabled: boolean;
+}) {
+  return (
+    <div className="space-y-1 px-1 pt-1">
+      <p className="text-[11px] text-muted-foreground">이어서 물어볼 만한 질문</p>
+      <div className="flex flex-wrap gap-1.5">
+        {items.map((q) => (
+          <button
+            key={q}
+            type="button"
+            disabled={disabled}
+            onClick={() => onPick(q)}
+            className="rounded-full border bg-background px-2.5 py-1 text-[11px] text-foreground/80 hover:bg-accent disabled:opacity-50"
+          >
+            {q}
+          </button>
+        ))}
       </div>
     </div>
   );

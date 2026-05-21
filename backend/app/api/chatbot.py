@@ -21,6 +21,8 @@ from ..schema.chatbot import (
     ChatSourceClause,
     ChatSourceRef,
     ChatSourceResponse,
+    ChatSuggestionItem,
+    ChatSuggestionsResponse,
     FaqItem,
     FaqListResponse,
     TermsSearchItem,
@@ -34,6 +36,7 @@ from ..service.chatbot import (
     search_terms,
 )
 from ..service.chatbot_feedback import submit_feedback_db
+from ..service.chatbot_suggestions import list_personalized_suggestions
 from ..service.token import TokenService
 
 router = APIRouter(prefix="/chatbot", tags=["chatbot"])
@@ -48,6 +51,7 @@ def _to_msg(m: dict) -> ChatMessageItem:
         rag_tier_cd=m["rag_tier_cd"],
         sources=[ChatSourceRef(**s) for s in m["sources"]],
         confidence=m["confidence"],
+        follow_up_questions=m.get("follow_up_questions") or [],
         created_at=m["created_at"],
     )
 
@@ -121,3 +125,13 @@ async def post_feedback(
 ) -> dict:
     await submit_feedback_db(user.customer_no, req.message_id, req.rating, req.comment)
     return {"received": True}
+
+
+@router.get("/suggestions", response_model=ChatSuggestionsResponse)
+async def get_suggestions(
+    user: CurrentCustomer = Depends(current_customer),
+    limit: int = Query(4, ge=1, le=8),
+) -> ChatSuggestionsResponse:
+    """EmptyState 개인화 추천 — 보유 패턴(예금/적금/대출/자동이체) 시그널 기반."""
+    items = await list_personalized_suggestions(user.customer_no, limit=limit)
+    return ChatSuggestionsResponse(items=[ChatSuggestionItem(**i) for i in items])
