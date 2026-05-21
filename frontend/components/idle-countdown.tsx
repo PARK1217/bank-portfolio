@@ -4,13 +4,13 @@ import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
 /**
- * Idle 자동 로그아웃까지 남은 시간 표시 (MM:SS).
+ * 세션 만료(JWT exp)까지 남은 시간 표시 (MM:SS).
  * 인증되지 않았거나 카운트다운이 활성화 안 됐으면 렌더링하지 않음.
  *
  * 색상 단계 (UI 경고)
  *  - >= 3분  : muted
  *  - 1~3분   : warning (주황)
- *  - <  1분  : destructive (빨강)
+ *  - <  1분  : destructive (빨강) — 60초 전 자동 토스트 경고 발화됨 (lib/auth.tsx)
  */
 export function IdleCountdown() {
   const { idleRemainingSec, isAuthenticated, isReady, refreshIdle } = useAuth();
@@ -31,13 +31,13 @@ export function IdleCountdown() {
     <button
       type="button"
       onClick={refreshIdle}
-      title={`활동이 없으면 자동 로그아웃됩니다 (30분). 클릭 시 즉시 연장.`}
+      title="세션 만료까지 남은 시간 — 만료 시 자동 로그아웃됩니다."
       className={cn(
         "num-tabular font-mono text-xs tabular-nums",
         "rounded-md px-2 py-1 hover:bg-accent transition-colors",
         colorCls,
       )}
-      aria-label={`자동 로그아웃까지 ${mm}분 ${ss}초 남음. 클릭 시 연장.`}
+      aria-label={`세션 만료까지 ${mm}분 ${ss}초 남음.`}
     >
       <span aria-hidden className="mr-1 opacity-60">⏱</span>
       {mm}:{ss}
