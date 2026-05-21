@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
+import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useFetch } from "@/lib/use-fetch";
 import { showApiError } from "@/lib/toast";
@@ -196,7 +197,7 @@ function NewAutoTransferForm() {
 
     setSubmitting(true);
     try {
-      const res = await api.post<AutoTransferResponse>(
+      await api.post<AutoTransferResponse>(
         "/api/transfer/auto",
         {
           from_account_token: fromToken,
@@ -215,7 +216,8 @@ function NewAutoTransferForm() {
         },
         { idempotent: true },
       );
-      router.push(`/transfer/auto/${res.auto_token}/history`);
+      toast.success("자동이체가 등록되었습니다.");
+      router.push("/transfer/auto");
     } catch (err) {
       showApiError(err, "자동이체 등록에 실패했습니다.");
     } finally {
