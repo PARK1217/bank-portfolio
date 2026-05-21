@@ -201,7 +201,7 @@ function ScheduledForm() {
           </Field>
 
           <Field label="메모 (선택)">
-            <Input maxLength={30} value={memo} onChange={(e) => setMemo(e.target.value)} />
+            <Input maxLength={100} value={memo} onChange={(e) => setMemo(e.target.value)} />
           </Field>
 
           <Button

@@ -114,7 +114,7 @@ class AutoTransferCreate(BaseModel):
     )
     valid_start_date: date
     valid_end_date: date | None = None
-    memo: str | None = None
+    memo: str | None = Field(None, max_length=100)
     linked_to: str | None = Field(None, description="INSTALLMENT/LOAN/UTILITY/USER")
     linked_id: int | None = None
 
@@ -179,7 +179,7 @@ class ScheduledTransferCreate(BaseModel):
     to_holder_name: str
     amount_krw: int = Field(..., gt=0)
     scheduled_at: datetime
-    memo: str | None = None
+    memo: str | None = Field(None, max_length=100)
 
 
 # ----------------------------------------------------------------------

@@ -62,12 +62,22 @@ def _next_execute_at(
         return datetime.combine(base + timedelta(days=7), datetime.min.time())
     if cycle == "MONTHLY":
         day = monthly_day or base.day
-        nm_year = base.year + (1 if base.month == 12 else 0)
-        nm_month = 1 if base.month == 12 else base.month + 1
-        try:
-            return datetime(nm_year, nm_month, day)
-        except ValueError:
-            return datetime(nm_year, nm_month, 28)
+        # 이번 달 day 가 base 이상이면 이번 달, 미만이면 다음 달.
+        # 예: today=2026-05-21, start=2026-06-01, day=15 → base=2026-06-01,
+        #     이번 달(6월) 15일이 base 보다 이전이므로 다음 달 7/15 가 아니라
+        #     base 시점 기준 이번 달이 day < base.day 면 다음 달로 보낸다.
+        for year, month in (
+            (base.year, base.month),
+            (base.year + (1 if base.month == 12 else 0),
+             1 if base.month == 12 else base.month + 1),
+        ):
+            try:
+                cand = datetime(year, month, day)
+            except ValueError:
+                cand = datetime(year, month, 28)
+            if cand.date() >= base:
+                return cand
+        return None
     return None
 
 
