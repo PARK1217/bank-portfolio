@@ -40,6 +40,7 @@ _EXPLICIT_ACTIONS: dict[tuple[str, str], str] = {
     ("GET",  "/api/admin/loans/review-queue"):                 "LOAN_REVIEW_QUEUE",
     ("GET",  "/api/admin/loans/decisions"):                    "LOAN_DECISIONS_LIST",
     ("POST", "/api/admin/loans/:id/predict"):                  "LOAN_PREDICT",
+    ("GET",  "/api/admin/loans/:id/attachments"):              "LOAN_ATTACHMENTS",
     ("POST", "/api/admin/loans/decisions/:id/review"):         "LOAN_HUMAN_REVIEW",
     ("GET",  "/api/admin/customers/overdue"):                  "OVERDUE_LIST",
     ("GET",  "/api/admin/customers/:id/overdue"):              "OVERDUE_DETAIL",
@@ -53,6 +54,7 @@ _EXPLICIT_ACTIONS: dict[tuple[str, str], str] = {
 _TARGET_TABLE_RULES: list[tuple[re.Pattern[str], str, int | None]] = [
     # (pattern, target_table, group_index for TARGET_ID; None=ID 미사용)
     (re.compile(r"^/api/admin/loans/(\d+)/predict$"),                 "LOAN_APPLICATION", 1),
+    (re.compile(r"^/api/admin/loans/(\d+)/attachments$"),             "LOAN_APPLICATION", 1),
     (re.compile(r"^/api/admin/loans/decisions/(\d+)/review$"),        "AI_LOAN_DECISION", 1),
     (re.compile(r"^/api/admin/loans/decisions$"),                    "AI_LOAN_DECISION", None),
     (re.compile(r"^/api/admin/loans/review-queue$"),                 "AI_LOAN_DECISION", None),
