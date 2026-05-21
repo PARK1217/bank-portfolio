@@ -41,6 +41,8 @@ _EXPLICIT_ACTIONS: dict[tuple[str, str], str] = {
     ("GET",  "/api/admin/loans/decisions"):                    "LOAN_DECISIONS_LIST",
     ("POST", "/api/admin/loans/:id/predict"):                  "LOAN_PREDICT",
     ("POST", "/api/admin/loans/decisions/:id/review"):         "LOAN_HUMAN_REVIEW",
+    ("GET",  "/api/admin/customers/overdue"):                  "OVERDUE_LIST",
+    ("GET",  "/api/admin/customers/:id/overdue"):              "OVERDUE_DETAIL",
 }
 
 # ---------------------------------------------------------------------------
@@ -54,6 +56,8 @@ _TARGET_TABLE_RULES: list[tuple[re.Pattern[str], str, int | None]] = [
     (re.compile(r"^/api/admin/loans/decisions$"),                    "AI_LOAN_DECISION", None),
     (re.compile(r"^/api/admin/loans/review-queue$"),                 "AI_LOAN_DECISION", None),
     (re.compile(r"^/api/admin/auth/(login|logout|me)$"),             "ADMIN_SESSION",    None),
+    (re.compile(r"^/api/admin/customers/(\d+)/overdue$"),            "CUSTOMER",         1),
+    (re.compile(r"^/api/admin/customers/overdue$"),                  "CUSTOMER",         None),
 ]
 
 
