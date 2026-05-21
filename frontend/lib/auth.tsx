@@ -17,8 +17,11 @@
  *   B. **서버 401 인터셉트** (lib/api.ts onAuthExpired)
  *      - 응답 코드 E_TOKEN_EXPIRED / E_TOKEN_INVALID 시 자동 signOut + /auto-logout?reason=expired|invalid
  *      - A 가 먼저 트리거되면 B 는 중복 진입 방지 (현재 path 가 /auto-logout 이면 skip)
- *
- * 활동 기반 갱신은 백엔드 `/api/auth/refresh` 가 없어 현재 불가 — WORKBOARD 인계 항목 참조.
+ *   C. **활동 기반 silent refresh**
+ *      - mousemove/keydown/click/scroll 감지 시 `lastActivityRef` 갱신 (throttled)
+ *      - 만료 임박(`SILENT_REFRESH_THRESHOLD_SEC`) 시점에 최근 활동(`SILENT_REFRESH_ACTIVITY_WINDOW_MS`)
+ *        이 있으면 자동으로 `/api/auth/refresh` 호출 → 토큰 교체 + 카운트다운 재시작 (silent, 토스트 없음)
+ *      - 이 갱신이 성공하면 만료 60초 전 경고도 새 토큰의 exp 기준으로 다시 계산
  */
 
 import {
@@ -47,6 +50,8 @@ import {
 
 const TICK_MS = 1000;                  // 1초 tick
 const WARN_BEFORE_SEC = 60;            // 만료 60초 전 토스트 경고
+const SILENT_REFRESH_THRESHOLD_SEC = 120;        // 만료 2분 남으면 활동 체크 시작
+const SILENT_REFRESH_ACTIVITY_WINDOW_MS = 60_000; // 최근 60초 내 활동 있어야 자동 갱신
 
 
 // ---------------------------------------------------------------------------
@@ -66,7 +71,7 @@ interface AuthContextValue extends AuthState {
   signOut: () => void;
   /** JWT 만료까지 남은 초. 비인증 / exp 없음 시 null. (변수명 호환 — 의미는 토큰 남은 시간) */
   idleRemainingSec: number | null;
-  /** 사용자가 수동 연장 액션 (현재 백엔드 refresh 미지원이라 no-op + 안내 토스트). */
+  /** 사용자가 수동 연장 액션 — `/api/auth/refresh` 호출 후 토스트로 결과 안내. */
   refreshIdle: () => void;
 }
 
@@ -124,6 +129,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [idleRemainingSec, setIdleRemainingSec] = useState<number | null>(null);
   // 1회 경고 토스트 발화 여부 (token 단위로 reset 됨)
   const warnedRef = useRef<boolean>(false);
+  // 활동 기반 silent refresh — 최근 활동 시각 + 중복 호출 방지
+  const lastActivityRef = useRef<number>(Date.now());
+  const refreshingRef = useRef<boolean>(false);
 
   // ---- 초기 localStorage 동기화 -----------------------------------------
   useEffect(() => {
@@ -161,8 +169,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setState({ token: null, customerNo: null, isAuthenticated: false, isReady: true });
   }, []);
 
-  const refreshIdle = useCallback(async () => {
-    // 백엔드 `/api/auth/refresh` 호출 → 새 JWT 받기 → storage 갱신 → 카운트다운 자동 재시작.
+  const performRefresh = useCallback(async (opts: { silent: boolean }) => {
+    if (refreshingRef.current) return;
+    refreshingRef.current = true;
     try {
       const res = await api.post<{ access_token: string; expires_in: number }>(
         "/api/auth/refresh",
@@ -175,11 +184,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         token: res.access_token,
         customerNo: decodeJwt(res.access_token).customerNo ?? s.customerNo,
       }));
-      toast.success("세션이 연장되었습니다.", { duration: 2500 });
+      if (!opts.silent) {
+        toast.success("세션이 연장되었습니다.", { duration: 2500 });
+      }
     } catch {
       // 401 인터셉트가 별도로 동작하므로 별도 토스트 불필요
+    } finally {
+      refreshingRef.current = false;
     }
   }, []);
+
+  const refreshIdle = useCallback(() => {
+    void performRefresh({ silent: false });
+  }, [performRefresh]);
 
   // ---- Layer B : 서버 인증 만료 응답 자동 처리 -----------------------------
   useEffect(() => {
@@ -213,6 +230,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const remainingSec = Math.max(0, Math.ceil(remainingMs / 1000));
       setIdleRemainingSec(remainingSec);
 
+      // 활동 기반 silent refresh — 만료 2분 전 + 최근 60초 내 활동 있으면 자동 갱신
+      if (
+        remainingSec > 0 &&
+        remainingSec <= SILENT_REFRESH_THRESHOLD_SEC &&
+        Date.now() - lastActivityRef.current <= SILENT_REFRESH_ACTIVITY_WINDOW_MS &&
+        !refreshingRef.current
+      ) {
+        void performRefresh({ silent: true });
+      }
+
       // 만료 60초 전 — 1회만 경고
       if (remainingSec <= WARN_BEFORE_SEC && remainingSec > 0 && !warnedRef.current) {
         warnedRef.current = true;
@@ -240,7 +267,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       window.clearInterval(intervalId);
     };
-  }, [state.isAuthenticated, state.token, signOut, router]);
+  }, [state.isAuthenticated, state.token, signOut, router, performRefresh]);
+
+  // ---- Layer C : 사용자 활동 시각 기록 (활동 기반 silent refresh 입력) ------
+  useEffect(() => {
+    if (!state.isAuthenticated) return;
+    const markActivity = () => {
+      lastActivityRef.current = Date.now();
+    };
+    const evts: (keyof WindowEventMap)[] = ["mousemove", "keydown", "click", "scroll", "touchstart"];
+    evts.forEach((e) => window.addEventListener(e, markActivity, { passive: true }));
+    return () => {
+      evts.forEach((e) => window.removeEventListener(e, markActivity));
+    };
+  }, [state.isAuthenticated]);
 
   return (
     <AuthContext.Provider
