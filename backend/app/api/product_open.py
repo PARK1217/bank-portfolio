@@ -522,6 +522,91 @@ async def open_joint(
 # 어린이(미성년) 개설 (MINOR) — 친권자 위임 + 첨부서류
 # ---------------------------------------------------------------------------
 
+async def _persist_minor_participants(
+    conn,
+    *,
+    account_no: str,
+    guardian_customer_no: int,
+    child_party_id: int,
+    delegation_power_codes: list[str],
+) -> dict:
+    """CONTRACT_PARTICIPANT 2행(친권자 GUARDIAN seq=1 + 자녀 MINOR seq=2) +
+    자녀에게 CUSTOMER 가 있으면 DELEGATION(친권자→자녀, ROLE_TYPE_CD='PARENT') 1행 INSERT."""
+    guardian_party = await conn.fetchval(
+        'SELECT "PARTY_ID" FROM public."CUSTOMER" WHERE "CUSTOMER_NO" = $1',
+        guardian_customer_no,
+    )
+    if guardian_party is None:
+        raise BusinessError(E_VALIDATION, "친권자 고객 정보가 확인되지 않습니다.")
+
+    child_exists = await conn.fetchval(
+        'SELECT 1 FROM public."PARTY" WHERE "PARTY_ID" = $1',
+        child_party_id,
+    )
+    if not child_exists:
+        raise BusinessError(E_VALIDATION, "자녀 정보(PARTY_ID)를 찾을 수 없어요.")
+    if int(child_party_id) == int(guardian_party):
+        raise BusinessError(E_VALIDATION, "친권자와 자녀가 동일할 수 없어요.")
+
+    # ROLE_TYPE_MASTER 마스터 행 idempotent 보강 (시드 없을 환경 대비).
+    await conn.execute(
+        'INSERT INTO public."ROLE_TYPE_MASTER" '
+        '("ROLE_TYPE_ID","ROLE_TYPE_NAME","CREATED_BY") '
+        "VALUES ('GUARDIAN','친권자','SYSTEM'),('MINOR','미성년본인','SYSTEM') "
+        'ON CONFLICT ("ROLE_TYPE_ID") DO NOTHING'
+    )
+
+    today = date.today().strftime("%Y%m%d")
+    participant_sql = (
+        'INSERT INTO public."CONTRACT_PARTICIPANT" '
+        '("CONTRACT_NO","PARTY_ID","ROLE_TYPE_ID","PARTICIPANT_SEQ","SHARE_RATIO",'
+        ' "PARTICIPATE_START_DATE","PARTICIPATE_STATUS_CD","JOINT_LIABILITY_YN","CREATED_BY") '
+        "VALUES ($1,$2,$3,$4,$5,$6,'ACTIVE','N','SYSTEM')"
+    )
+    await conn.execute(
+        participant_sql, account_no, guardian_party, "GUARDIAN", 1, 1.0, today
+    )
+    await conn.execute(
+        participant_sql, account_no, child_party_id, "MINOR", 2, 0.0, today
+    )
+
+    child_customer_no = await conn.fetchval(
+        'SELECT "CUSTOMER_NO" FROM public."CUSTOMER" WHERE "PARTY_ID" = $1',
+        child_party_id,
+    )
+    delegation_inserted = False
+    if child_customer_no is not None:
+        codes = [c for c in delegation_power_codes if c in _JOINT_POWER_COLUMN]
+        codes_set = set(codes)
+        perm = lambda key: "Y" if key in codes_set else "N"  # noqa: E731
+        next_id = await conn.fetchval(
+            'SELECT COALESCE(MAX("DELEGATION_ID"), 30000) + 1 FROM public."DELEGATION"'
+        )
+        await conn.execute(
+            'INSERT INTO public."DELEGATION" '
+            '("DELEGATION_ID","TARGET_CUST_NO","AGENT_CUST_NO","ROLE_TYPE_CD",'
+            ' "INQUIRY_PERM","WITHDRAW_PERM","TRANSFER_PERM","CLOSE_PERM",'
+            ' "LIMIT_CHANGE_PERM","DELEG_START_DATE","NOTARIZE_YN","CREATED_BY") '
+            "VALUES ($1,$2,$3,'PARENT',$4,$5,$6,$7,$8,$9,'N','SYSTEM')",
+            int(next_id),
+            int(child_customer_no),
+            guardian_customer_no,
+            perm("INQUIRY"),
+            perm("WITHDRAW"),
+            perm("TRANSFER"),
+            perm("CLOSE"),
+            perm("LIMIT_CHANGE"),
+            today,
+        )
+        delegation_inserted = True
+
+    return {
+        "participants": 2,
+        "delegation_inserted": delegation_inserted,
+        "child_customer_no": int(child_customer_no) if child_customer_no else None,
+    }
+
+
 @router.post("/{product_id}/open-minor", response_model=OpenAccountResponse)
 async def open_minor(
     product_id: int,
@@ -545,6 +630,13 @@ async def open_minor(
                 password_plain=None,
                 alias="어린이 통장",
             )
+            persist_stats = await _persist_minor_participants(
+                conn,
+                account_no=account_no,
+                guardian_customer_no=user.customer_no,
+                child_party_id=req.child_party_id,
+                delegation_power_codes=req.delegation_power_codes,
+            )
 
     account_token = await tokens.issue("ACCOUNT", account_no, user.customer_no)
     log.info(
@@ -553,7 +645,9 @@ async def open_minor(
         customer_no=user.customer_no,
         account_no=account_no,
         child_party_id=req.child_party_id,
+        child_customer_no=persist_stats["child_customer_no"],
         delegation_power_codes=req.delegation_power_codes,
+        delegation_inserted=persist_stats["delegation_inserted"],
         attachments=req.attachment_ids,
     )
     return OpenAccountResponse(account_token=account_token)
