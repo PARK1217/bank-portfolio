@@ -90,7 +90,7 @@ function AccountDetailContent({ token }: { token: string }) {
 
       <section className="flex flex-wrap gap-2">
         <Link
-          href={`/transfer?from=${token}`}
+          href={`/transfer?from=${token}&from_no=${encodeURIComponent(account.account_no)}`}
           className={cn(buttonVariants(), "flex-1 min-w-[120px]")}
         >
           이체

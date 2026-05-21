@@ -58,6 +58,7 @@ function TransferForm() {
   const router = useRouter();
   const search = useSearchParams();
   const prefillToken = search.get("from") ?? "";
+  const prefillFromNo = search.get("from_no") ?? "";
   const prefillToBank = search.get("to_bank") ?? "";
   const prefillToAccount = search.get("to_account") ?? "";
   const prefillToHolder = search.get("to_holder") ?? "";
@@ -77,16 +78,22 @@ function TransferForm() {
   const [amount, setAmount] = useState<string>("");
   const [memo, setMemo] = useState<string>("");
 
-  // accounts 로딩 후 prefill 적용
+  // accounts 로딩 후 prefill 적용.
+  // account_token 은 매번 새로 발급되는 in-memory 토큰이라 계좌 상세에서 받아온
+  // prefill token 이 목록 토큰과 다를 수 있음 → from_no(account_no, 안정) 폴백.
+  // 또한 fromToken 이 목록에 없는 invalid 상태라면 항상 재설정해서 select 와
+  // fromAccount 가 어긋나는(잔액 미표시·다음 비활성) 상태를 막는다.
   useEffect(() => {
     if (!accounts.length) return;
-    if (fromToken) return;
-    if (prefillToken && accounts.some((a) => a.account_token === prefillToken)) {
-      setFromToken(prefillToken);
-    } else {
-      setFromToken(accounts[0].account_token);
-    }
-  }, [accounts, fromToken, prefillToken]);
+    if (accounts.some((a) => a.account_token === fromToken)) return;
+    const byToken = prefillToken
+      ? accounts.find((a) => a.account_token === prefillToken)
+      : null;
+    const byNo = prefillFromNo
+      ? accounts.find((a) => a.account_no === prefillFromNo)
+      : null;
+    setFromToken((byToken ?? byNo ?? accounts[0]).account_token);
+  }, [accounts, fromToken, prefillToken, prefillFromNo]);
 
   useEffect(() => {
     if (accountsError) showApiError(accountsError, "계좌 목록을 불러오지 못했습니다.");
