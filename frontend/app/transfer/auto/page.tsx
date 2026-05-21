@@ -203,6 +203,20 @@ export default function Page() {
   return (
     <Protected>
       <main className="container max-w-2xl py-8 animate-fade-in">
+        <nav className="mb-3 flex gap-3 text-xs text-muted-foreground">
+          <Link href="/transfer" className="hover:text-foreground">
+            즉시이체
+          </Link>
+          <Link href="/transfer/auto" className="font-medium text-foreground">
+            자동이체
+          </Link>
+          <Link href="/transfer/scheduled" className="hover:text-foreground">
+            예약이체
+          </Link>
+          <Link href="/transfer/favorites" className="hover:text-foreground">
+            자주 쓰는 계좌
+          </Link>
+        </nav>
         <div className="mb-4">
           <h1 className="text-xl font-semibold">자동이체</h1>
           <p className="text-xs text-muted-foreground">

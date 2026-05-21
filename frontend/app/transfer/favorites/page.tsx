@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Protected } from "@/components/protected";
@@ -217,6 +218,20 @@ export default function Page() {
   return (
     <Protected>
       <main className="container max-w-md py-8 animate-fade-in">
+        <nav className="mb-3 flex gap-3 text-xs text-muted-foreground">
+          <Link href="/transfer" className="hover:text-foreground">
+            즉시이체
+          </Link>
+          <Link href="/transfer/auto" className="hover:text-foreground">
+            자동이체
+          </Link>
+          <Link href="/transfer/scheduled" className="hover:text-foreground">
+            예약이체
+          </Link>
+          <Link href="/transfer/favorites" className="font-medium text-foreground">
+            자주 쓰는 계좌
+          </Link>
+        </nav>
         <div className="mb-4">
           <h1 className="text-xl font-semibold">자주 쓰는 계좌</h1>
           <p className="text-xs text-muted-foreground">자주 이체하는 계좌를 등록하여 빠르게 이체합니다.</p>

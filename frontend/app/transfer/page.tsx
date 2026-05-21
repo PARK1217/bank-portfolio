@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
+import Link from "next/link";
 import { api } from "@/lib/api";
 import { useFetch } from "@/lib/use-fetch";
 import { setTransferDraft } from "@/lib/transfer-session";
@@ -352,6 +353,20 @@ export default function Page() {
   return (
     <Protected>
       <main className="container max-w-md py-8 animate-fade-in">
+        <nav className="mb-3 flex gap-3 text-xs text-muted-foreground">
+          <Link href="/transfer" className="font-medium text-foreground">
+            즉시이체
+          </Link>
+          <Link href="/transfer/auto" className="hover:text-foreground">
+            자동이체
+          </Link>
+          <Link href="/transfer/scheduled" className="hover:text-foreground">
+            예약이체
+          </Link>
+          <Link href="/transfer/favorites" className="hover:text-foreground">
+            자주 쓰는 계좌
+          </Link>
+        </nav>
         <Suspense fallback={<Spinner label="로딩 중…" />}>
           <TransferForm />
         </Suspense>
