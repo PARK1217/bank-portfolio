@@ -35,6 +35,8 @@ class NoticeDetailResponse(BaseModel):
     author: str | None = None
     published_at: datetime
     view_count: int = 0
+    prev_id: int | None = None
+    next_id: int | None = None
 
 
 # --- 이벤트 ---------------------------------------------------------------
@@ -71,3 +73,5 @@ class EventDetailResponse(BaseModel):
     author: str | None = None
     published_at: datetime
     view_count: int = 0
+    prev_id: int | None = None
+    next_id: int | None = None

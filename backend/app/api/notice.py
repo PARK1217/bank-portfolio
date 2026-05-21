@@ -13,7 +13,14 @@ from ..schema.notice import (
     NoticeListItem,
     NoticeListResponse,
 )
-from ..service.notice import get_event, get_notice, list_events, list_notices
+from ..service.notice import (
+    get_event,
+    get_notice,
+    hit_event,
+    hit_notice,
+    list_events,
+    list_notices,
+)
 
 router = APIRouter(tags=["notice-event"])
 log = structlog.get_logger("notice")
@@ -66,7 +73,15 @@ async def detail_notice(notice_id: int) -> NoticeDetailResponse:
         author=r["AUTHOR"],
         published_at=r["PUBLISHED_AT"],
         view_count=int(r["VIEW_COUNT"] or 0),
+        prev_id=r["prev_id"],
+        next_id=r["next_id"],
     )
+
+
+@router.post("/notices/{notice_id}/hit")
+async def hit_notice_view(notice_id: int) -> dict:
+    await hit_notice(notice_id)
+    return {"ok": True}
 
 
 # --- 이벤트 ---------------------------------------------------------------
@@ -118,4 +133,12 @@ async def detail_event(event_id: int) -> EventDetailResponse:
         author=r["AUTHOR"],
         published_at=r["PUBLISHED_AT"],
         view_count=int(r["VIEW_COUNT"] or 0),
+        prev_id=r["prev_id"],
+        next_id=r["next_id"],
     )
+
+
+@router.post("/events/{event_id}/hit")
+async def hit_event_view(event_id: int) -> dict:
+    await hit_event(event_id)
+    return {"ok": True}

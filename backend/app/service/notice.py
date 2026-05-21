@@ -45,6 +45,10 @@ async def list_notices(
 
 
 async def get_notice(notice_id: int) -> dict:
+    """공지 본문 조회 (조회수 변경 X — Strict Mode 중복 회피 위해 별도 hit endpoint).
+
+    반환 dict 에 prev_id/next_id 포함 (목록 정렬 = 고정 우선·PUBLISHED_AT 최신).
+    """
     pool = get_pool()
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
@@ -55,13 +59,40 @@ async def get_notice(notice_id: int) -> dict:
         )
         if row is None:
             raise NotFoundError(E_NOT_FOUND, "공지사항을 찾을 수 없습니다.")
-        # 조회수 증가 (실패해도 본문 응답엔 영향 X)
+        # prev/next — 목록 순서 (PINNED DESC, PUBLISHED_AT DESC, NOTICE_ID DESC) 기준
+        cur_pinned = row["PINNED_YN"] or "N"
+        cur_pub = row["PUBLISHED_AT"]
+        # 다음(목록상 아래) — 더 옛날, 같은 pinned
+        next_id = await conn.fetchval(
+            'SELECT "NOTICE_ID" FROM public."NOTICE" '
+            'WHERE "DELETE_YN"=\'N\' AND "STATUS_CD"=\'PUBLISH\' '
+            '  AND (("PINNED_YN" = $1 AND ("PUBLISHED_AT" < $2 OR '
+            '         ("PUBLISHED_AT" = $2 AND "NOTICE_ID" < $3))) '
+            '       OR ("PINNED_YN" < $1)) '
+            'ORDER BY "PINNED_YN" DESC, "PUBLISHED_AT" DESC, "NOTICE_ID" DESC LIMIT 1',
+            cur_pinned, cur_pub, notice_id,
+        )
+        # 이전(목록상 위) — 더 최신
+        prev_id = await conn.fetchval(
+            'SELECT "NOTICE_ID" FROM public."NOTICE" '
+            'WHERE "DELETE_YN"=\'N\' AND "STATUS_CD"=\'PUBLISH\' '
+            '  AND (("PINNED_YN" = $1 AND ("PUBLISHED_AT" > $2 OR '
+            '         ("PUBLISHED_AT" = $2 AND "NOTICE_ID" > $3))) '
+            '       OR ("PINNED_YN" > $1)) '
+            'ORDER BY "PINNED_YN" ASC, "PUBLISHED_AT" ASC, "NOTICE_ID" ASC LIMIT 1',
+            cur_pinned, cur_pub, notice_id,
+        )
+    return {**dict(row), "prev_id": prev_id, "next_id": next_id}
+
+
+async def hit_notice(notice_id: int) -> None:
+    pool = get_pool()
+    async with pool.acquire() as conn:
         await conn.execute(
             'UPDATE public."NOTICE" SET "VIEW_COUNT" = "VIEW_COUNT" + 1 '
-            'WHERE "NOTICE_ID" = $1',
+            'WHERE "NOTICE_ID" = $1 AND "DELETE_YN"=\'N\' AND "STATUS_CD"=\'PUBLISH\'',
             notice_id,
         )
-    return dict(row)
 
 
 # --- 이벤트 ---------------------------------------------------------------
@@ -102,6 +133,7 @@ async def list_events(
 
 
 async def get_event(event_id: int) -> dict:
+    """이벤트 본문 + prev/next. 조회수 증가는 별도 hit_event."""
     pool = get_pool()
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
@@ -111,9 +143,31 @@ async def get_event(event_id: int) -> dict:
         )
         if row is None:
             raise NotFoundError(E_NOT_FOUND, "이벤트를 찾을 수 없습니다.")
+        cur_pub = row["PUBLISHED_AT"]
+        # 다음(목록상 아래) — 더 옛날
+        next_id = await conn.fetchval(
+            'SELECT "EVENT_ID" FROM public."EVENT" '
+            'WHERE "DELETE_YN"=\'N\' '
+            '  AND ("PUBLISHED_AT" < $1 OR ("PUBLISHED_AT" = $1 AND "EVENT_ID" < $2)) '
+            'ORDER BY "PUBLISHED_AT" DESC, "EVENT_ID" DESC LIMIT 1',
+            cur_pub, event_id,
+        )
+        # 이전(목록상 위) — 더 최신
+        prev_id = await conn.fetchval(
+            'SELECT "EVENT_ID" FROM public."EVENT" '
+            'WHERE "DELETE_YN"=\'N\' '
+            '  AND ("PUBLISHED_AT" > $1 OR ("PUBLISHED_AT" = $1 AND "EVENT_ID" > $2)) '
+            'ORDER BY "PUBLISHED_AT" ASC, "EVENT_ID" ASC LIMIT 1',
+            cur_pub, event_id,
+        )
+    return {**dict(row), "prev_id": prev_id, "next_id": next_id}
+
+
+async def hit_event(event_id: int) -> None:
+    pool = get_pool()
+    async with pool.acquire() as conn:
         await conn.execute(
             'UPDATE public."EVENT" SET "VIEW_COUNT" = "VIEW_COUNT" + 1 '
-            'WHERE "EVENT_ID" = $1',
+            'WHERE "EVENT_ID" = $1 AND "DELETE_YN"=\'N\'',
             event_id,
         )
-    return dict(row)
