@@ -119,6 +119,13 @@ async def precheck(req: LoanPrecheckRequest) -> LoanPrecheckResponse:
     )
 
 
+# 별칭: 프론트엔드 SCR-LN-002 폼이 product_id 를 path 로 호출 (/api/loans/{product_id}/precheck).
+# precheck_dsr 는 현재 product_id 를 사용하지 않으므로 위 핸들러를 그대로 위임.
+@router.post("/{product_id}/precheck", response_model=LoanPrecheckResponse)
+async def precheck_by_product(product_id: int, req: LoanPrecheckRequest) -> LoanPrecheckResponse:
+    return await precheck(req)
+
+
 # ---------------------------------------------------------------------------
 # LN-003
 # ---------------------------------------------------------------------------

@@ -57,6 +57,7 @@ const TYPE_LABEL: Record<string, string> = {
   SAVING: "입출금",
   DEPOSIT: "정기예금",
   INSTALL: "적금",     // DB PRODUCT_TYPE_CD varchar(8) 한도
+  FOREIGN: "외화",
   LOAN: "대출",
 };
 
@@ -67,7 +68,7 @@ function openCtaTarget(productId: number, type: string): { href: string; label: 
     case "SAVING":
     case "DEPOSIT":
     case "INSTALL":      // DB varchar(8) 한도 — URL 슬러그는 그대로 /open-installment
-      // 약관 동의를 거쳐 type-specific open 페이지로
+    case "FOREIGN":      // 외화계좌 — 약관 동의 후 /open-foreign 폼으로 진입
       return { href: `/products/${productId}/terms`, label: "가입하기" };
     case "LOAN":
       return { href: `/loans/${productId}/precheck`, label: "한도 조회 (가신청)" };
@@ -235,13 +236,13 @@ function DetailContent({ productId }: { productId: string }) {
           {product.product_type_cd === "SAVING" ? (
             <div className="grid grid-cols-2 gap-2">
               <Link
-                href={`/products/${product.product_id}/open-joint`}
+                href={`/products/${product.product_id}/terms?as=joint`}
                 className={cn(buttonVariants({ variant: "outline", size: "sm" }), "")}
               >
                 공동명의로 개설 ⭐
               </Link>
               <Link
-                href={`/products/${product.product_id}/open-minor`}
+                href={`/products/${product.product_id}/terms?as=minor`}
                 className={cn(buttonVariants({ variant: "outline", size: "sm" }), "")}
               >
                 미성년 자녀 명의 ⭐

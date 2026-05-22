@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { getProductOpenSession } from "@/lib/product-open-session";
 import { showApiError } from "@/lib/toast";
 
 
@@ -37,6 +38,14 @@ const DELEGATION_POWERS: { code: string; label: string }[] = [
 function JointForm({ productId }: { productId: number }) {
   const router = useRouter();
   const { customerNo } = useAuth();
+
+  // 약관 미동의 시 /terms?as=joint 로 가드 (SCR-OP-010 게이트, 변형 정보 보존).
+  useEffect(() => {
+    const s = getProductOpenSession();
+    if (!s || s.product_id !== productId || !s.agreed_terms_at) {
+      router.replace(`/products/${productId}/terms?as=joint`);
+    }
+  }, [productId, router]);
 
   const [alias, setAlias] = useState("");
   const [initialDeposit, setInitialDeposit] = useState("0");

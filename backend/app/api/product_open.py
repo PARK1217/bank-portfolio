@@ -26,6 +26,7 @@ from pydantic import BaseModel, Field
 from ..db import get_pool
 from ..errors import E_NOT_FOUND, E_VALIDATION
 from ..exceptions import BusinessError, NotFoundError
+from ..service import account_product_map
 from ..service.auth import CurrentCustomer, current_customer, get_token_service
 from ..service.auth.passwords import hash_password
 from ..service.token import TokenService
@@ -109,8 +110,8 @@ class ProductCompleteResponse(BaseModel):
 # 보조
 # ---------------------------------------------------------------------------
 
-# account_no → product_id 매핑 (in-memory, 휘발성)
-_account_product: dict[str, int] = {}
+# account_no → product_id 매핑 — `service/account_product_map.py` 공유 모듈.
+# INSTALL 라우터(`service/account_open.py`)도 같은 모듈에 set 하여 complete 응답 product_name 정합.
 
 _TYPE_LABEL = {
     "SAVING": "자유입출금 통장",
@@ -163,17 +164,13 @@ async def _insert_account_row(
 
 
 async def _generate_account_no(conn) -> str:
-    """`110-200-{6자리}` 신규 ACCOUNT_NO — 중복 회피 단순 retry."""
-    for _ in range(10):
-        suffix = f"{secrets.randbelow(900_000) + 100_000:06d}"
-        candidate = f"110-200-{suffix}"
-        exists = await conn.fetchval(
-            'SELECT 1 FROM public."ACCOUNT" WHERE "ACCOUNT_NO" = $1',
-            candidate,
-        )
-        if not exists:
-            return candidate
-    raise BusinessError(E_VALIDATION, "계좌번호 생성에 실패했습니다. 잠시 후 다시 시도해 주세요.")
+    """공유 helper `service/account_no_gen.generate_account_no` 위임."""
+    from ..service.account_no_gen import generate_account_no
+
+    try:
+        return await generate_account_no(conn)
+    except RuntimeError as e:
+        raise BusinessError(E_VALIDATION, str(e))
 
 
 async def _holder_name(conn, customer_no: int) -> str:
@@ -221,7 +218,7 @@ async def post_product_terms(
 # 자유입출금 개설 (SAVING)
 # ---------------------------------------------------------------------------
 
-async def _fetch_and_validate_product(conn, product_id: int, expected_type: str) -> dict:
+async def _fetch_and_validate_product(conn, product_id: int, expected_type: str | tuple[str, ...]) -> dict:
     product = await conn.fetchrow(
         'SELECT "PRODUCT_ID", "PRODUCT_NAME", "PRODUCT_TYPE_CD" '
         'FROM public."PRODUCT" WHERE "PRODUCT_ID" = $1 AND "DELETE_YN" = \'N\'',
@@ -229,8 +226,10 @@ async def _fetch_and_validate_product(conn, product_id: int, expected_type: str)
     )
     if not product:
         raise NotFoundError(E_NOT_FOUND, "상품을 찾을 수 없습니다.")
-    if product["PRODUCT_TYPE_CD"] != expected_type:
-        raise BusinessError(E_VALIDATION, f"{_TYPE_LABEL.get(expected_type, expected_type)} 상품이 아닙니다.")
+    expected_tuple = (expected_type,) if isinstance(expected_type, str) else tuple(expected_type)
+    if product["PRODUCT_TYPE_CD"] not in expected_tuple:
+        labels = " / ".join(_TYPE_LABEL.get(t, t) for t in expected_tuple)
+        raise BusinessError(E_VALIDATION, f"{labels} 상품이 아닙니다.")
     return product
 
 
@@ -260,7 +259,7 @@ async def _open_common(
         daily_w=daily_w,
         daily_t=daily_t,
     )
-    _account_product[account_no] = int(product["PRODUCT_ID"])
+    account_product_map.set_product(account_no, int(product["PRODUCT_ID"]))
     return account_no
 
 
@@ -618,17 +617,19 @@ async def open_minor(
         raise BusinessError(E_VALIDATION, "친권자 정보가 본인과 일치하지 않습니다.")
     pool = get_pool()
     async with pool.acquire() as conn:
-        # 미성년 통장도 SAVING 상품 베이스로 등록 (전용 상품 타입이 정의되어 있지 않음).
-        product = await _fetch_and_validate_product(conn, product_id, "SAVING")
+        # 미성년 통장 — SAVING(어린이 자유입출금) 또는 INSTALL(어린이 적금) 둘 다 허용.
+        # 테스트시나리오.md §10.6 의 304(INSTALL) 진입을 위해 INSTALL 확장 (2026-05-22).
+        product = await _fetch_and_validate_product(conn, product_id, ("SAVING", "INSTALL"))
+        is_install = product["PRODUCT_TYPE_CD"] == "INSTALL"
         async with conn.transaction():
             account_no = await _open_common(
                 conn,
                 product=product,
                 customer_no=user.customer_no,
-                account_type_cd="SAVING",
+                account_type_cd="INSTALL" if is_install else "SAVING",
                 balance_krw=0,
                 password_plain=None,
-                alias="어린이 통장",
+                alias="어린이 적금" if is_install else "어린이 통장",
             )
             persist_stats = await _persist_minor_participants(
                 conn,
@@ -680,7 +681,7 @@ async def get_product_complete(
             raise NotFoundError(E_NOT_FOUND, "개설 결과를 찾을 수 없습니다.")
 
         product_name: str | None = None
-        pid = _account_product.get(account_no)
+        pid = account_product_map.get_product(account_no)
         if pid is not None:
             pname = await conn.fetchval(
                 'SELECT "PRODUCT_NAME" FROM public."PRODUCT" WHERE "PRODUCT_ID" = $1',
