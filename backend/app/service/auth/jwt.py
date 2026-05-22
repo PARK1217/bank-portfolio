@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 from datetime import datetime, timedelta, timezone
 
 import jwt as pyjwt
@@ -13,11 +14,15 @@ from ...exceptions import AuthError
 
 
 def issue_access_token(customer_no: int) -> tuple[str, int]:
-    """JWT 발급. 반환: (token, expires_in_seconds)."""
+    """JWT 발급. 반환: (token, expires_in_seconds).
+
+    jti 클레임으로 토큰별 고유 ID 부여 — 로그아웃 시 해당 jti 만 블랙리스트 처리.
+    """
     now = datetime.now(timezone.utc)
     expires_in = settings.JWT_EXPIRE_MINUTES * 60
     payload = {
         "sub": str(customer_no),
+        "jti": uuid.uuid4().hex,
         "iat": int(now.timestamp()),
         "exp": int((now + timedelta(seconds=expires_in)).timestamp()),
     }
@@ -25,8 +30,11 @@ def issue_access_token(customer_no: int) -> tuple[str, int]:
     return token, expires_in
 
 
-def decode_access_token(token: str) -> int:
-    """JWT → customer_no. 검증 실패 시 AuthError(E_UNAUTHORIZED)."""
+def decode_access_token(token: str) -> tuple[int, str | None]:
+    """JWT → (customer_no, jti). 검증 실패 시 AuthError(E_UNAUTHORIZED).
+
+    기존 jti 없는 토큰도 호환 — jti=None 반환.
+    """
     try:
         payload = pyjwt.decode(
             token,
@@ -42,6 +50,9 @@ def decode_access_token(token: str) -> int:
     if sub is None:
         raise AuthError(E_UNAUTHORIZED, "유효하지 않은 토큰입니다.")
     try:
-        return int(sub)
+        customer_no = int(sub)
     except (ValueError, TypeError) as e:
         raise AuthError(E_UNAUTHORIZED, "유효하지 않은 토큰입니다.") from e
+
+    jti = payload.get("jti")
+    return customer_no, (str(jti) if jti else None)

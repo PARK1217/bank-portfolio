@@ -32,6 +32,7 @@ class CurrentCustomer:
     email: str
     grade_cd: str | None
     status_cd: str
+    name: str | None
 
 
 async def current_customer(
@@ -40,13 +41,21 @@ async def current_customer(
     if credentials is None or credentials.scheme.lower() != "bearer":
         raise AuthError(E_UNAUTHORIZED, "인증이 필요합니다.")
 
-    customer_no = decode_access_token(credentials.credentials)
+    customer_no, jti = decode_access_token(credentials.credentials)
+
+    # 로그아웃으로 블랙리스트된 jti 는 만료 전이라도 거부.
+    from .session import is_jti_revoked
+    if jti and is_jti_revoked(jti):
+        raise AuthError(E_UNAUTHORIZED, "세션이 만료되었습니다.")
 
     pool = get_pool()
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
-            'SELECT "CUSTOMER_NO", "EMAIL", "CUST_GRADE_CD", "CUST_STATUS_CD", "DELETE_YN" '
-            'FROM public."CUSTOMER" WHERE "CUSTOMER_NO" = $1',
+            'SELECT c."CUSTOMER_NO", c."EMAIL", c."CUST_GRADE_CD", c."CUST_STATUS_CD", c."DELETE_YN", '
+            '       p."PARTY_NAME" '
+            'FROM public."CUSTOMER" c '
+            'LEFT JOIN public."PARTY" p ON p."PARTY_ID" = c."PARTY_ID" '
+            'WHERE c."CUSTOMER_NO" = $1',
             customer_no,
         )
 
@@ -63,7 +72,21 @@ async def current_customer(
         email=row["EMAIL"],
         grade_cd=row["CUST_GRADE_CD"],
         status_cd=row["CUST_STATUS_CD"],
+        name=row["PARTY_NAME"],
     )
+
+
+def current_customer_jti(
+    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
+) -> str | None:
+    """현재 요청 JWT 의 jti 클레임을 그대로 반환 (로그아웃 시 블랙리스트 등록용)."""
+    if credentials is None or credentials.scheme.lower() != "bearer":
+        return None
+    try:
+        _, jti = decode_access_token(credentials.credentials)
+    except AuthError:
+        return None
+    return jti
 
 
 def get_token_service(request: Request) -> TokenService:

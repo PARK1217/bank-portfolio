@@ -19,7 +19,29 @@ export function NavUser() {
   const { isAuthenticated, customerNo, signOut, isReady } = useAuth();
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [name, setName] = useState<string | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
+
+  // 인증 상태가 켜지면 /api/auth/me 로 이름 조회. 토큰 바뀔 때마다 재호출.
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setName(null);
+      return;
+    }
+    let alive = true;
+    void api
+      .get<{ name?: string | null }>("/api/auth/me")
+      .then((res) => {
+        if (alive) setName(res.name ?? null);
+      })
+      .catch(() => {
+        // 401 은 AuthProvider 의 onAuthExpired 가 처리 — 여기선 표시만 비워둔다.
+        if (alive) setName(null);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [isAuthenticated, customerNo]);
 
   // 외부 클릭/포커스/Escape 시 닫기.
   useEffect(() => {
@@ -76,7 +98,15 @@ export function NavUser() {
           className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-muted-foreground hover:bg-accent hover:text-foreground"
         >
           <span>
-            고객 <span className="font-mono">#{customerNo ?? "-"}</span>
+            {name ? (
+              <>
+                {name} <span className="text-muted-foreground/60">님</span>
+              </>
+            ) : (
+              <>
+                고객 <span className="font-mono">#{customerNo ?? "-"}</span>
+              </>
+            )}
           </span>
           <span aria-hidden className="text-[0.65rem]">▾</span>
         </button>

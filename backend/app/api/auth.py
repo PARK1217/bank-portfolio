@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import base64
 import secrets
-from datetime import datetime
+from datetime import datetime, timezone
 
 import structlog
 from fastapi import APIRouter, Depends
@@ -32,6 +32,8 @@ from ..service.auth import (
     issue_access_token,
     verify_password,
 )
+from ..service.auth.deps import current_customer_jti
+from ..service.auth.session import revoke_jti
 from ..service.token import TokenService
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -96,9 +98,14 @@ async def login(
 async def logout(
     user: CurrentCustomer = Depends(current_customer),
     tokens: TokenService = Depends(get_token_service),
+    jti: str | None = Depends(current_customer_jti),
 ) -> LogoutResponse:
     revoked = await tokens.revoke_all_for_customer(user.customer_no)
-    log.info("logout_success", revoked=revoked)
+    # JWT 자체를 즉시 무효화 — 만료까지 남은 시간만큼만 블랙리스트 보관.
+    if jti:
+        exp_at = int(datetime.now(timezone.utc).timestamp()) + 30 * 60
+        revoke_jti(jti, exp_at)
+    log.info("logout_success", revoked=revoked, jti_revoked=bool(jti))
     return LogoutResponse(revoked_tokens=revoked)
 
 
@@ -193,6 +200,7 @@ async def me(user: CurrentCustomer = Depends(current_customer)) -> dict:
     return {
         "customer_no": user.customer_no,
         "email": user.email,
+        "name": user.name,
         "grade_cd": user.grade_cd,
         "status_cd": user.status_cd,
         "otp_active": bool(entry and entry.get("active")),
