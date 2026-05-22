@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Spinner } from "@/components/ui/spinner";
 import { Badge } from "@/components/ui/badge";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
-import { api, type DecisionItem } from "@/lib/api";
+import { api, mapDecisionItem, type DecisionItem } from "@/lib/api";
 import { fmtDateTime, fmtKrw } from "@/lib/utils";
 
 
@@ -33,10 +33,10 @@ export default function DecisionsPage() {
     const q = filter === "ALL" ? "" : `?decision_cd=${filter}`;
     (async () => {
       try {
-        const res = await api.get<{ items: DecisionItem[]; count: number }>(
+        const res = await api.get<{ items: Record<string, unknown>[]; count: number }>(
           `/api/admin/loans/decisions${q}${q ? "&" : "?"}limit=200`,
         );
-        setItems(res.items);
+        setItems(res.items.map(mapDecisionItem));
       } catch (err) {
         setError(err instanceof Error ? err.message : "결정 이력을 불러오지 못했습니다.");
       }

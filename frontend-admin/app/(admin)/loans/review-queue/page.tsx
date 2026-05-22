@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Spinner } from "@/components/ui/spinner";
 import { Badge } from "@/components/ui/badge";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
-import { api, type ReviewQueueItem } from "@/lib/api";
+import { api, mapReviewQueueItem, type ReviewQueueItem } from "@/lib/api";
 import { fmtDateTime, fmtKrw } from "@/lib/utils";
 
 
@@ -17,10 +17,10 @@ export default function ReviewQueuePage() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await api.get<{ items: ReviewQueueItem[]; count: number }>(
+        const res = await api.get<{ items: Record<string, unknown>[]; count: number }>(
           "/api/admin/loans/review-queue?limit=100",
         );
-        setItems(res.items);
+        setItems(res.items.map(mapReviewQueueItem));
       } catch (err) {
         setError(err instanceof Error ? err.message : "큐를 불러오지 못했습니다.");
       }

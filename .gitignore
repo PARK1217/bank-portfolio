@@ -179,6 +179,8 @@ backend/logs/
 # 로컬 협업 보드 — 같은 머신의 여러 Claude Code 세션 간 in-progress 공유용
 WORKBOARD.md
 
-# Frontend (Next.js) — Python의 lib/ 규칙이 frontend/lib 를 잡아먹지 않도록 예외
+# Frontend (Next.js) — Python의 lib/ 규칙이 frontend/lib, frontend-admin/lib 를 잡아먹지 않도록 예외
 !frontend/lib/
 !frontend/lib/**
+!frontend-admin/lib/
+!frontend-admin/lib/**

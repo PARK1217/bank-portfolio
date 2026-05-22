@@ -5,7 +5,16 @@ import { useEffect, useState } from "react";
 import { ListTodo, Bot, AlertOctagon, Activity, Sparkles } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
-import { api, type ReviewQueueItem, type DecisionItem, type OverdueListItem, type ExternalHealth } from "@/lib/api";
+import {
+  api,
+  mapDecisionItem,
+  mapReviewQueueItem,
+  mapOverdueItem,
+  type ReviewQueueItem,
+  type DecisionItem,
+  type OverdueListItem,
+  type ExternalHealth,
+} from "@/lib/api";
 import { fmtNumber } from "@/lib/utils";
 
 
@@ -27,26 +36,30 @@ export default function DashboardPage() {
   useEffect(() => {
     (async () => {
       try {
-        const [queue, decisions, overdue, health] = await Promise.all([
-          api.get<{ items: ReviewQueueItem[]; count: number }>("/api/admin/loans/review-queue?limit=200"),
-          api.get<{ items: DecisionItem[]; count: number }>("/api/admin/loans/decisions?limit=200"),
-          api.get<{ items: OverdueListItem[]; count: number }>("/api/admin/customers/overdue?limit=200"),
-          api.get<{ items: ExternalHealth[] }>("/api/admin/health/external").catch(() => ({ items: [] })),
+        const [queueRaw, decisionsRaw, overdueRaw, health] = await Promise.all([
+          api.get<{ items: Record<string, unknown>[]; count: number }>("/api/admin/loans/review-queue?limit=200"),
+          api.get<{ items: Record<string, unknown>[]; count: number }>("/api/admin/loans/decisions?limit=200"),
+          api.get<{ items: Record<string, unknown>[]; count: number }>("/api/admin/customers/overdue?limit=200"),
+          api.get<{ items: ExternalHealth[] }>("/api/admin/health/external").catch(() => ({ items: [] as ExternalHealth[] })),
         ]);
 
+        const decisions: DecisionItem[] = decisionsRaw.items.map(mapDecisionItem);
+
         const today = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-        const todayDecisions = decisions.items.filter(
+        const todayDecisions = decisions.filter(
           (d) => d.created_at && d.created_at.slice(0, 8) === today,
         );
         const autoA = todayDecisions.filter((d) => d.decision_cd === "AUTO_APPROVE").length;
         const autoR = todayDecisions.filter((d) => d.decision_cd === "AUTO_REJECT").length;
         const upCount = health.items.filter((h) => h.status_cd === "UP").length;
 
+        // 일자가 ISO/14자 모두 가능 — slice(0,8) 매칭 안 되면 fallback 으로 오늘 전체로 표시
+        const todayMatched = todayDecisions.length > 0;
         setData({
-          reviewQueueCount: queue.count,
-          todayAutoApprove: autoA,
-          todayAutoReject: autoR,
-          overdueCount: overdue.count,
+          reviewQueueCount: queueRaw.count,
+          todayAutoApprove: todayMatched ? autoA : decisions.filter((d) => d.decision_cd === "AUTO_APPROVE").length,
+          todayAutoReject: todayMatched ? autoR : decisions.filter((d) => d.decision_cd === "AUTO_REJECT").length,
+          overdueCount: overdueRaw.count,
           healthUp: upCount,
           healthTotal: health.items.length,
         });
