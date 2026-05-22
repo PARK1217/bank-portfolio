@@ -147,13 +147,23 @@ async def get_customer_detail(customer_no: int) -> dict[str, Any]:
             'ORDER BY "CONTRACT_DATE" DESC',
             customer_no,
         )
+        # 화면에 위임자·대리인 회원번호만 보여주면 누군지 알기 어려워 PARTY_NAME JOIN.
+        # 권한 4개(INQUIRY/WITHDRAW/TRANSFER/CLOSE) 외 4개(OPEN_PRODUCT/LOAN_APPLY/
+        # LIMIT_CHANGE/PWD_CHANGE) 도 함께 노출 — open-minor 의 8 권한 어필 정합.
         delegations_out = await conn.fetch(
-            'SELECT "DELEGATION_ID","TARGET_CUST_NO","AGENT_CUST_NO","ROLE_TYPE_CD",'
-            '       "INQUIRY_PERM","WITHDRAW_PERM","TRANSFER_PERM","CLOSE_PERM",'
-            '       "DELEG_START_DATE" '
-            'FROM public."DELEGATION" '
-            'WHERE "TARGET_CUST_NO" = $1 OR "AGENT_CUST_NO" = $1 '
-            'ORDER BY "DELEGATION_ID" DESC LIMIT 20',
+            'SELECT d."DELEGATION_ID",d."TARGET_CUST_NO",d."AGENT_CUST_NO",d."ROLE_TYPE_CD",'
+            '       d."INQUIRY_PERM",d."WITHDRAW_PERM",d."TRANSFER_PERM",d."CLOSE_PERM",'
+            '       d."OPEN_PRODUCT_PERM",d."LOAN_APPLY_PERM",d."LIMIT_CHANGE_PERM",d."PWD_CHANGE_PERM",'
+            '       d."DELEG_START_DATE", '
+            '       pt."PARTY_NAME" AS target_name, '
+            '       pa."PARTY_NAME" AS agent_name '
+            'FROM public."DELEGATION" d '
+            'LEFT JOIN public."CUSTOMER" ct ON ct."CUSTOMER_NO" = d."TARGET_CUST_NO" '
+            'LEFT JOIN public."PARTY" pt    ON pt."PARTY_ID"    = ct."PARTY_ID" '
+            'LEFT JOIN public."CUSTOMER" ca ON ca."CUSTOMER_NO" = d."AGENT_CUST_NO" '
+            'LEFT JOIN public."PARTY" pa    ON pa."PARTY_ID"    = ca."PARTY_ID" '
+            'WHERE d."TARGET_CUST_NO" = $1 OR d."AGENT_CUST_NO" = $1 '
+            'ORDER BY d."DELEGATION_ID" DESC LIMIT 20',
             customer_no,
         )
 
@@ -230,11 +240,17 @@ async def get_customer_detail(customer_no: int) -> dict[str, Any]:
                 "delegation_id": int(d["DELEGATION_ID"]),
                 "target_cust_no": int(d["TARGET_CUST_NO"]) if d["TARGET_CUST_NO"] is not None else None,
                 "agent_cust_no": int(d["AGENT_CUST_NO"]) if d["AGENT_CUST_NO"] is not None else None,
+                "target_name": d["target_name"],
+                "agent_name": d["agent_name"],
                 "role_type_cd": d["ROLE_TYPE_CD"],
                 "inquiry_perm": d["INQUIRY_PERM"],
                 "withdraw_perm": d["WITHDRAW_PERM"],
                 "transfer_perm": d["TRANSFER_PERM"],
                 "close_perm": d["CLOSE_PERM"],
+                "open_product_perm": d["OPEN_PRODUCT_PERM"],
+                "loan_apply_perm": d["LOAN_APPLY_PERM"],
+                "limit_change_perm": d["LIMIT_CHANGE_PERM"],
+                "pwd_change_perm": d["PWD_CHANGE_PERM"],
                 "start_date": d["DELEG_START_DATE"],
                 "direction": "AS_TARGET" if d["TARGET_CUST_NO"] == customer_no else "AS_AGENT",
             }

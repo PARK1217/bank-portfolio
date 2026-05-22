@@ -338,11 +338,17 @@ export interface CustomerDelegation {
   delegation_id: number;
   target_cust_no?: number | null;
   agent_cust_no?: number | null;
+  target_name?: string | null;
+  agent_name?: string | null;
   role_type_cd?: string | null;
   inquiry_perm?: string | null;
   withdraw_perm?: string | null;
   transfer_perm?: string | null;
   close_perm?: string | null;
+  open_product_perm?: string | null;
+  loan_apply_perm?: string | null;
+  limit_change_perm?: string | null;
+  pwd_change_perm?: string | null;
   start_date?: string | null;
   direction: "AS_TARGET" | "AS_AGENT";
 }
@@ -405,6 +411,46 @@ export interface AccountTxItem {
   counterpart_holder_name?: string | null;
   memo?: string | null;
 }
+
+export interface AuditLogItem {
+  audit_id: number;
+  employee_no: string;
+  action_cd: string;
+  target_table?: string | null;
+  target_id?: string | null;
+  result_cd?: string | null;
+  access_ip?: string | null;
+  user_agent?: string | null;
+  remark?: string | null;
+  created_at?: string | null;
+  before_json?: unknown;
+  after_json?: unknown;
+}
+
+export interface AuditListResponse {
+  items: AuditLogItem[];
+  count: number;
+  total: number;
+}
+
+export interface AuditFacet {
+  value: string;
+  count: number;
+}
+
+export interface AuditFacets {
+  actions: AuditFacet[];
+  employees: AuditFacet[];
+  target_tables: AuditFacet[];
+  stats: {
+    total: number;
+    ok: number;
+    denied: number;
+    error: number;
+    today: number;
+  };
+}
+
 
 export interface AccountDetail {
   account: {

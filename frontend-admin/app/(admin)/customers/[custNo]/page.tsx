@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
-import { api, type CustomerDetail, ApiError } from "@/lib/api";
+import { api, type CustomerDetail, type CustomerDelegation, ApiError } from "@/lib/api";
 import { fmtDateTime, fmtKrw, fmtPercent, fmtNumber } from "@/lib/utils";
 
 
@@ -266,9 +266,9 @@ export default function CustomerDetailPage() {
                     <TR>
                       <TH>방향</TH>
                       <TH>역할</TH>
-                      <TH>위임자(TARGET)</TH>
-                      <TH>대리인(AGENT)</TH>
-                      <TH>권한</TH>
+                      <TH>위임자 (TARGET)</TH>
+                      <TH>대리인 (AGENT)</TH>
+                      <TH>활성 권한</TH>
                       <TH>시작</TH>
                     </TR>
                   </THead>
@@ -281,13 +281,14 @@ export default function CustomerDetailPage() {
                           </Badge>
                         </TD>
                         <TD>{d.role_type_cd ?? "-"}</TD>
-                        <TD className="font-mono text-xs">#{d.target_cust_no ?? "-"}</TD>
-                        <TD className="font-mono text-xs">#{d.agent_cust_no ?? "-"}</TD>
-                        <TD className="text-xs">
-                          <PermFlag label="조회" yn={d.inquiry_perm} />
-                          <PermFlag label="출금" yn={d.withdraw_perm} />
-                          <PermFlag label="이체" yn={d.transfer_perm} />
-                          <PermFlag label="해지" yn={d.close_perm} />
+                        <TD>
+                          <PartyRef name={d.target_name} custNo={d.target_cust_no} />
+                        </TD>
+                        <TD>
+                          <PartyRef name={d.agent_name} custNo={d.agent_cust_no} />
+                        </TD>
+                        <TD>
+                          <ActivePerms d={d} />
                         </TD>
                         <TD className="text-xs text-muted-foreground">{fmtDateTime(d.start_date)}</TD>
                       </TR>
@@ -314,14 +315,45 @@ function Pair({ label, value }: { label: string; value: React.ReactNode }) {
 }
 
 
-function PermFlag({ label, yn }: { label: string; yn?: string | null }) {
+function PartyRef({ name, custNo }: { name?: string | null; custNo?: number | null }) {
+  if (custNo == null) return <span className="text-xs text-muted-foreground">-</span>;
   return (
-    <span
-      className={`mr-1 inline-block rounded px-1.5 py-0.5 text-[10px] ${
-        yn === "Y" ? "bg-success/15 text-success" : "bg-muted text-muted-foreground"
-      }`}
-    >
-      {label}
-    </span>
+    <div className="leading-tight">
+      <div className="text-sm font-medium">{name ?? "(이름 없음)"}</div>
+      <div className="font-mono text-[10px] text-muted-foreground">#{custNo}</div>
+    </div>
+  );
+}
+
+
+// DELEGATION 의 8개 권한 컬럼 → 라벨 매핑.
+const DELEG_PERMS: { key: keyof CustomerDelegation; label: string }[] = [
+  { key: "inquiry_perm",      label: "조회" },
+  { key: "withdraw_perm",     label: "출금" },
+  { key: "transfer_perm",     label: "이체" },
+  { key: "close_perm",        label: "해지" },
+  { key: "open_product_perm", label: "상품개설" },
+  { key: "loan_apply_perm",   label: "대출신청" },
+  { key: "limit_change_perm", label: "한도변경" },
+  { key: "pwd_change_perm",   label: "비번변경" },
+];
+
+
+function ActivePerms({ d }: { d: CustomerDelegation }) {
+  const active = DELEG_PERMS.filter((p) => d[p.key] === "Y");
+  if (active.length === 0) {
+    return <span className="text-xs text-muted-foreground">권한 없음</span>;
+  }
+  return (
+    <div className="flex flex-wrap gap-1">
+      {active.map((p) => (
+        <span
+          key={p.key}
+          className="inline-block rounded border border-success/40 bg-success/10 px-1.5 py-0.5 text-[10px] font-medium text-success"
+        >
+          {p.label}
+        </span>
+      ))}
+    </div>
   );
 }
