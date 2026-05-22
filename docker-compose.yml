@@ -11,6 +11,10 @@ services:
       POSTGRES_DB: bank
       LANG: C.UTF-8
       LC_ALL: C.UTF-8
+      TZ: Asia/Seoul
+      PGTZ: Asia/Seoul
+    # Postgres 세션 timezone 도 KST 로 고정 — CURRENT_TIMESTAMP / NOW() 모두 KST 로 반환.
+    command: ["postgres", "-c", "timezone=Asia/Seoul"]
     ports:
       - "5434:5432"  # 기존 banking 스택(5433)과 동시 실행 가능하도록 분리
     volumes:
@@ -41,6 +45,9 @@ services:
       JWT_ALGORITHM: HS256
       JWT_EXPIRE_MINUTES: 30
       CORS_ORIGINS: http://localhost:3001,http://localhost:5001
+      # 컨테이너 wall-clock 을 KST 로 고정 → datetime.now() / NOW() / 로그 timestamp 모두 KST.
+      # JWT 의 iat/exp 는 명시적으로 datetime.now(timezone.utc) 를 쓰므로 표준대로 UTC 유지.
+      TZ: Asia/Seoul
       # LLM API (host `.env` 에서 보간, gitignore). 미설정 시 fallback 응답.
       GROQ_API_KEY: ${GROQ_API_KEY:-}
       MISTRAL_API_KEY: ${MISTRAL_API_KEY:-}
@@ -67,6 +74,7 @@ services:
     restart: unless-stopped
     environment:
       NEXT_PUBLIC_API_URL: http://localhost:8001
+      TZ: Asia/Seoul
     ports:
       - "3001:3000"  # 기존 banking 스택(3000)과 분리
     depends_on:
@@ -80,6 +88,7 @@ services:
     restart: unless-stopped
     environment:
       PHOENIX_WORKING_DIR: /mnt/data
+      TZ: Asia/Seoul
     ports:
       - "6006:6006"  # UI + OTLP HTTP 통합
     volumes:
@@ -106,6 +115,7 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
       CLUSTER_ID: "bankportfolio-kafka-cluster"
+      TZ: Asia/Seoul
     ports:
       - "9092:9092"
     volumes:

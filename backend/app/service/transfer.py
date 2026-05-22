@@ -16,7 +16,7 @@ from __future__ import annotations
 import asyncio
 import random
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime
 
 import structlog
 
@@ -52,8 +52,8 @@ BOK_SUCCESS_RATE = 0.95
 
 def _is_bok_wire_open_now(now: datetime | None = None) -> bool:
     """한국은행 거액결제망(BOK-Wire+) 운영시간: 평일 09:00 ~ 17:30 (KST)."""
-    # 컨테이너 기본 timezone 이 UTC 인 경우 대비 KST(UTC+9) 보정.
-    now = now or (datetime.utcnow() + timedelta(hours=9))
+    # 컨테이너 TZ=Asia/Seoul 로 고정 (docker-compose.yml) → datetime.now() 가 곧 KST.
+    now = now or datetime.now()
     if now.weekday() >= 5:  # 토(5)/일(6)
         return False
     if now.hour < 9:
