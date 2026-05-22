@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { Paperclip } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import { Badge } from "@/components/ui/badge";
@@ -111,6 +112,7 @@ export default function DecisionsPage() {
                   <TH>결정</TH>
                   <TH>사람 라벨</TH>
                   <TH>일시</TH>
+                  <TH>첨부</TH>
                 </TR>
               </THead>
               <TBody>
@@ -140,6 +142,16 @@ export default function DecisionsPage() {
                       )}
                     </TD>
                     <TD className="text-xs text-muted-foreground">{fmtDateTime(row.created_at)}</TD>
+                    <TD>
+                      <Link
+                        href={`/loans/${row.application_id}/attachments`}
+                        className="inline-flex items-center gap-1 rounded border bg-background px-2 py-0.5 text-[10px] text-muted-foreground hover:bg-accent hover:text-foreground"
+                        title="첨부서류 일치성"
+                      >
+                        <Paperclip className="h-3 w-3" />
+                        첨부
+                      </Link>
+                    </TD>
                   </TR>
                 ))}
               </TBody>

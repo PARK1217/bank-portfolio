@@ -13,6 +13,18 @@ import { api, type PredictResponse, ApiError } from "@/lib/api";
 import { fmtKrw } from "@/lib/utils";
 
 
+// ML XGBoost 입력 피처(loan_decision.py) → 한글 라벨 매핑.
+// 백엔드 신규 피처가 추가되면 여기에 항목을 늘리면 됨 (없으면 키 그대로 표시).
+const FEATURE_LABELS: Record<string, string> = {
+  credit_score: "신용점수",
+  overdue_days_24m: "최근 24개월 연체일수",
+  overdue_ratio: "연체 비율",
+  deposit_balance: "예치 잔액",
+  annual_income: "연 소득",
+  request_ratio: "희망액 / 권장한도",
+};
+
+
 export default function LoanApplicationDetailPage() {
   const params = useParams<{ appId: string }>();
   const router = useRouter();
@@ -103,7 +115,7 @@ export default function LoanApplicationDetailPage() {
                 <dl className="space-y-2 text-sm">
                   <FeatureRow label="고객 번호" value={`#${predict.customer_no}`} />
                   {Object.entries(predict.features).map(([k, v]) => (
-                    <FeatureRow key={k} label={k} value={formatFeatureValue(k, v)} />
+                    <FeatureRow key={k} label={FEATURE_LABELS[k] ?? k} value={formatFeatureValue(k, v)} />
                   ))}
                 </dl>
               </CardContent>
