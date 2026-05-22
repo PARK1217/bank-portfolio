@@ -33,6 +33,7 @@ from .config import settings
 from .db import close_pool, get_pool, init_pool
 from .exceptions import BankingException
 from .logging_setup import get_logger, setup_logging
+from .observability import init_tracing
 from .middleware import (
     REQUEST_ID_HEADER,
     AdminAuditMiddleware,
@@ -123,6 +124,9 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="bank-portfolio API", version="0.1.0", lifespan=lifespan)
+
+# Phoenix / OTLP 트레이스 — 가이드 §9.2.2. 미설정 시 graceful no-op.
+init_tracing(app)
 
 app.add_middleware(
     CORSMiddleware,

@@ -23,3 +23,12 @@ aiokafka==0.11.0
 ucimlrepo==0.0.7
 xgboost==2.1.1
 joblib==1.4.2
+
+# Phoenix / OTLP 트레이스 (가이드 §9.2.2 Arize Phoenix 연동) — Phoenix UI 6006 에서 RAG 트레이스 · 토큰 · 지연 시각화.
+arize-phoenix-otel==0.6.1
+opentelemetry-api==1.27.0
+opentelemetry-sdk==1.27.0
+opentelemetry-exporter-otlp-proto-http==1.27.0
+opentelemetry-instrumentation-fastapi==0.48b0
+opentelemetry-instrumentation-httpx==0.48b0
+openinference-semantic-conventions==0.1.12

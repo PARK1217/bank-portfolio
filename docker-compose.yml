@@ -40,6 +40,10 @@ services:
       MISTRAL_API_KEY: ${MISTRAL_API_KEY:-}
       HUGGINGFACE_API_KEY: ${HUGGINGFACE_API_KEY:-}
       LLM_PROVIDER: ${LLM_PROVIDER:-groq}
+      # Phoenix OTLP — 가이드 §9.2.2 LLM/Agent 관측. phoenix 서비스 미가동 시 export 실패는 graceful degrade.
+      PHOENIX_COLLECTOR_ENDPOINT: ${PHOENIX_COLLECTOR_ENDPOINT:-http://phoenix:6006}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://phoenix:6006/v1/traces}
+      PHOENIX_PROJECT_NAME: ${PHOENIX_PROJECT_NAME:-banking-rag}
     ports:
       - "8001:8000"  # 기존 banking 스택(8000)과 분리
     depends_on:
@@ -61,6 +65,19 @@ services:
       - "3001:3000"  # 기존 banking 스택(3000)과 분리
     depends_on:
       - backend
+
+  phoenix:
+    # Arize Phoenix — 가이드 §9.2.2 LLM/Agent 관측. RAG 트레이스 + Faithfulness 평가 + 토큰 사용량.
+    # OTLP HTTP/UI 통합 포트 6006 — backend 가 `PHOENIX_COLLECTOR_ENDPOINT` 로 발행, 운영자는 같은 포트로 UI 접근.
+    image: arizephoenix/phoenix:latest
+    container_name: bank-portfolio-phoenix
+    restart: unless-stopped
+    environment:
+      PHOENIX_WORKING_DIR: /mnt/data
+    ports:
+      - "6006:6006"  # UI + OTLP HTTP 통합
+    volumes:
+      - phoenix_data:/mnt/data
 
   kafka:
     # 공식 Apache Kafka 3.7 (KRaft 모드 — Zookeeper 없이 단독 운영, 가이드 §2.4).
@@ -97,3 +114,4 @@ services:
 volumes:
   postgres_data:
   kafka_data:
+  phoenix_data:
