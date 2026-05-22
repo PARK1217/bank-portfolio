@@ -86,6 +86,13 @@ const CONFIDENCE_BADGE: Record<string, { label: string; color: string }> = {
   LOW: { label: "신중 — 정보 부족", color: "text-warning" },
 };
 
+// 상담원 연결 더미 연락처 — 시연 환경. 실제 운영은 콜센터/응대팀 채널 연결로 교체.
+const HANDOFF_PHONE = "1588-0098";
+const HANDOFF_EMAIL = "support@daon.example";
+
+// 종료된 챗봇 세션 sessionStorage 키 — 탭을 닫으면 자연스럽게 해제.
+const ENDED_SESSIONS_KEY = "chatbot.endedSessions";
+
 
 function ChatScreen() {
   const search = useSearchParams();
@@ -98,7 +105,23 @@ function ChatScreen() {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [feedbackGiven, setFeedbackGiven] = useState<Record<number, number>>({});
+  // 종료된 세션 집합 — sessionStorage(키 ENDED_KEY) 와 mirror. 새 세션 시작하면 자연스럽게 해제.
+  const [endedSessions, setEndedSessions] = useState<Set<number>>(new Set());
   const scrollRef = useRef<HTMLDivElement | null>(null);
+
+  // 종료된 세션 마스터 — sessionStorage 에서 초기 로드
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(ENDED_SESSIONS_KEY);
+      if (!raw) return;
+      const arr = JSON.parse(raw);
+      if (Array.isArray(arr)) {
+        setEndedSessions(new Set(arr.filter((x) => typeof x === "number")));
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
 
   // 기존 세션이면 히스토리 로드
   useEffect(() => {
@@ -118,6 +141,32 @@ function ChatScreen() {
     };
   }, [sessionId]);
 
+  const isEnded = sessionId !== null && endedSessions.has(sessionId);
+
+  function endSession() {
+    if (sessionId == null) {
+      // 메시지 0건 상태에서는 종료할 대상이 없음
+      toast.info("아직 시작된 대화가 없어요.");
+      return;
+    }
+    const next = new Set(endedSessions);
+    next.add(sessionId);
+    setEndedSessions(next);
+    try {
+      sessionStorage.setItem(ENDED_SESSIONS_KEY, JSON.stringify(Array.from(next)));
+    } catch {
+      // ignore — 종료 표시는 best-effort
+    }
+    toast.success("상담을 종료했어요. 새 대화를 시작하려면 새 탭/새 세션을 열어주세요.");
+  }
+
+  function startNewSession() {
+    // 헤더 "새 대화" — 같은 화면에서 세션을 새로 시작 (다음 send 호출이 session_id=null 로 새로 발급)
+    setSessionId(null);
+    setMessages([]);
+    setFeedbackGiven({});
+  }
+
   // 메시지 추가 시 자동 스크롤
   useEffect(() => {
     if (scrollRef.current) {
@@ -127,7 +176,7 @@ function ChatScreen() {
 
   async function send(textOverride?: string) {
     const text = (textOverride || input).trim();
-    if (!text || sending) return;
+    if (!text || sending || isEnded) return;
     setSending(true);
     // 사용자 메시지 낙관적으로 먼저 그림
     const optimistic: ChatMessageItem = {
@@ -194,13 +243,30 @@ function ChatScreen() {
             3-tier RAG: 키워드 → FAQ → 약관 검색. 정보 부족 시 상담원 연결을 제안합니다.
           </p>
         </div>
-        <div className="flex gap-2 text-xs">
+        <div className="flex items-center gap-2 text-xs">
           <Link href="/chatbot/faq" className="text-primary hover:underline">
             FAQ
           </Link>
           <Link href="/chatbot/terms-search" className="text-primary hover:underline">
             약관 검색
           </Link>
+          {isEnded ? (
+            <button
+              type="button"
+              onClick={startNewSession}
+              className="rounded border border-input bg-background px-2 py-0.5 text-foreground hover:bg-accent"
+            >
+              새 대화
+            </button>
+          ) : sessionId !== null && messages.length > 0 ? (
+            <button
+              type="button"
+              onClick={endSession}
+              className="rounded border border-input bg-background px-2 py-0.5 text-muted-foreground hover:bg-accent"
+            >
+              상담 종료
+            </button>
+          ) : null}
         </div>
       </header>
 
@@ -216,6 +282,7 @@ function ChatScreen() {
               onFeedback={sendFeedback}
               onFollowUp={(q) => void send(q)}
               sending={sending}
+              sessionId={sessionId}
             />
           ))
         )}
@@ -230,27 +297,39 @@ function ChatScreen() {
         ) : null}
       </div>
 
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          void send();
-        }}
-        className="flex items-end gap-2 border-t pt-3"
-      >
-        <textarea
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={onKeyDown}
-          placeholder="궁금한 점을 입력하세요 (Enter 전송, Shift+Enter 줄바꿈)"
-          rows={2}
-          maxLength={2000}
-          disabled={sending}
-          className="flex-1 resize-none rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        />
-        <Button type="submit" disabled={sending || !input.trim()}>
-          전송
-        </Button>
-      </form>
+      {isEnded ? (
+        <div className="rounded-md border bg-muted/30 px-3 py-3 text-xs text-muted-foreground">
+          상담이 종료되었어요. <button
+            type="button"
+            onClick={startNewSession}
+            className="ml-1 text-primary underline-offset-2 hover:underline"
+          >
+            새 대화 시작
+          </button>
+        </div>
+      ) : (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            void send();
+          }}
+          className="flex items-end gap-2 border-t pt-3"
+        >
+          <textarea
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={onKeyDown}
+            placeholder="궁금한 점을 입력하세요 (Enter 전송, Shift+Enter 줄바꿈)"
+            rows={2}
+            maxLength={2000}
+            disabled={sending}
+            className="flex-1 resize-none rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          />
+          <Button type="submit" disabled={sending || !input.trim()}>
+            전송
+          </Button>
+        </form>
+      )}
     </div>
   );
 }
@@ -342,14 +421,31 @@ function MessageBubble({
   onFeedback,
   onFollowUp,
   sending,
+  sessionId,
 }: {
   msg: ChatMessageItem;
   feedback?: number;
   onFeedback: (id: number, rating: 1 | 5) => void;
   onFollowUp: (q: string) => void;
   sending: boolean;
+  sessionId: number | null;
 }) {
   const isUser = msg.role_cd === "USER";
+  // 상담원 연결 카드 노출 트리거:
+  //   - confidence=LOW: 백엔드가 명시적으로 정보 부족 라벨
+  //   - rag_tier_cd=null: 어떤 RAG 단계에도 매칭 안 된 fallback 답변
+  //   - 출처 0건: 매칭 자체가 없었음
+  //   - 모든 출처가 score < 0.40: 약관 검색은 매칭됐지만 유사도가 낮아 답변 신뢰성↓ (휴리스틱)
+  const lowScoreOnly =
+    !isUser &&
+    msg.sources.length > 0 &&
+    msg.sources.every((s) => (s.score ?? 1) < 0.4);
+  const needsHandoff =
+    !isUser &&
+    (msg.confidence === "LOW" ||
+      msg.rag_tier_cd === null ||
+      msg.sources.length === 0 ||
+      lowScoreOnly);
   return (
     <div className={cn("flex", isUser ? "justify-end" : "justify-start")}>
       <div className={cn("max-w-[85%] space-y-1", isUser ? "items-end text-right" : "items-start")}>
@@ -365,11 +461,44 @@ function MessageBubble({
         {!isUser ? (
           <>
             <AssistantMeta msg={msg} feedback={feedback} onFeedback={onFeedback} />
+            {needsHandoff ? <HandoffCard sessionId={sessionId} /> : null}
             {msg.follow_up_questions?.length > 0 ? (
               <FollowUpChips items={msg.follow_up_questions} onPick={onFollowUp} disabled={sending} />
             ) : null}
           </>
         ) : null}
+      </div>
+    </div>
+  );
+}
+
+
+function HandoffCard({ sessionId }: { sessionId: number | null }) {
+  const handoffHref = sessionId ? `/chatbot/handoff?session=${sessionId}` : "/chatbot/handoff";
+  return (
+    <div className="rounded-md border border-warning/30 bg-warning/5 p-2.5 text-xs">
+      <p className="text-foreground">
+        답변이 충분하지 않다면 <span className="font-medium">상담원</span>이 도와드릴 수 있어요.
+      </p>
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        <a
+          href={`tel:${HANDOFF_PHONE}`}
+          className="inline-flex items-center gap-1 rounded-full border bg-background px-2.5 py-1 text-foreground/90 hover:bg-accent"
+        >
+          전화 <span className="num-tabular text-muted-foreground">{HANDOFF_PHONE}</span>
+        </a>
+        <a
+          href={`mailto:${HANDOFF_EMAIL}`}
+          className="inline-flex items-center gap-1 rounded-full border bg-background px-2.5 py-1 text-foreground/90 hover:bg-accent"
+        >
+          이메일 <span className="text-muted-foreground">{HANDOFF_EMAIL}</span>
+        </a>
+        <Link
+          href={handoffHref}
+          className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-primary hover:bg-primary/15"
+        >
+          상담원 연결 신청 →
+        </Link>
       </div>
     </div>
   );
