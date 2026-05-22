@@ -116,6 +116,8 @@ export const api = {
     request<T>(path, { ...opts, method: "GET" }),
   post: <T = unknown>(path: string, body?: unknown, opts?: Omit<FetchOptions, "method" | "body">) =>
     request<T>(path, { ...opts, method: "POST", body }),
+  patch: <T = unknown>(path: string, body?: unknown, opts?: Omit<FetchOptions, "method" | "body">) =>
+    request<T>(path, { ...opts, method: "PATCH", body }),
 };
 
 
@@ -785,6 +787,55 @@ export interface LoanContractListResponse {
   items: LoanContractListItem[];
   count: number;
   total: number;
+}
+
+
+// ---------------------------------------------------------------------------
+// 회원·계좌 액션 이력 (admin_customer_action / admin_account_action)
+// ---------------------------------------------------------------------------
+
+export interface CustomerStatusHistoryRow {
+  history_id: number;
+  event_datetime?: string | null;
+  old_status_cd?: string | null;
+  new_status_cd: string;
+  reason_cd?: string | null;
+  remark?: string | null;
+  employee_no?: string | null;
+}
+
+export interface CustomerGradeHistoryRow {
+  grade_start_date?: string | null;
+  grade_end_date?: string | null;
+  grade_cd?: string | null;
+  reason_cd?: string | null;
+  remark?: string | null;
+  created_by?: string | null;
+}
+
+export interface AccountStatusHistoryRow {
+  history_id: number;
+  event_datetime?: string | null;
+  event_type_cd: string;       // STATUS_CHANGE | PWD_ERROR_RESET
+  old_value?: string | null;
+  new_value?: string | null;
+  reason_cd?: string | null;
+  remark?: string | null;
+  employee_no?: string | null;
+}
+
+export interface AccountLimitHistoryRow {
+  request_id: number;
+  limit_type_cd: string;       // DAILY_WITHDRAW | DAILY_TRANSFER
+  old_limit_krw: number;
+  new_limit_krw: number;
+  status_cd: string;
+  verify_method_cd: string;    // OTP | ADMIN
+  request_datetime?: string | null;
+  apply_datetime?: string | null;
+  applied_datetime?: string | null;
+  canceled_datetime?: string | null;
+  remark?: string | null;
 }
 
 

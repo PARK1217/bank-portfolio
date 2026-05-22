@@ -1,15 +1,34 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, ShieldAlert, Award } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
-import { api, type CustomerDetail, type CustomerDelegation, ApiError } from "@/lib/api";
-import { decodeId, encodeId, fmtDateTime, fmtKrw, fmtPercent, fmtNumber } from "@/lib/utils";
+import {
+  api,
+  ApiError,
+  type CustomerDelegation,
+  type CustomerDetail,
+  type CustomerGradeHistoryRow,
+  type CustomerStatusHistoryRow,
+} from "@/lib/api";
+import { decodeId, encodeId, fmtDateTime, fmtKrw, fmtNumber, fmtPercent } from "@/lib/utils";
+
+
+const CUST_STATUSES = ["5050", "LIMITED", "LOCKED", "DORMANT"];
+const CUST_STATUS_LABEL: Record<string, string> = {
+  "5050": "정상",
+  LIMITED: "거래제한",
+  LOCKED: "잠금",
+  DORMANT: "휴면",
+};
+const CUST_GRADES = ["VIP", "G100", "GENERAL", "MINOR", "SENIOR", "STUDENT"];
 
 
 export default function CustomerDetailPage() {
@@ -27,18 +46,28 @@ export default function CustomerDetailPage() {
 
   const [data, setData] = useState<CustomerDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [statusHistory, setStatusHistory] = useState<CustomerStatusHistoryRow[]>([]);
+  const [gradeHistory, setGradeHistory] = useState<CustomerGradeHistoryRow[]>([]);
+
+  const reload = useCallback(async () => {
+    if (!custNo) return;
+    try {
+      const [detail, sh, gh] = await Promise.all([
+        api.get<CustomerDetail>(`/api/admin/customers/${custNo}`),
+        api.get<{ items: CustomerStatusHistoryRow[] }>(`/api/admin/customers/${custNo}/status-history`),
+        api.get<{ items: CustomerGradeHistoryRow[] }>(`/api/admin/customers/${custNo}/grade-history`),
+      ]);
+      setData(detail);
+      setStatusHistory(sh.items);
+      setGradeHistory(gh.items);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "회원 상세를 불러오지 못했습니다.");
+    }
+  }, [custNo]);
 
   useEffect(() => {
-    if (!custNo) return;
-    (async () => {
-      try {
-        const res = await api.get<CustomerDetail>(`/api/admin/customers/${custNo}`);
-        setData(res);
-      } catch (err) {
-        setError(err instanceof ApiError ? err.message : "회원 상세를 불러오지 못했습니다.");
-      }
-    })();
-  }, [custNo]);
+    void reload();
+  }, [reload]);
 
   if (!custNo) return null;
 
@@ -306,9 +335,301 @@ export default function CustomerDetailPage() {
               </CardContent>
             </Card>
           ) : null}
+
+          {/* 관리자 액션 */}
+          <ActionPanel
+            customer={data.customer}
+            reload={reload}
+          />
+
+          {/* 변경 이력 */}
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <StatusHistoryCard items={statusHistory} />
+            <GradeHistoryCard items={gradeHistory} />
+          </div>
         </>
       ) : null}
     </div>
+  );
+}
+
+
+function ActionPanel({
+  customer,
+  reload,
+}: {
+  customer: CustomerDetail["customer"];
+  reload: () => Promise<void>;
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">관리자 액션</CardTitle>
+        <CardDescription>회원 상태·등급 강제 변경 — 변경 시 도메인 이력 + 감사 로그 자동 적재</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <StatusActionForm
+            customerNo={customer.customer_no}
+            currentStatus={customer.status_cd ?? ""}
+            reload={reload}
+          />
+          <GradeActionForm
+            customerNo={customer.customer_no}
+            currentGrade={customer.grade_cd ?? ""}
+            reload={reload}
+          />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+
+function StatusActionForm({
+  customerNo,
+  currentStatus,
+  reload,
+}: {
+  customerNo: number;
+  currentStatus: string;
+  reload: () => Promise<void>;
+}) {
+  const [newStatus, setNewStatus] = useState(currentStatus);
+  const [reason, setReason] = useState("");
+  const [remark, setRemark] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [ok, setOk] = useState<string | null>(null);
+
+  useEffect(() => {
+    setNewStatus(currentStatus);
+  }, [currentStatus]);
+
+  const disabled = submitting || !newStatus || newStatus === currentStatus;
+
+  async function submit() {
+    if (disabled) return;
+    if (!window.confirm(`상태를 [${CUST_STATUS_LABEL[currentStatus] ?? currentStatus}] → [${CUST_STATUS_LABEL[newStatus] ?? newStatus}] 로 변경할까요?`)) {
+      return;
+    }
+    setSubmitting(true);
+    setErr(null);
+    setOk(null);
+    try {
+      await api.post(`/api/admin/customers/${customerNo}/status`, {
+        new_status_cd: newStatus,
+        reason_cd: reason || null,
+        remark: remark || null,
+      });
+      setOk("상태가 변경되었어요.");
+      setReason("");
+      setRemark("");
+      await reload();
+    } catch (e) {
+      setErr(e instanceof ApiError ? e.message : "변경에 실패했어요.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="space-y-2 rounded-md border p-3">
+      <div className="flex items-center gap-2 text-sm font-medium">
+        <ShieldAlert className="h-3.5 w-3.5 text-warning" />
+        상태 변경
+        <span className="text-[10px] text-muted-foreground">현재 {CUST_STATUS_LABEL[currentStatus] ?? currentStatus ?? "-"}</span>
+      </div>
+      <div className="grid grid-cols-3 gap-2">
+        <select
+          value={newStatus}
+          onChange={(e) => setNewStatus(e.target.value)}
+          className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+        >
+          {CUST_STATUSES.map((s) => (
+            <option key={s} value={s}>
+              {CUST_STATUS_LABEL[s] ?? s}
+            </option>
+          ))}
+        </select>
+        <Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="사유 코드 (FRAUD_LOCK)" />
+        <Input value={remark} onChange={(e) => setRemark(e.target.value)} placeholder="비고" />
+      </div>
+      <div className="flex items-center gap-2">
+        <Button size="sm" disabled={disabled} onClick={() => void submit()}>
+          {submitting ? "처리 중…" : "변경 적용"}
+        </Button>
+        {ok ? <span className="text-xs text-success">{ok}</span> : null}
+        {err ? <span className="text-xs text-destructive">{err}</span> : null}
+      </div>
+    </div>
+  );
+}
+
+
+function GradeActionForm({
+  customerNo,
+  currentGrade,
+  reload,
+}: {
+  customerNo: number;
+  currentGrade: string;
+  reload: () => Promise<void>;
+}) {
+  const [newGrade, setNewGrade] = useState(currentGrade);
+  const [reason, setReason] = useState("");
+  const [remark, setRemark] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [ok, setOk] = useState<string | null>(null);
+
+  useEffect(() => {
+    setNewGrade(currentGrade);
+  }, [currentGrade]);
+
+  const disabled = submitting || !newGrade || newGrade === currentGrade;
+
+  async function submit() {
+    if (disabled) return;
+    if (!window.confirm(`등급을 [${currentGrade}] → [${newGrade}] 로 변경할까요?`)) return;
+    setSubmitting(true);
+    setErr(null);
+    setOk(null);
+    try {
+      await api.post(`/api/admin/customers/${customerNo}/grade`, {
+        new_grade_cd: newGrade,
+        reason_cd: reason || null,
+        remark: remark || null,
+      });
+      setOk("등급이 변경되었어요.");
+      setReason("");
+      setRemark("");
+      await reload();
+    } catch (e) {
+      setErr(e instanceof ApiError ? e.message : "변경에 실패했어요.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="space-y-2 rounded-md border p-3">
+      <div className="flex items-center gap-2 text-sm font-medium">
+        <Award className="h-3.5 w-3.5 text-primary" />
+        등급 변경
+        <span className="text-[10px] text-muted-foreground">현재 {currentGrade || "-"}</span>
+      </div>
+      <div className="grid grid-cols-3 gap-2">
+        <select
+          value={newGrade}
+          onChange={(e) => setNewGrade(e.target.value)}
+          className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+        >
+          {CUST_GRADES.map((g) => (
+            <option key={g} value={g}>
+              {g}
+            </option>
+          ))}
+        </select>
+        <Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="사유 코드" />
+        <Input value={remark} onChange={(e) => setRemark(e.target.value)} placeholder="비고" />
+      </div>
+      <div className="flex items-center gap-2">
+        <Button size="sm" disabled={disabled} onClick={() => void submit()}>
+          {submitting ? "처리 중…" : "변경 적용"}
+        </Button>
+        {ok ? <span className="text-xs text-success">{ok}</span> : null}
+        {err ? <span className="text-xs text-destructive">{err}</span> : null}
+      </div>
+    </div>
+  );
+}
+
+
+function StatusHistoryCard({ items }: { items: CustomerStatusHistoryRow[] }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">상태 변경 이력</CardTitle>
+        <CardDescription>{items.length}건 — 최근 순</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {items.length === 0 ? (
+          <p className="text-xs text-muted-foreground">변경 이력이 없습니다.</p>
+        ) : (
+          <Table>
+            <THead>
+              <TR>
+                <TH>일시</TH>
+                <TH>변화</TH>
+                <TH>사유</TH>
+                <TH>처리자</TH>
+                <TH>비고</TH>
+              </TR>
+            </THead>
+            <TBody>
+              {items.map((h) => (
+                <TR key={h.history_id}>
+                  <TD className="text-xs">{fmtDateTime(h.event_datetime)}</TD>
+                  <TD className="text-xs">
+                    <span className="text-muted-foreground">{CUST_STATUS_LABEL[h.old_status_cd ?? ""] ?? h.old_status_cd ?? "-"}</span>
+                    {" → "}
+                    <span className="font-medium">{CUST_STATUS_LABEL[h.new_status_cd] ?? h.new_status_cd}</span>
+                  </TD>
+                  <TD className="text-xs">{h.reason_cd ?? "-"}</TD>
+                  <TD className="font-mono text-[10px] text-muted-foreground">{h.employee_no ?? "-"}</TD>
+                  <TD className="text-xs text-muted-foreground max-w-[160px] truncate" title={h.remark ?? ""}>
+                    {h.remark ?? "-"}
+                  </TD>
+                </TR>
+              ))}
+            </TBody>
+          </Table>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+
+function GradeHistoryCard({ items }: { items: CustomerGradeHistoryRow[] }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">등급 변경 이력</CardTitle>
+        <CardDescription>{items.length}건 — 최근 순</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {items.length === 0 ? (
+          <p className="text-xs text-muted-foreground">변경 이력이 없습니다.</p>
+        ) : (
+          <Table>
+            <THead>
+              <TR>
+                <TH>시작</TH>
+                <TH>종료</TH>
+                <TH>등급</TH>
+                <TH>사유</TH>
+                <TH>처리자</TH>
+              </TR>
+            </THead>
+            <TBody>
+              {items.map((h, i) => (
+                <TR key={`${h.grade_start_date}-${i}`}>
+                  <TD className="text-xs">{fmtDateTime(h.grade_start_date)}</TD>
+                  <TD className="text-xs text-muted-foreground">
+                    {h.grade_end_date ? fmtDateTime(h.grade_end_date) : <Badge variant="primary">현재</Badge>}
+                  </TD>
+                  <TD className="text-xs font-medium">{h.grade_cd ?? "-"}</TD>
+                  <TD className="text-xs">{h.reason_cd ?? "-"}</TD>
+                  <TD className="font-mono text-[10px] text-muted-foreground">{h.created_by ?? "-"}</TD>
+                </TR>
+              ))}
+            </TBody>
+          </Table>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
