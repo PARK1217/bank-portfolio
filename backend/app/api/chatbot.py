@@ -137,7 +137,7 @@ async def post_feedback(
 async def get_sessions_list(
     user: CurrentCustomer = Depends(current_customer),
 ) -> dict:
-    items = list_sessions(user.customer_no)
+    items = await list_sessions(user.customer_no)
     return {"sessions": items}
 
 
@@ -145,8 +145,9 @@ async def get_sessions_list(
 async def get_session_detail(
     session_id: int,
     user: CurrentCustomer = Depends(current_customer),
+    tokens: TokenService = Depends(get_token_service),
 ) -> dict:
-    return get_session(user.customer_no, session_id)
+    return await get_session(user.customer_no, session_id, tokens)
 
 
 # ---------------------------------------------------------------------------

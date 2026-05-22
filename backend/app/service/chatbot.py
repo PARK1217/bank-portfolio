@@ -12,11 +12,14 @@
     `jhgan/ko-sroberta-multitask` 로 쿼리 임베딩 → `AI_FAQ` `<=>` top-k.
 
 list_faq / search_terms 는 in-memory 코퍼스 (단순 목록·문자열 매칭, 시연용).
-세션/메시지는 in-memory dict — 운영은 AI_CHATBOT_SESSION/MESSAGE 로 이관.
+세션/메시지는 AI_CHATBOT_SESSION / AI_CHATBOT_MESSAGE(v53) 에 영구화.
+RAG_SOURCE_IDS jsonb 에 sources 메타(doc_type/doc_id/title/clause/snippet/score) 저장 —
+get_session 응답 시 doc_token 은 본인 검증 후 재발급.
 """
 
 from __future__ import annotations
 
+import json
 import re
 from datetime import datetime
 from pathlib import Path
@@ -87,10 +90,22 @@ class TermsClause(TypedDict):
 # Module-level 캐시 — 앱 시작 시 load_corpora() 로 채움.
 _FAQ_CORPUS: list[FaqEntry] = []
 _TERMS_CORPUS: list[TermsClause] = []
-_SESSIONS: dict[int, dict] = {}
-_NEXT_SESSION_ID = [1]
-_NEXT_MESSAGE_ID = [1]
 _FEEDBACK_LOG: list[dict] = []
+
+
+def _sources_for_db(sources: list[dict]) -> str:
+    """RAG_SOURCE_IDS jsonb 에 저장할 메타 직렬화. doc_token 제외(재발급 가능)."""
+    keep = []
+    for s in sources:
+        keep.append({
+            "doc_type": s.get("doc_type"),
+            "doc_id": s.get("doc_id"),
+            "title": s.get("title"),
+            "clause": s.get("clause"),
+            "snippet": s.get("snippet"),
+            "score": s.get("score"),
+        })
+    return json.dumps(keep, ensure_ascii=False)
 
 
 _TOKEN_RE = re.compile(r"[A-Za-z가-힣0-9]+")
@@ -236,29 +251,45 @@ async def chat_send(
 ) -> dict:
     # FastAPI 자동 span 이 root 역할. 여기선 retrieve / generate 두 sub span 으로 분리해
     # Phoenix 의 RAG 트리 (RETRIEVER → LLM) 를 그린다. OpenInference 컨벤션 따름.
-    if session_id is None or session_id not in _SESSIONS:
-        session_id = _NEXT_SESSION_ID[0]
-        _NEXT_SESSION_ID[0] += 1
-        _SESSIONS[session_id] = {
-            "customer_no": customer_no,
-            "messages": [],
-            "started_at": datetime.now(),
-        }
-    sess = _SESSIONS[session_id]
-    if sess["customer_no"] != customer_no:
-        raise NotFoundError(E_NOT_FOUND, "세션을 찾을 수 없습니다.")
+    pool = get_pool()
 
+    # 세션 확보 — 기존 세션 본인 확인 또는 신규 INSERT
+    async with pool.acquire() as conn:
+        if session_id is not None:
+            owner = await conn.fetchval(
+                'SELECT "CUSTOMER_NO" FROM public."AI_CHATBOT_SESSION" '
+                'WHERE "SESSION_ID" = $1 '
+                "  AND (\"DELETE_YN\" IS NULL OR \"DELETE_YN\" = 'N')",
+                session_id,
+            )
+            if owner is None or int(owner) != int(customer_no):
+                session_id = None
+        if session_id is None:
+            session_id = await conn.fetchval(
+                'INSERT INTO public."AI_CHATBOT_SESSION" '
+                '  ("CUSTOMER_NO", "STATUS_CD", "DELETE_YN") '
+                "VALUES ($1, 'ACTIVE', 'N') "
+                'RETURNING "SESSION_ID"',
+                customer_no,
+            )
+        # USER 메시지 INSERT (응답 메타 채우기 위해 row 받아옴)
+        user_row = await conn.fetchrow(
+            'INSERT INTO public."AI_CHATBOT_MESSAGE" '
+            '  ("SESSION_ID", "ROLE_CD", "CONTENT", "DELETE_YN") '
+            "VALUES ($1, 'USER', $2, 'N') "
+            'RETURNING "MESSAGE_ID", "CREATED_AT"',
+            session_id,
+            message,
+        )
     user_msg = {
-        "message_id": _NEXT_MESSAGE_ID[0],
+        "message_id": int(user_row["MESSAGE_ID"]),
         "role_cd": "USER",
         "content": message,
         "rag_tier_cd": None,
         "sources": [],
         "confidence": None,
-        "created_at": datetime.now(),
+        "created_at": user_row["CREATED_AT"],
     }
-    _NEXT_MESSAGE_ID[0] += 1
-    sess["messages"].append(user_msg)
 
     # 임베딩 + 벡터 검색 — Retriever span
     with _tracer.start_as_current_span("chatbot.rag.retrieve") as retr:
@@ -269,7 +300,6 @@ async def chat_send(
         retr.set_attribute("session.id", session_id)
         retr.set_attribute("user.id", customer_no)
         query_vec = _embed_query(message)
-        pool = get_pool()
         async with pool.acquire() as conn:
             rows = await conn.fetch(
                 'SELECT "FAQ_ID", "CATEGORY", "QUESTION", "ANSWER", '
@@ -320,6 +350,7 @@ async def chat_send(
                 ResourceType.DOC, f"AI_FAQ:{top_faq['FAQ_ID']}", customer_no
             ),
             "doc_type": "FAQ",
+            "doc_id": int(top_faq["FAQ_ID"]),
             "title": top_faq["QUESTION"],
             "clause": None,
             "snippet": (top_faq["ANSWER"] or "")[:120],
@@ -339,6 +370,7 @@ async def chat_send(
                     ResourceType.DOC, f"AI_FAQ:{r['FAQ_ID']}", customer_no
                 ),
                 "doc_type": "TERMS",
+                "doc_id": int(r["FAQ_ID"]),
                 "title": title or r["QUESTION"],
                 "clause": clause or None,
                 "snippet": (r["ANSWER"] or "")[:120],
@@ -415,18 +447,28 @@ async def chat_send(
         k=3,
     )
 
+    async with pool.acquire() as conn:
+        asst_row = await conn.fetchrow(
+            'INSERT INTO public."AI_CHATBOT_MESSAGE" '
+            '  ("SESSION_ID", "ROLE_CD", "CONTENT", "RAG_TIER_CD", '
+            '   "RAG_SOURCE_IDS", "DELETE_YN") '
+            "VALUES ($1, 'ASSISTANT', $2, $3, $4::jsonb, 'N') "
+            'RETURNING "MESSAGE_ID", "CREATED_AT"',
+            session_id,
+            answer,
+            tier,
+            _sources_for_db(sources),
+        )
     assistant_msg = {
-        "message_id": _NEXT_MESSAGE_ID[0],
+        "message_id": int(asst_row["MESSAGE_ID"]),
         "role_cd": "ASSISTANT",
         "content": answer,
         "rag_tier_cd": tier,
         "sources": sources,
         "confidence": confidence,
         "follow_up_questions": follow_ups,
-        "created_at": datetime.now(),
+        "created_at": asst_row["CREATED_AT"],
     }
-    _NEXT_MESSAGE_ID[0] += 1
-    sess["messages"].append(assistant_msg)
 
     return {
         "session_id": session_id,
@@ -439,44 +481,101 @@ async def chat_send(
 # FAQ 목록 / 약관 검색 / 출처 조회 / 피드백
 # ---------------------------------------------------------------------------
 
-def list_sessions(customer_no: int) -> list[dict]:
+async def list_sessions(customer_no: int) -> list[dict]:
     """본인의 챗봇 세션 목록 — SCR-CB-004 history 화면용.
 
-    `_SESSIONS` in-memory dict 라 backend reload 시 유실. v53 AI_CHATBOT_SESSION
-    DB 영구화는 후속 작업 인계 노트 참조.
+    AI_CHATBOT_SESSION + 마지막 ASSISTANT 메시지 LATERAL 조인.
     """
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            'SELECT s."SESSION_ID", s."STARTED_AT", s."ENDED_AT", '
+            '       s."STATUS_CD", m."CONTENT" AS last_content '
+            'FROM public."AI_CHATBOT_SESSION" s '
+            'LEFT JOIN LATERAL ('
+            '  SELECT "CONTENT" FROM public."AI_CHATBOT_MESSAGE" '
+            '  WHERE "SESSION_ID" = s."SESSION_ID" '
+            "    AND \"ROLE_CD\" = 'ASSISTANT' "
+            "    AND (\"DELETE_YN\" IS NULL OR \"DELETE_YN\" = 'N') "
+            '  ORDER BY "CREATED_AT" DESC, "MESSAGE_ID" DESC LIMIT 1'
+            ') m ON TRUE '
+            'WHERE s."CUSTOMER_NO" = $1 '
+            "  AND (s.\"DELETE_YN\" IS NULL OR s.\"DELETE_YN\" = 'N') "
+            'ORDER BY s."STARTED_AT" DESC, s."SESSION_ID" DESC',
+            customer_no,
+        )
     out = []
-    for sid, sess in _SESSIONS.items():
-        if sess["customer_no"] != customer_no:
-            continue
-        msgs = sess.get("messages") or []
-        last_snippet = None
-        for m in reversed(msgs):
-            if m.get("role_cd") == "ASSISTANT" and m.get("content"):
-                last_snippet = m["content"][:80]
-                break
-        if last_snippet is None and msgs:
-            last_snippet = (msgs[-1].get("content") or "")[:80]
+    for r in rows:
+        last = r["last_content"]
         out.append({
-            "session_id": int(sid),
-            "started_at": sess.get("started_at"),
-            "ended_at": None,
-            "status_cd": "ACTIVE",
-            "last_message_snippet": last_snippet,
+            "session_id": int(r["SESSION_ID"]),
+            "started_at": r["STARTED_AT"],
+            "ended_at": r["ENDED_AT"],
+            "status_cd": r["STATUS_CD"] or "ACTIVE",
+            "last_message_snippet": (last[:80] if last else None),
         })
-    # 최신순
-    out.sort(key=lambda x: (x["started_at"] or datetime.min), reverse=True)
     return out
 
 
-def get_session(customer_no: int, session_id: int) -> dict:
-    """세션 상세 — 본인 검증 후 messages 전체 반환."""
-    sess = _SESSIONS.get(session_id)
-    if not sess or sess["customer_no"] != customer_no:
-        raise NotFoundError(E_NOT_FOUND, "세션을 찾을 수 없습니다.")
+async def get_session(
+    customer_no: int, session_id: int, tokens: TokenService
+) -> dict:
+    """세션 상세 — 본인 검증 후 messages 전체 반환. sources doc_token 재발급."""
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        owner = await conn.fetchval(
+            'SELECT "CUSTOMER_NO" FROM public."AI_CHATBOT_SESSION" '
+            'WHERE "SESSION_ID" = $1 '
+            "  AND (\"DELETE_YN\" IS NULL OR \"DELETE_YN\" = 'N')",
+            session_id,
+        )
+        if owner is None or int(owner) != int(customer_no):
+            raise NotFoundError(E_NOT_FOUND, "세션을 찾을 수 없습니다.")
+        rows = await conn.fetch(
+            'SELECT "MESSAGE_ID", "ROLE_CD", "CONTENT", "RAG_TIER_CD", '
+            '       "RAG_SOURCE_IDS", "CREATED_AT" '
+            'FROM public."AI_CHATBOT_MESSAGE" '
+            'WHERE "SESSION_ID" = $1 '
+            "  AND (\"DELETE_YN\" IS NULL OR \"DELETE_YN\" = 'N') "
+            'ORDER BY "CREATED_AT", "MESSAGE_ID"',
+            session_id,
+        )
+    messages = []
+    for r in rows:
+        raw_src = r["RAG_SOURCE_IDS"]
+        if isinstance(raw_src, str):
+            try:
+                raw_src = json.loads(raw_src)
+            except Exception:
+                raw_src = []
+        sources: list[dict] = []
+        for s in raw_src or []:
+            doc_id = s.get("doc_id")
+            if doc_id is None:
+                continue
+            sources.append({
+                "doc_token": await tokens.issue(
+                    ResourceType.DOC, f"AI_FAQ:{doc_id}", customer_no
+                ),
+                "doc_type": s.get("doc_type") or "FAQ",
+                "title": s.get("title") or "",
+                "clause": s.get("clause"),
+                "snippet": s.get("snippet") or "",
+                "score": s.get("score"),
+            })
+        messages.append({
+            "message_id": int(r["MESSAGE_ID"]),
+            "role_cd": r["ROLE_CD"],
+            "content": r["CONTENT"] or "",
+            "rag_tier_cd": r["RAG_TIER_CD"],
+            "sources": sources,
+            "confidence": None,
+            "follow_up_questions": [],
+            "created_at": r["CREATED_AT"],
+        })
     return {
         "session_id": int(session_id),
-        "messages": list(sess.get("messages") or []),
+        "messages": messages,
     }
 
 
