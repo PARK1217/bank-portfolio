@@ -203,40 +203,67 @@ export interface AttachmentsResponse {
 
 export interface OverdueListItem {
   customer_no: number;
-  customer_name?: string | null;
-  grade_cd?: string | null;
-  total_overdue_amount: number;
-  overdue_days_max: number;
-  loan_contracts_count: number;
-  last_repay_date?: string | null;
+  name?: string | null;
+  overdue_count: number;
+  loan_contract_count: number;
+  overdue_amount_krw: number;
+  overdue_principal_krw: number;
+  max_overdue_days: number;
+  earliest_overdue_date?: string | null;
+}
+
+export interface OverdueScheduleItem {
+  installment_no: number;
+  scheduled_date: string;
+  principal_amount?: number | null;
+  interest_amount?: number | null;
+  total_amount?: number | null;
+  paid_amount?: number | null;
+  unpaid_amount?: number | null;
+  status_cd: string;
+  overdue_days?: number | null;
+}
+
+export interface OverdueContract {
+  loan_contract_no: string;
+  product_name?: string | null;
+  loan_type_cd?: string | null;
+  contract_limit: number;
+  current_usage: number;
+  contract_rate: number;
+  overdue_spread_rate?: number | null;
+  loan_status_cd?: string | null;
+  overdue_stage_cd?: string | null;
+  contract_date?: string | null;
+  maturity_date?: string | null;
+  overdue_count: number;
+  overdue_amount_krw: number;
+  max_overdue_days: number;
+  schedules?: OverdueScheduleItem[] | null;
 }
 
 export interface OverdueDetail {
-  customer: { customer_no: number; name?: string | null; grade_cd?: string | null };
-  contracts: Array<{
-    loan_contract_no: string;
-    product_name?: string | null;
-    principal: number;
-    outstanding: number;
-    overdue_days: number;
-    overdue_amount: number;
-    apply_rate: number;
-    contract_status_cd: string;
-  }>;
-  schedules: Array<{
-    seq: number;
-    due_date: string;
-    amount: number;
-    status_cd: string;
-  }>;
+  customer: {
+    customer_no: number;
+    name?: string | null;
+    email?: string | null;
+    grade_cd?: string | null;
+    status_cd?: string | null;
+  };
+  contracts: OverdueContract[];
 }
 
 export interface ExternalHealth {
+  health_id?: number | null;
   api_name: string;
   status_cd: "UP" | "DEGRADED" | "DOWN" | string;
-  last_response_ms?: number | null;
-  uptime_24h?: number | null;
-  last_checked_at?: string | null;
+  latency_p50_ms?: number | null;
+  latency_p95_ms?: number | null;
+  success_rate?: number | null;
+  request_count?: number | null;
+  error_count?: number | null;
+  window_minutes?: number | null;
+  sample_at?: string | null;
 }
 
 
@@ -280,14 +307,75 @@ export function mapReviewQueueItem(raw: Record<string, unknown>): ReviewQueueIte
   return mapDecisionItem(raw);
 }
 
+// 백엔드 /api/admin/loans/{app_id}/attachments 응답을 화면 타입(AttachmentsResponse)
+// 으로 정규화. 미스매치 항목:
+//   application.loan_app_id    → application_id
+//   application.desired_amount → request_amount
+//   items[].doc_name           → doc_type_name
+//   items[].doc_type_id (int)  → doc_type_cd (문자열 카테고리 우선, doc_category_cd 폴백)
+//   items[].submission.file_path     → file_name (basename)
+//   items[].submission.submit_at     → submitted_at
+//   items[].submission.verifier_emp_no → verified_by
+// items[].status_cd 는 submission 부재 시 fallback 으로만 사용 (submission 있으면 그쪽 verify_status_cd 우선).
+export function mapAttachmentsResponse(raw: Record<string, unknown>): AttachmentsResponse {
+  const appRaw = (raw.application ?? {}) as Record<string, unknown>;
+  const summaryRaw = (raw.summary ?? {}) as Record<string, unknown>;
+  const itemsRaw = (raw.items ?? []) as Record<string, unknown>[];
+  return {
+    application: {
+      application_id: pick<number>(appRaw, ["application_id", "loan_app_id", "LOAN_APP_ID", "APPLICATION_ID"]) ?? 0,
+      customer_no: pick<number>(appRaw, ["customer_no", "CUSTOMER_NO"]) ?? 0,
+      customer_name: pick<string>(appRaw, ["customer_name", "PARTY_NAME"]) ?? null,
+      product_id: pick<number>(appRaw, ["product_id", "PRODUCT_ID"]) ?? null,
+      product_name: pick<string>(appRaw, ["product_name", "PRODUCT_NAME"]) ?? null,
+      request_amount: pick<number>(appRaw, ["request_amount", "desired_amount", "DESIRED_AMOUNT", "REQUEST_AMOUNT"]) ?? null,
+    },
+    summary: {
+      required_total: pick<number>(summaryRaw, ["required_total"]) ?? 0,
+      required_submitted: pick<number>(summaryRaw, ["required_submitted"]) ?? 0,
+      required_verified: pick<number>(summaryRaw, ["required_verified"]) ?? 0,
+      required_missing: pick<number>(summaryRaw, ["required_missing"]) ?? 0,
+      optional_total: pick<number>(summaryRaw, ["optional_total"]) ?? 0,
+      optional_submitted: pick<number>(summaryRaw, ["optional_submitted"]) ?? 0,
+      complete_yn: pick<string>(summaryRaw, ["complete_yn"]) ?? "N",
+    },
+    items: itemsRaw.map((it) => {
+      const subRaw = (it.submission ?? null) as Record<string, unknown> | null;
+      const docTypeIdNum = pick<number>(it, ["doc_type_id", "DOC_TYPE_ID"]);
+      const docCategory = pick<string>(it, ["doc_category_cd", "DOC_CATEGORY_CD"]);
+      const filePath = subRaw ? pick<string>(subRaw, ["file_path", "file_name"]) : undefined;
+      const fileName = filePath ? filePath.split("/").pop() ?? filePath : undefined;
+      return {
+        requirement_id: pick<number>(it, ["requirement_id", "REQUIREMENT_ID"]) ?? 0,
+        doc_type_cd: pick<string>(it, ["doc_type_cd", "DOC_TYPE_CD"]) ?? docCategory ?? (docTypeIdNum != null ? String(docTypeIdNum) : ""),
+        doc_type_name: pick<string>(it, ["doc_type_name", "doc_name", "DOC_NAME"]) ?? "",
+        required_yn: pick<string>(it, ["required_yn", "REQUIRED_YN"]) ?? "N",
+        submission: subRaw
+          ? {
+              attach_id: pick<number>(subRaw, ["attach_id", "ATTACH_ID"]) ?? 0,
+              file_name: fileName ?? "",
+              verify_status_cd: pick<string>(subRaw, ["verify_status_cd", "VERIFY_STATUS_CD"]) ?? pick<string>(it, ["status_cd", "STATUS_CD"]) ?? "PENDING",
+              submitted_at: pick<string>(subRaw, ["submitted_at", "submit_at", "SUBMIT_AT"]) ?? null,
+              verified_at: pick<string>(subRaw, ["verified_at", "VERIFIED_AT"]) ?? null,
+              verified_by: pick<string>(subRaw, ["verified_by", "verifier_emp_no", "VERIFIER_EMP_NO"]) ?? null,
+              reject_reason: pick<string>(subRaw, ["reject_reason", "REJECT_REASON"]) ?? null,
+            }
+          : null,
+      };
+    }),
+  };
+}
+
+
 export function mapOverdueItem(raw: Record<string, unknown>): OverdueListItem {
   return {
     customer_no: pick<number>(raw, ["customer_no", "CUSTOMER_NO"]) ?? 0,
-    customer_name: pick<string>(raw, ["customer_name", "PARTY_NAME"]) ?? null,
-    grade_cd: pick<string>(raw, ["grade_cd", "CUST_GRADE_CD", "GRADE_CD"]) ?? null,
-    total_overdue_amount: pick<number>(raw, ["total_overdue_amount", "TOTAL_OVERDUE_AMOUNT", "OVERDUE_AMOUNT"]) ?? 0,
-    overdue_days_max: pick<number>(raw, ["overdue_days_max", "OVERDUE_DAYS_MAX", "OVERDUE_DAYS"]) ?? 0,
-    loan_contracts_count: pick<number>(raw, ["loan_contracts_count", "LOAN_CONTRACTS_COUNT", "CONTRACTS_COUNT"]) ?? 0,
-    last_repay_date: pick<string>(raw, ["last_repay_date", "LAST_REPAY_DATE"]) ?? null,
+    name: pick<string>(raw, ["name", "customer_name", "PARTY_NAME"]) ?? null,
+    overdue_count: pick<number>(raw, ["overdue_count", "OVERDUE_COUNT"]) ?? 0,
+    loan_contract_count: pick<number>(raw, ["loan_contract_count", "LOAN_CONTRACT_COUNT"]) ?? 0,
+    overdue_amount_krw: pick<number>(raw, ["overdue_amount_krw", "OVERDUE_AMOUNT_KRW", "OVERDUE_AMOUNT"]) ?? 0,
+    overdue_principal_krw: pick<number>(raw, ["overdue_principal_krw", "OVERDUE_PRINCIPAL_KRW"]) ?? 0,
+    max_overdue_days: pick<number>(raw, ["max_overdue_days", "MAX_OVERDUE_DAYS"]) ?? 0,
+    earliest_overdue_date: pick<string>(raw, ["earliest_overdue_date", "EARLIEST_OVERDUE_DATE"]) ?? null,
   };
 }

@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
-import { api, type AttachmentsResponse, ApiError } from "@/lib/api";
+import { api, mapAttachmentsResponse, type AttachmentsResponse, ApiError } from "@/lib/api";
 import { fmtDateTime, fmtKrw } from "@/lib/utils";
 
 
@@ -23,8 +23,8 @@ export default function LoanAttachmentsPage() {
     if (!appId) return;
     (async () => {
       try {
-        const res = await api.get<AttachmentsResponse>(`/api/admin/loans/${appId}/attachments`);
-        setData(res);
+        const res = await api.get<Record<string, unknown>>(`/api/admin/loans/${appId}/attachments`);
+        setData(mapAttachmentsResponse(res));
       } catch (err) {
         setError(err instanceof ApiError ? err.message : "첨부서류를 불러오지 못했습니다.");
       }
