@@ -91,7 +91,7 @@ export default function ObservabilityPage() {
               <div className="absolute inset-0 flex items-center justify-center">
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   <div className="h-3 w-3 animate-pulse rounded-full bg-primary/60" />
-                  Phoenix 로딩 중… ({PHOENIX_URL})
+                  Phoenix 로딩 중…
                 </div>
               </div>
             ) : null}
