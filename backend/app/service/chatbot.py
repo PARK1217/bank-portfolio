@@ -19,6 +19,7 @@ get_session 응답 시 doc_token 은 본인 검증 후 재발급.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 from datetime import datetime
@@ -415,17 +416,15 @@ async def chat_send(
                         },
                         key=trace_id,
                     )
-                    # RAG 응답 품질 추적 — 같은 trace_id 로 발행, consumer 가 AI_RAG_EVALUATION INSERT (§3.7).
-                    # 정량 지표(faithfulness/answer_relevancy 등)는 Phoenix/Ragas 통합 후 채움.
-                    await kafka_svc.send_event(
-                        kafka_svc.TOPIC_CHATBOT_RAG_EVALS,
-                        {
-                            "trace_id": trace_id,
-                            "question": message,
-                            "retrieved_docs": sources,
-                            "answer": llm_answer,
-                        },
-                        key=trace_id,
+                    # RAG 응답 품질 추적 — 평가는 LLM 3번 호출이라 3~6초 걸려 사용자 응답을 막지 않도록
+                    # asyncio.create_task 로 백그라운드 fire-and-forget. 평가 끝나면 같은 trace_id 로 발행.
+                    asyncio.create_task(
+                        _evaluate_and_publish(
+                            trace_id=trace_id,
+                            question=message,
+                            retrieved_docs=sources,
+                            answer=llm_answer,
+                        )
                     )
         except Exception:
             log.exception("llm_answer_failed")
@@ -703,3 +702,39 @@ def submit_feedback(message_id: int, rating: int, comment: str | None) -> None:
 
 def feedback_count() -> int:
     return len(_FEEDBACK_LOG)
+
+
+async def _evaluate_and_publish(
+    *,
+    trace_id: str,
+    question: str,
+    retrieved_docs: list[dict],
+    answer: str,
+) -> None:
+    """RAG 응답 품질 평가 → Kafka 발행 (백그라운드 fire-and-forget).
+
+    LLM-as-judge 3번 호출이라 3~6초 소요 — 사용자 응답 흐름과 분리.
+    실패해도 메인 흐름 영향 없음.
+    """
+    try:
+        from .rag_evaluator import evaluate_rag
+        from . import kafka as kafka_svc
+
+        scores = await evaluate_rag(
+            question=question, retrieved_docs=retrieved_docs, answer=answer
+        )
+        await kafka_svc.send_event(
+            kafka_svc.TOPIC_CHATBOT_RAG_EVALS,
+            {
+                "trace_id": trace_id,
+                "question": question,
+                "retrieved_docs": retrieved_docs,
+                "answer": answer,
+                "faithfulness": scores.get("faithfulness"),
+                "answer_relevancy": scores.get("answer_relevancy"),
+                "context_precision": scores.get("context_precision"),
+            },
+            key=trace_id,
+        )
+    except Exception:
+        log.exception("rag_eval_publish_failed", trace_id=trace_id)

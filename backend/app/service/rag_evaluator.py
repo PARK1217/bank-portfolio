@@ -1,0 +1,129 @@
+"""RAG 응답 품질 평가 — LLM-as-judge (가이드 §9.2.2 Phoenix Faithfulness).
+
+응답 직후 호출 → 세 지표 0.0~1.0 점수 산출:
+- faithfulness        : 답변이 retrieved 문서에 근거 있나? (환각 여부)
+- answer_relevancy    : 답변이 사용자 질문에 답하고 있나?
+- context_precision   : 검색된 문서가 질문과 관련 있나?
+
+평가자 LLM 은 `service/llm.chat_completion` 을 재사용 — 응답 생성과 동일한 provider (Groq Llama 3.1) 가
+스스로 채점 (운영에선 더 큰 모델로 분리 권장). 메인 흐름을 막지 않도록 호출 측에서 `asyncio.create_task`
+로 던지는 패턴 권장 — 실패해도 None 폴백.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import re
+
+import structlog
+
+from .llm import chat_completion
+
+log = structlog.get_logger("rag_evaluator")
+
+
+_RUBRIC_SYSTEM = (
+    "당신은 RAG(검색 증강 생성) 응답을 평가하는 정확한 채점자입니다. "
+    "주어진 점수만 0.0~1.0 사이 소수점 둘째 자리로 JSON 한 줄로만 답하세요. "
+    "설명·주석·코드블록 금지. 예: {\"score\": 0.85}"
+)
+
+
+async def _score_one(
+    system_rule: str,
+    payload: dict,
+    label: str,
+) -> float | None:
+    """평가 LLM 한 번 호출 → 0.0~1.0 점수."""
+    user = json.dumps(payload, ensure_ascii=False)
+    try:
+        raw = await chat_completion(
+            _RUBRIC_SYSTEM + "\n\n" + system_rule, user, max_tokens=64
+        )
+        if not raw:
+            return None
+        # JSON 한 줄 기대. 본문에 잡문이 끼면 정규식으로 score 만 추출.
+        m = re.search(r'"score"\s*:\s*([0-9.]+)', raw)
+        if not m:
+            return None
+        v = float(m.group(1))
+        # 클램프 0.0~1.0
+        return max(0.0, min(1.0, v))
+    except Exception:
+        log.exception("rag_eval_one_failed", label=label)
+        return None
+
+
+_FAITH_RULE = (
+    "[Faithfulness] 답변이 retrieved 문서 내용에 근거가 있는지 평가합니다. "
+    "문서에 없는 사실·수치·약관을 답변이 만들어냈다면 낮은 점수. "
+    "문서를 그대로 인용하거나 충실히 요약했다면 높은 점수. "
+    "관련 없는 답변(예: 거절·정중 회피)은 0.5 중립."
+)
+
+_ANSWER_RULE = (
+    "[Answer Relevancy] 답변이 사용자 질문에 직접 답했는지 평가합니다. "
+    "질문 의도와 동떨어진 답·일반론·회피는 낮은 점수. "
+    "질문을 정확히 짚어 답했다면 높은 점수."
+)
+
+_CONTEXT_RULE = (
+    "[Context Precision] 검색된 문서들이 사용자 질문과 관련 있는지 평가합니다. "
+    "엉뚱한 도메인 문서가 섞였으면 낮은 점수. 모든 top-k 문서가 질문 관련이면 높은 점수."
+)
+
+
+async def evaluate_rag(
+    question: str,
+    retrieved_docs: list[dict],
+    answer: str,
+) -> dict[str, float | None]:
+    """RAG 응답 3 지표 평가. 병렬 LLM 호출.
+
+    Args:
+        question: 사용자 원 질문.
+        retrieved_docs: top-k 문서 메타 (title/snippet/score 위주, 너무 길면 잘림).
+        answer: LLM 이 생성한 응답.
+
+    Returns:
+        {"faithfulness": 0.0~1.0 | None, "answer_relevancy": ..., "context_precision": ...}
+    """
+    # 문서가 너무 많으면 평가자 prompt 가 비대해짐 → 상위 5건 + snippet 잘라서 전달.
+    docs_brief = [
+        {
+            "title": (d.get("title") or "")[:80],
+            "snippet": (d.get("snippet") or d.get("content") or "")[:300],
+            "score": d.get("score"),
+        }
+        for d in (retrieved_docs or [])[:5]
+    ]
+
+    faith_payload = {
+        "question": question,
+        "retrieved_docs": docs_brief,
+        "answer": answer,
+    }
+    answer_payload = {"question": question, "answer": answer}
+    context_payload = {"question": question, "retrieved_docs": docs_brief}
+
+    faithfulness, answer_relevancy, context_precision = await asyncio.gather(
+        _score_one(_FAITH_RULE, faith_payload, "faithfulness"),
+        _score_one(_ANSWER_RULE, answer_payload, "answer_relevancy"),
+        _score_one(_CONTEXT_RULE, context_payload, "context_precision"),
+        return_exceptions=False,
+    )
+
+    log.info(
+        "rag_evaluated",
+        faithfulness=faithfulness,
+        answer_relevancy=answer_relevancy,
+        context_precision=context_precision,
+        docs_count=len(docs_brief),
+    )
+
+    return {
+        "faithfulness": faithfulness,
+        "answer_relevancy": answer_relevancy,
+        "context_precision": context_precision,
+    }

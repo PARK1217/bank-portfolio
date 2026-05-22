@@ -33,6 +33,7 @@ const PUBLIC_PATHS: (string | RegExp)[] = [
   /^\/products(\/|$)/,
   /^\/notices(\/|$)/,
   /^\/events(\/|$)/,
+  /^\/faqs(\/|$)/,
 ];
 
 function isPublicPath(pathname: string): boolean {
