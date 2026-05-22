@@ -174,7 +174,51 @@ async def predict_and_persist(
     application_id: int,
     model_key: str = DEFAULT_MODEL,
 ) -> dict:
-    """피처 추출 → 추론 → AI_LOAN_DECISION INSERT → 결과 dict 반환."""
+    """피처 추출 → 추론 → AI_LOAN_DECISION INSERT → 결과 dict 반환.
+
+    멱등성: 같은 application 에 미검토(HUMAN_REVIEWED_AT IS NULL) HUMAN_REVIEW row 가
+    이미 있으면 새 추론을 돌리지 않고 그 row 를 재사용한다. 시드의 회색지대 데이터가
+    신청 상세 진입 시점에 새 추론으로 자동 분류되어 사람 검토 카드가 사라지는
+    시연 의도 미스매치 방지.
+    """
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        existing = await conn.fetchrow(
+            'SELECT d."DECISION_ID", d."MODEL_VERSION", d."FEATURES_JSON", d."SCORE", '
+            '       d."DECISION_CD", d."THRESHOLD_HIGH", d."THRESHOLD_LOW", '
+            '       la."CUSTOMER_NO" '
+            'FROM public."AI_LOAN_DECISION" d '
+            'JOIN public."LOAN_APPLICATION" la ON la."LOAN_APP_ID" = d."APPLICATION_ID" '
+            'WHERE d."APPLICATION_ID" = $1 '
+            '  AND d."DECISION_CD" = \'HUMAN_REVIEW\' '
+            '  AND d."HUMAN_REVIEWED_AT" IS NULL '
+            '  AND d."DELETE_YN" = \'N\' '
+            'ORDER BY d."CREATED_AT" DESC LIMIT 1',
+            application_id,
+        )
+        if existing:
+            features = existing["FEATURES_JSON"]
+            if isinstance(features, str):
+                features = json.loads(features)
+            log.info(
+                "loan_decision_reused",
+                decision_id=int(existing["DECISION_ID"]),
+                application_id=application_id,
+                score=float(existing["SCORE"]),
+            )
+            return {
+                "decision_id": int(existing["DECISION_ID"]),
+                "application_id": application_id,
+                "customer_no": int(existing["CUSTOMER_NO"]),
+                "model_version": existing["MODEL_VERSION"],
+                "score": float(existing["SCORE"]),
+                "decision_cd": existing["DECISION_CD"],
+                "threshold_high": float(existing["THRESHOLD_HIGH"]),
+                "threshold_low": float(existing["THRESHOLD_LOW"]),
+                "features": features,
+                "meta": {"reused": True},
+            }
+
     extracted = await extract_features(application_id)
     features = extracted["features"]
 
@@ -286,6 +330,22 @@ async def human_review(
     pool = get_pool()
     async with pool.acquire() as conn:
         async with conn.transaction():
+            # 가드: HUMAN_REVIEW 미검토 결정만 라벨링 허용. 자동 분류(AUTO_APPROVE/REJECT) 나
+            # 이미 검토된 결정에 사람 라벨을 덮어쓰는 호출은 거부.
+            current = await conn.fetchrow(
+                'SELECT "DECISION_CD", "HUMAN_REVIEWED_AT" '
+                'FROM public."AI_LOAN_DECISION" WHERE "DECISION_ID" = $1',
+                decision_id,
+            )
+            if current is None:
+                raise ValueError(f"DECISION_ID {decision_id} 없음")
+            if current["DECISION_CD"] != "HUMAN_REVIEW":
+                raise ValueError(
+                    f"자동 분류({current['DECISION_CD']}) 결정은 사람 검토 대상이 아닙니다"
+                )
+            if current["HUMAN_REVIEWED_AT"] is not None:
+                raise ValueError("이미 검토 완료된 결정입니다")
+
             row = await conn.fetchrow(
                 'UPDATE public."AI_LOAN_DECISION" '
                 '   SET "HUMAN_DECISION_CD" = $1, '
