@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { api, type CustomerListResponse } from "@/lib/api";
-import { fmtKrw, fmtNumber, fmtDateTime } from "@/lib/utils";
+import { encodeId, fmtKrw, fmtNumber, fmtDateTime } from "@/lib/utils";
 
 
 const GRADES = ["", "VIP", "GENERAL", "MINOR", "SENIOR", "STUDENT"];
@@ -154,7 +154,7 @@ export default function CustomersPage() {
                   <TR key={row.customer_no}>
                     <TD>
                       <Link
-                        href={`/customers/${row.customer_no}`}
+                        href={`/customers/${encodeId(row.customer_no)}`}
                         className="font-medium hover:underline"
                       >
                         {row.name ?? "-"}

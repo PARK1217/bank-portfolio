@@ -8,7 +8,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Badge } from "@/components/ui/badge";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { api, mapOverdueItem, type OverdueListItem } from "@/lib/api";
-import { fmtDateTime, fmtKrw, fmtNumber } from "@/lib/utils";
+import { encodeId, fmtDateTime, fmtKrw, fmtNumber } from "@/lib/utils";
 
 
 export default function OverduePage() {
@@ -85,7 +85,7 @@ export default function OverduePage() {
                 {items.map((row) => (
                   <TR key={row.customer_no}>
                     <TD>
-                      <Link href={`/overdue/${row.customer_no}`} className="font-medium hover:underline">
+                      <Link href={`/overdue/${encodeId(row.customer_no)}`} className="font-medium hover:underline">
                         {row.name ?? "-"}
                       </Link>
                       <div className="font-mono text-[10px] text-muted-foreground">#{row.customer_no}</div>

@@ -9,13 +9,20 @@ import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { api, type AccountDetail, ApiError } from "@/lib/api";
-import { fmtDateTime, fmtKrw } from "@/lib/utils";
+import { decodeId, encodeId, fmtDateTime, fmtKrw, fmtTxType } from "@/lib/utils";
 
 
 export default function AccountDetailPage() {
   const params = useParams<{ accountNo: string }>();
   const router = useRouter();
-  const accountNo = params.accountNo;
+  // URL 의 :accountNo 는 base64 인코딩된 식별자 — 디코딩해서 raw account_no 복원.
+  const accountNo = (() => {
+    try {
+      return params.accountNo ? decodeId(params.accountNo) : "";
+    } catch {
+      return params.accountNo ?? "";
+    }
+  })();
 
   const [data, setData] = useState<AccountDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -140,7 +147,7 @@ export default function AccountDetailPage() {
                     label="고객"
                     value={
                       <Link
-                        href={`/customers/${data.account.customer_no}`}
+                        href={`/customers/${encodeId(data.account.customer_no)}`}
                         className="hover:underline"
                       >
                         {data.account.customer_name ?? "-"} (#{data.account.customer_no})
@@ -184,7 +191,7 @@ export default function AccountDetailPage() {
                         <TD className="text-xs text-muted-foreground">{fmtDateTime(t.tx_datetime)}</TD>
                         <TD>
                           <Badge variant={t.amount >= 0 ? "success" : "muted"}>
-                            {t.tx_type_cd ?? "-"}
+                            {fmtTxType(t.tx_type_cd)}
                           </Badge>
                         </TD>
                         <TD

@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { api, type AccountListResponse } from "@/lib/api";
-import { fmtKrw, fmtDateTime } from "@/lib/utils";
+import { encodeId, fmtKrw, fmtDateTime } from "@/lib/utils";
 
 
 const TYPES = ["", "SAVING", "DEPOSIT", "INSTALL", "FOREIGN"];
@@ -153,7 +153,7 @@ export default function AccountsPage() {
                 {data.items.map((row) => (
                   <TR key={row.account_no}>
                     <TD>
-                      <Link href={`/accounts/${row.account_no}`} className="font-mono text-xs hover:underline">
+                      <Link href={`/accounts/${encodeId(row.account_no)}`} className="font-mono text-xs hover:underline">
                         {row.account_no}
                       </Link>
                     </TD>
@@ -172,7 +172,7 @@ export default function AccountsPage() {
                     <TD>
                       {row.customer_no ? (
                         <Link
-                          href={`/customers/${row.customer_no}`}
+                          href={`/customers/${encodeId(row.customer_no)}`}
                           className="font-mono text-xs hover:underline"
                         >
                           #{row.customer_no}

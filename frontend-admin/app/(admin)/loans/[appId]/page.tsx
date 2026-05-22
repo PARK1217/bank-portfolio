@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
 import { Input } from "@/components/ui/input";
 import { api, type PredictResponse, ApiError } from "@/lib/api";
-import { fmtKrw } from "@/lib/utils";
+import { decodeId, encodeId, fmtKrw } from "@/lib/utils";
 
 
 // ML XGBoost 입력 피처(loan_decision.py) → 한글 라벨 매핑.
@@ -28,7 +28,15 @@ const FEATURE_LABELS: Record<string, string> = {
 export default function LoanApplicationDetailPage() {
   const params = useParams<{ appId: string }>();
   const router = useRouter();
-  const appId = parseInt(params.appId, 10);
+  // URL 의 :appId 는 base64 인코딩된 application_id — 디코딩해서 정수 복원.
+  const appId = (() => {
+    if (!params.appId) return 0;
+    try {
+      return parseInt(decodeId(params.appId), 10) || 0;
+    } catch {
+      return parseInt(params.appId, 10) || 0;
+    }
+  })();
 
   const [predict, setPredict] = useState<PredictResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -85,7 +93,7 @@ export default function LoanApplicationDetailPage() {
           <p className="mt-1 text-sm text-muted-foreground">ML 추론 + 사람 라벨링</p>
         </div>
         <Link
-          href={`/loans/${appId}/attachments`}
+          href={`/loans/${encodeId(appId)}/attachments`}
           className="inline-flex items-center gap-1.5 rounded-md border bg-background px-3 py-1.5 text-xs hover:bg-accent"
         >
           <Paperclip className="h-3 w-3" />

@@ -8,13 +8,21 @@ import { Spinner } from "@/components/ui/spinner";
 import { Badge } from "@/components/ui/badge";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { api, type OverdueDetail, type OverdueContract, type OverdueScheduleItem, ApiError } from "@/lib/api";
-import { fmtDateTime, fmtKrw, fmtPercent } from "@/lib/utils";
+import { decodeId, fmtDateTime, fmtKrw, fmtPercent } from "@/lib/utils";
 
 
 export default function OverdueDetailPage() {
   const params = useParams<{ custNo: string }>();
   const router = useRouter();
-  const custNo = parseInt(params.custNo, 10);
+  // URL 의 :custNo 는 base64 인코딩된 customer_no — 디코딩해서 정수 복원.
+  const custNo = (() => {
+    if (!params.custNo) return 0;
+    try {
+      return parseInt(decodeId(params.custNo), 10) || 0;
+    } catch {
+      return parseInt(params.custNo, 10) || 0;
+    }
+  })();
 
   const [data, setData] = useState<OverdueDetail | null>(null);
   const [error, setError] = useState<string | null>(null);

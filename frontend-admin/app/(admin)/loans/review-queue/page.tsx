@@ -8,7 +8,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Badge } from "@/components/ui/badge";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { api, mapReviewQueueItem, type ReviewQueueItem } from "@/lib/api";
-import { fmtDateTime, fmtKrw } from "@/lib/utils";
+import { encodeId, fmtDateTime, fmtKrw } from "@/lib/utils";
 
 
 export default function ReviewQueuePage() {
@@ -78,7 +78,7 @@ export default function ReviewQueuePage() {
                 {items.map((row) => (
                   <TR key={row.decision_id} className="cursor-pointer">
                     <TD className="font-mono text-xs">
-                      <Link href={`/loans/${row.application_id}`} className="hover:underline">
+                      <Link href={`/loans/${encodeId(row.application_id)}`} className="hover:underline">
                         {row.application_id}
                       </Link>
                     </TD>
@@ -97,7 +97,7 @@ export default function ReviewQueuePage() {
                     <TD className="text-xs text-muted-foreground">{fmtDateTime(row.created_at)}</TD>
                     <TD>
                       <Link
-                        href={`/loans/${row.application_id}/attachments`}
+                        href={`/loans/${encodeId(row.application_id)}/attachments`}
                         className="inline-flex items-center gap-1 rounded border bg-background px-2 py-0.5 text-[10px] text-muted-foreground hover:bg-accent hover:text-foreground"
                         title="첨부서류 일치성"
                       >
