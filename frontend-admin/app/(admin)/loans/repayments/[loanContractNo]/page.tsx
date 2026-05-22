@@ -14,6 +14,7 @@ import {
   type RepaymentDetailResponse,
   type RepaymentScheduleRow,
   type RepaymentHistoryRow,
+  type LoanExecHistoryRow,
 } from "@/lib/api";
 import { decodeId, encodeId, fmtDateTime, fmtKrw, fmtNumber, fmtPercent } from "@/lib/utils";
 
@@ -27,6 +28,42 @@ const REPAY_TYPE_LABEL: Record<string, string> = {
   SCHEDULE: "정기",
   PREPAY: "중도",
   OVERDUE: "연체",
+};
+const SCHEDULE_STATUS_LABEL: Record<string, string> = {
+  WAITING: "예정",
+  PENDING: "처리 중",
+  PAID: "완납",
+  OVERDUE: "연체",
+};
+const HISTORY_STATUS_LABEL: Record<string, string> = {
+  OK: "정상",
+  CANCEL: "취소",
+};
+const LOAN_STATUS_LABEL: Record<string, string> = {
+  NORMAL: "정상",
+  OVERDUE: "연체",
+  COMPLETE: "완료",
+  EXPIRED: "만기",
+  CANCEL: "해지",
+  PAUSED: "정지",
+};
+const OVERDUE_STAGE_LABEL: Record<string, string> = {
+  STAGE1: "1단계",
+  STAGE2: "2단계",
+  STAGE3: "3단계",
+};
+const LOAN_TYPE_LABEL: Record<string, string> = {
+  CREDIT: "신용",
+  MORTGAGE: "주택담보",
+  JEONSE: "전세자금",
+  BUSINESS: "사업자",
+  COLLATERAL: "담보",
+};
+const REPAY_METHOD_LABEL: Record<string, string> = {
+  EPI: "원리금 균등",
+  EP: "원금 균등",
+  MATURITY: "만기 일시",
+  BULLET: "만기 일시",
 };
 
 
@@ -104,10 +141,12 @@ export default function RepaymentDetailPage() {
             </div>
             <div className="flex gap-2">
               <Badge variant={data.contract.loan_status_cd === "OVERDUE" ? "destructive" : "success"}>
-                {data.contract.loan_status_cd ?? "-"}
+                {LOAN_STATUS_LABEL[data.contract.loan_status_cd ?? ""] ?? data.contract.loan_status_cd ?? "-"}
               </Badge>
               {data.contract.overdue_stage_cd ? (
-                <Badge variant="warning">{data.contract.overdue_stage_cd}</Badge>
+                <Badge variant="warning">
+                  {OVERDUE_STAGE_LABEL[data.contract.overdue_stage_cd] ?? data.contract.overdue_stage_cd}
+                </Badge>
               ) : null}
             </div>
           </div>
@@ -120,8 +159,14 @@ export default function RepaymentDetailPage() {
             <CardContent>
               <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm md:grid-cols-4">
                 <Pair label="상품" value={data.contract.product_name ?? "-"} />
-                <Pair label="대출 유형" value={data.contract.loan_type_cd ?? "-"} />
-                <Pair label="상환 방식" value={data.contract.repay_method_cd ?? "-"} />
+                <Pair
+                  label="대출 유형"
+                  value={LOAN_TYPE_LABEL[data.contract.loan_type_cd ?? ""] ?? data.contract.loan_type_cd ?? "-"}
+                />
+                <Pair
+                  label="상환 방식"
+                  value={REPAY_METHOD_LABEL[data.contract.repay_method_cd ?? ""] ?? data.contract.repay_method_cd ?? "-"}
+                />
                 <Pair
                   label="금리"
                   value={
@@ -194,12 +239,51 @@ export default function RepaymentDetailPage() {
             />
           </div>
 
-          {/* 회차별 스케줄 */}
+          {/* 자금 실행 이력 */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">회차별 상환 스케줄</CardTitle>
+              <CardTitle className="text-base">자금 실행 이력</CardTitle>
               <CardDescription>
-                {data.schedules.length}회차 — 예정/완료/연체 상태 + 실제 상환 매핑(ACTUAL_REPAY_ID)
+                {data.executions.length}건 — LOAN_EXEC_HISTORY (실행/취소 + 채널·담당자)
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {data.executions.length === 0 ? (
+                <p className="text-xs text-muted-foreground">실행 이력이 없습니다.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <THead>
+                      <TR>
+                        <TH className="text-right">SEQ</TH>
+                        <TH>일시</TH>
+                        <TH>구분</TH>
+                        <TH className="text-right">금액</TH>
+                        <TH className="text-right">실행 후 잔액</TH>
+                        <TH>입금 계좌</TH>
+                        <TH>채널</TH>
+                        <TH>담당자</TH>
+                        <TH>취소</TH>
+                        <TH>비고</TH>
+                      </TR>
+                    </THead>
+                    <TBody>
+                      {data.executions.map((e) => (
+                        <ExecRow key={e.exec_seq} e={e} />
+                      ))}
+                    </TBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* 회차별 통합 — 예정 vs 실제 한 행에 매핑 */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">회차별 상환 현황</CardTitle>
+              <CardDescription>
+                {data.schedules.length}회차 — 좌측 예정(스케줄) · 우측 실제 상환(매칭된 이력)
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -212,19 +296,26 @@ export default function RepaymentDetailPage() {
                       <TR>
                         <TH className="text-right">회차</TH>
                         <TH>예정일</TH>
-                        <TH className="text-right">원금</TH>
-                        <TH className="text-right">이자</TH>
-                        <TH className="text-right">합계</TH>
-                        <TH className="text-right">회차 후 잔액</TH>
+                        <TH className="text-right">예정 원금</TH>
+                        <TH className="text-right">예정 이자</TH>
+                        <TH className="text-right">예정 합계</TH>
                         <TH>상태</TH>
                         <TH className="text-right">연체일</TH>
-                        <TH>실제 상환</TH>
+                        <TH className="border-l">실제 상환일</TH>
+                        <TH className="text-right">실제 원금</TH>
+                        <TH className="text-right">실제 이자</TH>
+                        <TH className="text-right">실제 합계</TH>
+                        <TH>채널</TH>
+                        <TH>적용</TH>
                       </TR>
                     </THead>
                     <TBody>
-                      {data.schedules.map((s) => (
-                        <ScheduleRow key={s.installment_no} s={s} />
-                      ))}
+                      {data.schedules.map((s) => {
+                        // SCHEDULE.actual_repay_id ↔ HISTORY.repay_seq (PK) 매칭.
+                        // 1:1 매칭 — 매칭된 HISTORY 가 없으면 null.
+                        const h = data.history.find((h) => h.repay_seq === s.actual_repay_id) ?? null;
+                        return <CombinedRow key={s.installment_no} s={s} h={h} />;
+                      })}
                     </TBody>
                   </Table>
                 </div>
@@ -232,45 +323,47 @@ export default function RepaymentDetailPage() {
             </CardContent>
           </Card>
 
-          {/* 상환 이력 */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">상환 이력</CardTitle>
-              <CardDescription>
-                {data.history.length}건 — REPAY_SEQ 순서 (취소 포함)
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {data.history.length === 0 ? (
-                <p className="text-xs text-muted-foreground">아직 상환 이력이 없습니다.</p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <Table>
-                    <THead>
-                      <TR>
-                        <TH className="text-right">SEQ</TH>
-                        <TH>일시</TH>
-                        <TH>구분</TH>
-                        <TH>채널</TH>
-                        <TH className="text-right">회차 참조</TH>
-                        <TH className="text-right">원금</TH>
-                        <TH className="text-right">정상이자</TH>
-                        <TH className="text-right">연체이자</TH>
-                        <TH className="text-right">상환 후 잔액</TH>
-                        <TH>출금 계좌</TH>
-                        <TH>상태</TH>
-                      </TR>
-                    </THead>
-                    <TBody>
-                      {data.history.map((h) => (
-                        <HistoryRow key={h.repay_seq} h={h} />
-                      ))}
-                    </TBody>
-                  </Table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          {/* 매칭 안 된 잔여 이력 (취소·중도상환 등 회차 외 처리) */}
+          {(() => {
+            const matchedSeqs = new Set(
+              data.schedules.map((s) => s.actual_repay_id).filter((v): v is number => v != null),
+            );
+            const orphan = data.history.filter((h) => !matchedSeqs.has(h.repay_seq));
+            if (orphan.length === 0) return null;
+            return (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">회차 외 상환 / 취소</CardTitle>
+                  <CardDescription>
+                    {orphan.length}건 — 회차에 매칭되지 않은 중도상환 · 정정 · 취소 거래
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <THead>
+                        <TR>
+                          <TH className="text-right">SEQ</TH>
+                          <TH>일시</TH>
+                          <TH>구분</TH>
+                          <TH>채널</TH>
+                          <TH className="text-right">원금</TH>
+                          <TH className="text-right">정상이자</TH>
+                          <TH className="text-right">연체이자</TH>
+                          <TH>상태</TH>
+                        </TR>
+                      </THead>
+                      <TBody>
+                        {orphan.map((h) => (
+                          <OrphanHistoryRow key={h.repay_seq} h={h} />
+                        ))}
+                      </TBody>
+                    </Table>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })()}
         </>
       ) : null}
     </div>
@@ -316,17 +409,28 @@ function Kpi({
 }
 
 
-function ScheduleRow({ s }: { s: RepaymentScheduleRow }) {
+function CombinedRow({
+  s,
+  h,
+}: {
+  s: RepaymentScheduleRow;
+  h: RepaymentHistoryRow | null;
+}) {
+  const actualTotal = h
+    ? h.repay_principal + h.repay_normal_interest + h.repay_overdue_interest
+    : 0;
+  const actualInterest = h
+    ? h.repay_normal_interest + h.repay_overdue_interest
+    : 0;
+
   return (
     <TR>
+      {/* 예정 (스케줄) */}
       <TD className="num-tabular text-right font-medium">{s.installment_no}</TD>
       <TD className="text-xs">{fmtDateTime(s.scheduled_date)}</TD>
       <TD className="num-tabular text-right">{fmtKrw(s.scheduled_principal)}</TD>
       <TD className="num-tabular text-right text-muted-foreground">{fmtKrw(s.scheduled_interest)}</TD>
       <TD className="num-tabular text-right font-semibold">{fmtKrw(s.scheduled_total)}</TD>
-      <TD className="num-tabular text-right text-xs text-muted-foreground">
-        {fmtKrw(s.post_principal_balance)}
-      </TD>
       <TD>
         <ScheduleStatusBadge cd={s.status_cd} />
       </TD>
@@ -337,15 +441,42 @@ function ScheduleRow({ s }: { s: RepaymentScheduleRow }) {
           <span className="text-muted-foreground">-</span>
         )}
       </TD>
-      <TD className="text-xs text-muted-foreground">
-        {s.actual_repay_id ? `#${s.actual_repay_id}` : "-"}
+      {/* 실제 (이력 매칭) — 구분 위해 left border */}
+      <TD className="border-l text-xs">
+        {h ? fmtDateTime(h.repay_datetime) : <span className="text-muted-foreground">-</span>}
+      </TD>
+      <TD className="num-tabular text-right">
+        {h ? fmtKrw(h.repay_principal) : <span className="text-muted-foreground">-</span>}
+      </TD>
+      <TD className="num-tabular text-right">
+        {h ? (
+          <>
+            <span className="text-muted-foreground">{fmtKrw(h.repay_normal_interest)}</span>
+            {h.repay_overdue_interest > 0 ? (
+              <div className="text-[10px] text-destructive">+{fmtKrw(h.repay_overdue_interest)} 연체</div>
+            ) : null}
+          </>
+        ) : (
+          <span className="text-muted-foreground">-</span>
+        )}
+      </TD>
+      <TD className="num-tabular text-right font-semibold">
+        {h ? fmtKrw(actualTotal) : <span className="text-muted-foreground">-</span>}
+      </TD>
+      <TD className="text-xs">
+        {h ? CHANNEL_LABEL[h.channel_cd ?? ""] ?? h.channel_cd ?? "-" : (
+          <span className="text-muted-foreground">-</span>
+        )}
+      </TD>
+      <TD>
+        {h ? <HistoryStatusBadge cd={h.repay_status_cd} /> : <Badge variant="muted">미상환</Badge>}
       </TD>
     </TR>
   );
 }
 
 
-function HistoryRow({ h }: { h: RepaymentHistoryRow }) {
+function OrphanHistoryRow({ h }: { h: RepaymentHistoryRow }) {
   return (
     <TR>
       <TD className="num-tabular text-right font-medium">{h.repay_seq}</TD>
@@ -354,7 +485,6 @@ function HistoryRow({ h }: { h: RepaymentHistoryRow }) {
         <RepayTypeBadge cd={h.repay_type_cd} />
       </TD>
       <TD className="text-xs">{CHANNEL_LABEL[h.channel_cd ?? ""] ?? h.channel_cd ?? "-"}</TD>
-      <TD className="num-tabular text-right text-xs">{h.schedule_ref ?? "-"}</TD>
       <TD className="num-tabular text-right">{fmtKrw(h.repay_principal)}</TD>
       <TD className="num-tabular text-right text-muted-foreground">
         {fmtKrw(h.repay_normal_interest)}
@@ -365,12 +495,6 @@ function HistoryRow({ h }: { h: RepaymentHistoryRow }) {
         ) : (
           <span className="text-muted-foreground">-</span>
         )}
-      </TD>
-      <TD className="num-tabular text-right text-xs text-muted-foreground">
-        {fmtKrw(h.post_principal_balance)}
-      </TD>
-      <TD className="font-mono text-[10px] text-muted-foreground">
-        {h.withdraw_account_no ?? "-"}
       </TD>
       <TD>
         <HistoryStatusBadge cd={h.repay_status_cd} />
@@ -388,7 +512,7 @@ function ScheduleStatusBadge({ cd }: { cd?: string | null }) {
     PENDING: "primary",
     OVERDUE: "destructive",
   };
-  return <Badge variant={map[cd] ?? "muted"}>{cd}</Badge>;
+  return <Badge variant={map[cd] ?? "muted"}>{SCHEDULE_STATUS_LABEL[cd] ?? cd}</Badge>;
 }
 
 
@@ -398,7 +522,7 @@ function HistoryStatusBadge({ cd }: { cd?: string | null }) {
     OK: "success",
     CANCEL: "destructive",
   };
-  return <Badge variant={map[cd] ?? "muted"}>{cd}</Badge>;
+  return <Badge variant={map[cd] ?? "muted"}>{HISTORY_STATUS_LABEL[cd] ?? cd}</Badge>;
 }
 
 
@@ -410,4 +534,51 @@ function RepayTypeBadge({ cd }: { cd?: string | null }) {
     OVERDUE: "destructive",
   };
   return <Badge variant={map[cd] ?? "muted"}>{REPAY_TYPE_LABEL[cd] ?? cd}</Badge>;
+}
+
+
+const EXEC_CHANNEL_LABEL: Record<string, string> = {
+  APP: "앱",
+  WEB: "웹",
+  COUNTER: "창구",
+  AUTO: "자동",
+};
+
+
+function ExecRow({ e }: { e: LoanExecHistoryRow }) {
+  const cancelled = e.cancel_yn === "Y";
+  return (
+    <TR>
+      <TD className="num-tabular text-right font-medium">{e.exec_seq}</TD>
+      <TD className="text-xs">{fmtDateTime(e.exec_datetime)}</TD>
+      <TD>
+        <Badge variant={e.exec_type_cd === "EXEC" ? "success" : "muted"}>
+          {e.exec_type_cd ?? "-"}
+        </Badge>
+      </TD>
+      <TD className={`num-tabular text-right font-semibold ${cancelled ? "text-muted-foreground line-through" : ""}`}>
+        {fmtKrw(e.exec_amount)}
+      </TD>
+      <TD className="num-tabular text-right text-xs text-muted-foreground">
+        {fmtKrw(e.post_exec_balance)}
+      </TD>
+      <TD className="font-mono text-[10px] text-muted-foreground">
+        {e.deposit_account_no ?? "-"}
+      </TD>
+      <TD className="text-xs">
+        {EXEC_CHANNEL_LABEL[e.channel_cd ?? ""] ?? e.channel_cd ?? "-"}
+      </TD>
+      <TD className="text-xs text-muted-foreground">{e.emp_no ?? "-"}</TD>
+      <TD>
+        {cancelled ? (
+          <Badge variant="destructive">취소</Badge>
+        ) : (
+          <span className="text-xs text-muted-foreground">-</span>
+        )}
+      </TD>
+      <TD className="text-xs text-muted-foreground max-w-[200px] truncate" title={e.remark ?? ""}>
+        {e.remark ?? "-"}
+      </TD>
+    </TR>
+  );
 }

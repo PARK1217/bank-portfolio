@@ -77,6 +77,18 @@ async function request<T = unknown>(path: string, opts: FetchOptions = {}): Prom
   if (!res.ok) {
     if (res.status === 401) {
       setAdminToken(null);
+      // 보호 경로에서 401 받으면 즉시 `/auto-logout` 안내 페이지로 이동.
+      // /login·/auto-logout 자체에서 받는 401(잘못된 비번 등)은 그대로 throw 해 화면에서 에러 표시.
+      if (typeof window !== "undefined") {
+        const here = window.location.pathname;
+        if (!here.startsWith("/login") && !here.startsWith("/auto-logout")) {
+          window.location.replace("/auto-logout?reason=expired");
+          // hard redirect 가 진행되는 동안 throw 가 캐치되어 `AdminAuthProvider` 의 useEffect
+          // 두 번째 분기(`/login` 가드)가 race 로 먼저 실행되는 것을 차단.
+          // 페이지 unload 까지 pending 으로 두면 그 사이 어떤 후속 로직도 트리거되지 않는다.
+          return new Promise<T>(() => {});
+        }
+      }
     }
     let code = "E_UNKNOWN";
     let message = `${res.status} ${res.statusText}`;
@@ -678,11 +690,101 @@ export interface RepaymentHistoryRow {
   remark?: string | null;
 }
 
+export interface LoanExecHistoryRow {
+  exec_seq: number;
+  exec_datetime?: string | null;
+  exec_type_cd?: string | null;
+  exec_amount: number;
+  post_exec_balance: number;
+  deposit_account_no?: string | null;
+  channel_cd?: string | null;
+  emp_no?: string | null;
+  remark?: string | null;
+  cancel_yn?: string | null;
+  original_tx_ref?: number | null;
+}
+
 export interface RepaymentDetailResponse {
   contract: RepaymentContract;
   summary: RepaymentSummary;
   schedules: RepaymentScheduleRow[];
   history: RepaymentHistoryRow[];
+  executions: LoanExecHistoryRow[];
+}
+
+
+// ---------------------------------------------------------------------------
+// 상환 dashboard (메인 진입 시 현황)
+// ---------------------------------------------------------------------------
+
+export interface RepayDashboardOverdueRow {
+  loan_contract_no: string;
+  product_name?: string | null;
+  customer_no?: number | null;
+  customer_name?: string | null;
+  overdue_count: number;
+  max_overdue_days: number;
+  total_overdue_krw: number;
+}
+
+export interface RepayDashboardUpcomingRow {
+  loan_contract_no: string;
+  installment_no: number;
+  scheduled_date?: string | null;
+  scheduled_total: number;
+  customer_no?: number | null;
+  customer_name?: string | null;
+  product_name?: string | null;
+  days_left: number;
+}
+
+export interface RepayDashboardResponse {
+  in_progress_contracts: number;
+  overdue_installments: number;
+  due_today: number;
+  due_this_month: number;
+  overdue_top: RepayDashboardOverdueRow[];
+  upcoming_top: RepayDashboardUpcomingRow[];
+}
+
+
+// ---------------------------------------------------------------------------
+// 실행된 대출 계약 (admin_loan_contract)
+// ---------------------------------------------------------------------------
+
+export interface LoanContractListItem {
+  loan_contract_no: string;
+  customer_no?: number | null;
+  customer_name?: string | null;
+  product_id?: number | null;
+  product_name?: string | null;
+  loan_type_cd?: string | null;
+  repay_method_cd?: string | null;
+  contract_limit: number;
+  current_usage: number;
+  available_amount: number;
+  contract_rate: number;
+  base_rate?: number | null;
+  spread_rate?: number | null;
+  overdue_spread_rate?: number | null;
+  rate_type_cd?: string | null;
+  loan_status_cd?: string | null;
+  overdue_stage_cd?: string | null;
+  overdue_count: number;
+  contract_date?: string | null;
+  effective_date?: string | null;
+  maturity_date?: string | null;
+  join_branch_cd?: string | null;
+  loan_account_no?: string | null;
+  main_deposit_account_no?: string | null;
+  loan_period_months?: number | null;
+  grace_period_months?: number | null;
+}
+
+export interface LoanContractListResponse {
+  items: LoanContractListItem[];
+  count: number;
+  total: number;
 }
 
 

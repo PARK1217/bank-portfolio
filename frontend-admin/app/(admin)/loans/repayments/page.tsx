@@ -2,14 +2,19 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Search, Wallet } from "lucide-react";
+import { Search, Wallet, AlertTriangle, CalendarClock } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
-import { api, type RepaymentListResponse, type RepaymentListItem } from "@/lib/api";
+import {
+  api,
+  type RepaymentListResponse,
+  type RepaymentListItem,
+  type RepayDashboardResponse,
+} from "@/lib/api";
 import { encodeId, fmtDateTime, fmtKrw, fmtNumber } from "@/lib/utils";
 
 
@@ -26,6 +31,10 @@ const CHANNEL_LABEL: Record<string, string> = {
   AUTO: "자동이체",
 };
 const STATUSES = ["", "OK", "CANCEL"];
+const STATUS_LABEL: Record<string, string> = {
+  OK: "정상",
+  CANCEL: "취소",
+};
 
 
 export default function RepaymentsPage() {
@@ -35,11 +44,32 @@ export default function RepaymentsPage() {
   const [status, setStatus] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+
+  // 메인 진입 시 dashboard. 검색 누르면 results 모드로 전환.
+  const [mode, setMode] = useState<"dashboard" | "results">("dashboard");
+
+  const [dashboard, setDashboard] = useState<RepayDashboardResponse | null>(null);
+  const [dashboardErr, setDashboardErr] = useState<string | null>(null);
+
   const [data, setData] = useState<RepaymentListResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  async function load() {
+  // 진입 시 dashboard 로드
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await api.get<RepayDashboardResponse>(
+          "/api/admin/loans/repayments/dashboard",
+        );
+        setDashboard(res);
+      } catch (err) {
+        setDashboardErr(err instanceof Error ? err.message : "현황을 불러오지 못했습니다.");
+      }
+    })();
+  }, []);
+
+  async function runSearch() {
     setLoading(true);
     setError(null);
     try {
@@ -51,8 +81,11 @@ export default function RepaymentsPage() {
       if (dateFrom) params.set("date_from", dateFrom);
       if (dateTo) params.set("date_to", dateTo);
       params.set("limit", "200");
-      const res = await api.get<RepaymentListResponse>(`/api/admin/loans/repayments?${params.toString()}`);
+      const res = await api.get<RepaymentListResponse>(
+        `/api/admin/loans/repayments?${params.toString()}`,
+      );
       setData(res);
+      setMode("results");
     } catch (err) {
       setError(err instanceof Error ? err.message : "상환 내역을 불러오지 못했습니다.");
     } finally {
@@ -60,31 +93,35 @@ export default function RepaymentsPage() {
     }
   }
 
-  useEffect(() => {
-    void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    void load();
+    void runSearch();
   }
 
-  // 검색결과 합산 — 화면의 신뢰성 보조 KPI.
-  const sumTotal = data?.items.reduce((s, x) => s + x.repay_total, 0) ?? 0;
-  const sumPrincipal = data?.items.reduce((s, x) => s + x.repay_principal, 0) ?? 0;
-  const sumInterest =
-    data?.items.reduce((s, x) => s + x.repay_normal_interest + x.repay_overdue_interest, 0) ?? 0;
+  function resetToDashboard() {
+    setMode("dashboard");
+    setData(null);
+    setError(null);
+    setQuery("");
+    setRepayType("");
+    setChannel("");
+    setStatus("");
+    setDateFrom("");
+    setDateTo("");
+  }
 
   return (
     <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">대출 상환 내역</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          LOAN_REPAY_HISTORY — 시간 역순 · 계약/회원/일자/구분 필터
+          {mode === "dashboard"
+            ? "현재 진행 중인 상환 현황. 검색 폼으로 과거 이력 조회 가능."
+            : "검색 결과 — 시간 역순"}
         </p>
       </div>
 
+      {/* 검색 폼 — 항상 노출 */}
       <Card>
         <CardContent className="p-4">
           <form onSubmit={onSubmit} className="flex flex-wrap items-end gap-3">
@@ -102,7 +139,7 @@ export default function RepaymentsPage() {
             </label>
             <SelectField label="구분" value={repayType} onChange={setRepayType} options={REPAY_TYPES} labels={REPAY_TYPE_LABEL} />
             <SelectField label="채널" value={channel} onChange={setChannel} options={CHANNELS} labels={CHANNEL_LABEL} />
-            <SelectField label="상태" value={status} onChange={setStatus} options={STATUSES} />
+            <SelectField label="상태" value={status} onChange={setStatus} options={STATUSES} labels={STATUS_LABEL} />
             <label className="space-y-1.5">
               <span className="text-[11px] font-medium text-muted-foreground">시작일 (YYYYMMDD)</span>
               <Input value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} placeholder="20260101" maxLength={8} className="w-32" />
@@ -114,15 +151,205 @@ export default function RepaymentsPage() {
             <Button type="submit" disabled={loading}>
               {loading ? "검색 중…" : "검색"}
             </Button>
+            {mode === "results" ? (
+              <Button type="button" variant="outline" onClick={resetToDashboard}>
+                현황으로
+              </Button>
+            ) : null}
           </form>
         </CardContent>
       </Card>
 
+      {mode === "dashboard" ? (
+        <DashboardView dashboard={dashboard} error={dashboardErr} />
+      ) : (
+        <ResultsView data={data} error={error} loading={loading} />
+      )}
+    </div>
+  );
+}
+
+
+function DashboardView({
+  dashboard,
+  error,
+}: {
+  dashboard: RepayDashboardResponse | null;
+  error: string | null;
+}) {
+  if (error) {
+    return (
+      <div className="rounded-md border border-destructive/50 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+        {error}
+      </div>
+    );
+  }
+  if (!dashboard) return <Spinner label="현황 불러오는 중…" />;
+
+  return (
+    <>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-        <KpiCard label="상환 건수" value={fmtNumber(data?.count ?? 0)} unit="건" color="text-primary" sub={data ? `전체 ${data.total}건` : null} />
-        <KpiCard label="합계" value={fmtKrw(sumTotal)} unit="" color="text-foreground" />
-        <KpiCard label="원금 합계" value={fmtKrw(sumPrincipal)} unit="" color="text-success" />
-        <KpiCard label="이자 합계 (정상+연체)" value={fmtKrw(sumInterest)} unit="" color="text-warning" />
+        <KpiCard
+          label="진행 중 계약"
+          value={fmtNumber(dashboard.in_progress_contracts)}
+          unit="건"
+          color="text-foreground"
+          icon={Wallet}
+        />
+        <KpiCard
+          label="연체 회차"
+          value={fmtNumber(dashboard.overdue_installments)}
+          unit="회"
+          color={dashboard.overdue_installments > 0 ? "text-destructive" : "text-muted-foreground"}
+          icon={AlertTriangle}
+        />
+        <KpiCard
+          label="오늘 도래"
+          value={fmtNumber(dashboard.due_today)}
+          unit="건"
+          color={dashboard.due_today > 0 ? "text-warning" : "text-muted-foreground"}
+          icon={CalendarClock}
+        />
+        <KpiCard
+          label="이번 달 도래"
+          value={fmtNumber(dashboard.due_this_month)}
+          unit="건"
+          color="text-foreground"
+          icon={CalendarClock}
+        />
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">최장 연체</CardTitle>
+            <CardDescription>연체일 기준 상위 5건 — 계약 클릭 시 상세</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {dashboard.overdue_top.length === 0 ? (
+              <p className="rounded-md border border-dashed bg-muted/30 p-6 text-center text-sm text-muted-foreground">
+                연체된 회차가 없습니다.
+              </p>
+            ) : (
+              <Table>
+                <THead>
+                  <TR>
+                    <TH>회원 / 상품</TH>
+                    <TH>계약번호</TH>
+                    <TH className="text-right">연체</TH>
+                    <TH className="text-right">최장</TH>
+                    <TH className="text-right">총액</TH>
+                  </TR>
+                </THead>
+                <TBody>
+                  {dashboard.overdue_top.map((r) => (
+                    <TR key={r.loan_contract_no}>
+                      <TD>
+                        <div className="text-sm font-medium">{r.customer_name ?? "-"}</div>
+                        <div className="text-[10px] text-muted-foreground">
+                          #{r.customer_no ?? "-"} · {r.product_name ?? "-"}
+                        </div>
+                      </TD>
+                      <TD>
+                        <Link
+                          href={`/loans/repayments/${encodeId(r.loan_contract_no)}`}
+                          className="font-mono text-xs hover:underline"
+                        >
+                          {r.loan_contract_no}
+                        </Link>
+                      </TD>
+                      <TD className="num-tabular text-right text-xs">{r.overdue_count}회</TD>
+                      <TD className="num-tabular text-right">
+                        <span className="font-semibold text-destructive">{r.max_overdue_days}</span>
+                        <span className="text-[10px] text-muted-foreground"> 일</span>
+                      </TD>
+                      <TD className="num-tabular text-right text-xs">{fmtKrw(r.total_overdue_krw)}</TD>
+                    </TR>
+                  ))}
+                </TBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">가까운 도래</CardTitle>
+            <CardDescription>다가오는 예정 회차 5건</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {dashboard.upcoming_top.length === 0 ? (
+              <p className="rounded-md border border-dashed bg-muted/30 p-6 text-center text-sm text-muted-foreground">
+                가까운 예정이 없습니다.
+              </p>
+            ) : (
+              <Table>
+                <THead>
+                  <TR>
+                    <TH>회원 / 상품</TH>
+                    <TH>계약번호</TH>
+                    <TH className="text-right">회차</TH>
+                    <TH className="text-right">예정일</TH>
+                    <TH className="text-right">금액</TH>
+                  </TR>
+                </THead>
+                <TBody>
+                  {dashboard.upcoming_top.map((r) => (
+                    <TR key={`${r.loan_contract_no}-${r.installment_no}`}>
+                      <TD>
+                        <div className="text-sm font-medium">{r.customer_name ?? "-"}</div>
+                        <div className="text-[10px] text-muted-foreground">
+                          #{r.customer_no ?? "-"} · {r.product_name ?? "-"}
+                        </div>
+                      </TD>
+                      <TD>
+                        <Link
+                          href={`/loans/repayments/${encodeId(r.loan_contract_no)}`}
+                          className="font-mono text-xs hover:underline"
+                        >
+                          {r.loan_contract_no}
+                        </Link>
+                      </TD>
+                      <TD className="num-tabular text-right text-xs">{r.installment_no}회</TD>
+                      <TD className="num-tabular text-right">
+                        <div className="text-xs">{fmtDateTime(r.scheduled_date)}</div>
+                        <div className="text-[10px] text-muted-foreground">D-{r.days_left}</div>
+                      </TD>
+                      <TD className="num-tabular text-right text-xs">{fmtKrw(r.scheduled_total)}</TD>
+                    </TR>
+                  ))}
+                </TBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </>
+  );
+}
+
+
+function ResultsView({
+  data,
+  error,
+  loading,
+}: {
+  data: RepaymentListResponse | null;
+  error: string | null;
+  loading: boolean;
+}) {
+  const sumTotal = data?.items.reduce((s, x) => s + x.repay_total, 0) ?? 0;
+  const sumPrincipal = data?.items.reduce((s, x) => s + x.repay_principal, 0) ?? 0;
+  const sumInterest =
+    data?.items.reduce((s, x) => s + x.repay_normal_interest + x.repay_overdue_interest, 0) ?? 0;
+
+  return (
+    <>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+        <KpiCard label="상환 건수" value={fmtNumber(data?.count ?? 0)} unit="건" color="text-primary" sub={data ? `전체 ${data.total}건` : null} icon={Wallet} />
+        <KpiCard label="합계" value={fmtKrw(sumTotal)} unit="" color="text-foreground" icon={Wallet} />
+        <KpiCard label="원금 합계" value={fmtKrw(sumPrincipal)} unit="" color="text-success" icon={Wallet} />
+        <KpiCard label="이자 합계 (정상+연체)" value={fmtKrw(sumInterest)} unit="" color="text-warning" icon={Wallet} />
       </div>
 
       <Card>
@@ -177,7 +404,7 @@ export default function RepaymentsPage() {
           )}
         </CardContent>
       </Card>
-    </div>
+    </>
   );
 }
 
@@ -264,19 +491,21 @@ function KpiCard({
   unit,
   color,
   sub,
+  icon: Icon,
 }: {
   label: string;
   value: string;
   unit: string;
   color: string;
   sub?: string | null;
+  icon: typeof Wallet;
 }) {
   return (
     <Card>
       <CardContent className="p-5">
         <div className="flex items-start justify-between">
           <div className="text-xs text-muted-foreground">{label}</div>
-          <Wallet className={`h-4 w-4 ${color}`} />
+          <Icon className={`h-4 w-4 ${color}`} />
         </div>
         <div className="mt-2 flex items-baseline gap-1">
           <span className={`num-tabular text-2xl font-semibold ${color}`}>{value}</span>
@@ -306,5 +535,5 @@ function RepayStatusBadge({ cd }: { cd?: string | null }) {
     OK: "success",
     CANCEL: "destructive",
   };
-  return <Badge variant={map[cd] ?? "muted"}>{cd}</Badge>;
+  return <Badge variant={map[cd] ?? "muted"}>{STATUS_LABEL[cd] ?? cd}</Badge>;
 }

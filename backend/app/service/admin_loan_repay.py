@@ -23,8 +23,110 @@ import structlog
 from ..db import get_pool
 from ..errors import E_NOT_FOUND
 from ..exceptions import NotFoundError
+from .admin_loan_contract import list_exec_history
 
 log = structlog.get_logger("admin_loan_repay")
+
+
+async def get_repayments_dashboard() -> dict[str, Any]:
+    """상환 메인 화면 진입 시 표시할 진행 중 현황.
+
+    - in_progress_contracts: 활성(NORMAL/OVERDUE) 계약 수
+    - overdue_installments : OVERDUE 회차 수 (전체)
+    - due_today           : 오늘 도래 회차 수 (WAITING/PENDING/OVERDUE)
+    - due_this_month      : 이번 달 도래 회차 수
+    - overdue_top         : 최장 연체일 상위 5건 (계약 단위)
+    - upcoming_top        : 가까운 도래 상위 5건
+    """
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        in_progress_contracts = await conn.fetchval(
+            'SELECT COUNT(*) FROM public."LOAN_CONTRACT" '
+            'WHERE "DELETE_YN" = \'N\' AND "LOAN_STATUS_CD" IN (\'NORMAL\', \'OVERDUE\')'
+        )
+        overdue_installments = await conn.fetchval(
+            'SELECT COUNT(*) FROM public."LOAN_REPAY_SCHEDULE" '
+            'WHERE "DELETE_YN" = \'N\' AND "SCHEDULE_STATUS_CD" = \'OVERDUE\''
+        )
+        # 오늘 도래 — to_date(SCHEDULED_DATE,'YYYYMMDD') = CURRENT_DATE
+        due_today = await conn.fetchval(
+            'SELECT COUNT(*) FROM public."LOAN_REPAY_SCHEDULE" '
+            'WHERE "DELETE_YN" = \'N\' '
+            '  AND "SCHEDULE_STATUS_CD" IN (\'WAITING\', \'PENDING\', \'OVERDUE\') '
+            '  AND to_date("SCHEDULED_DATE", \'YYYYMMDD\') = CURRENT_DATE'
+        )
+        # 이번 달 도래
+        due_this_month = await conn.fetchval(
+            'SELECT COUNT(*) FROM public."LOAN_REPAY_SCHEDULE" '
+            'WHERE "DELETE_YN" = \'N\' '
+            '  AND "SCHEDULE_STATUS_CD" IN (\'WAITING\', \'PENDING\', \'OVERDUE\') '
+            '  AND date_trunc(\'month\', to_date("SCHEDULED_DATE", \'YYYYMMDD\')) '
+            '      = date_trunc(\'month\', CURRENT_DATE)'
+        )
+
+        # 최장 연체 — 계약 단위 집계, 최장 연체일 DESC
+        overdue_top_rows = await conn.fetch(
+            'SELECT lc."LOAN_CONTRACT_NO", lc."PRODUCT_NAME_SNAPSHOT", lc."CUSTOMER_NO", '
+            '       p."PARTY_NAME" AS customer_name, '
+            '       COUNT(*) AS overdue_count, '
+            '       MAX(CURRENT_DATE - to_date(lrs."SCHEDULED_DATE", \'YYYYMMDD\')) AS max_days, '
+            '       SUM(lrs."SCHEDULED_TOTAL") AS total_overdue_krw '
+            'FROM public."LOAN_REPAY_SCHEDULE" lrs '
+            'JOIN public."LOAN_CONTRACT" lc ON lc."LOAN_CONTRACT_NO" = lrs."LOAN_CONTRACT_NO" '
+            'LEFT JOIN public."CUSTOMER" c ON c."CUSTOMER_NO" = lc."CUSTOMER_NO" '
+            'LEFT JOIN public."PARTY" p ON p."PARTY_ID" = c."PARTY_ID" '
+            'WHERE lrs."DELETE_YN" = \'N\' AND lc."DELETE_YN" = \'N\' '
+            '  AND lrs."SCHEDULE_STATUS_CD" = \'OVERDUE\' '
+            'GROUP BY lc."LOAN_CONTRACT_NO", lc."PRODUCT_NAME_SNAPSHOT", lc."CUSTOMER_NO", p."PARTY_NAME" '
+            'ORDER BY max_days DESC LIMIT 5'
+        )
+        # 가까운 도래 — 미래 WAITING 가장 가까운 5건
+        upcoming_rows = await conn.fetch(
+            'SELECT lrs."LOAN_CONTRACT_NO", lrs."INSTALLMENT_NO", lrs."SCHEDULED_DATE", '
+            '       lrs."SCHEDULED_TOTAL", lc."CUSTOMER_NO", '
+            '       p."PARTY_NAME" AS customer_name, lc."PRODUCT_NAME_SNAPSHOT", '
+            '       to_date(lrs."SCHEDULED_DATE", \'YYYYMMDD\') - CURRENT_DATE AS days_left '
+            'FROM public."LOAN_REPAY_SCHEDULE" lrs '
+            'JOIN public."LOAN_CONTRACT" lc ON lc."LOAN_CONTRACT_NO" = lrs."LOAN_CONTRACT_NO" '
+            'LEFT JOIN public."CUSTOMER" c ON c."CUSTOMER_NO" = lc."CUSTOMER_NO" '
+            'LEFT JOIN public."PARTY" p ON p."PARTY_ID" = c."PARTY_ID" '
+            'WHERE lrs."DELETE_YN" = \'N\' AND lc."DELETE_YN" = \'N\' '
+            '  AND lrs."SCHEDULE_STATUS_CD" IN (\'WAITING\', \'PENDING\') '
+            '  AND to_date(lrs."SCHEDULED_DATE", \'YYYYMMDD\') >= CURRENT_DATE '
+            'ORDER BY lrs."SCHEDULED_DATE" ASC LIMIT 5'
+        )
+
+    return {
+        "in_progress_contracts": int(in_progress_contracts or 0),
+        "overdue_installments": int(overdue_installments or 0),
+        "due_today": int(due_today or 0),
+        "due_this_month": int(due_this_month or 0),
+        "overdue_top": [
+            {
+                "loan_contract_no": r["LOAN_CONTRACT_NO"],
+                "product_name": r["PRODUCT_NAME_SNAPSHOT"],
+                "customer_no": int(r["CUSTOMER_NO"]) if r["CUSTOMER_NO"] is not None else None,
+                "customer_name": r["customer_name"],
+                "overdue_count": int(r["overdue_count"]),
+                "max_overdue_days": int(r["max_days"] or 0),
+                "total_overdue_krw": int(r["total_overdue_krw"] or 0),
+            }
+            for r in overdue_top_rows
+        ],
+        "upcoming_top": [
+            {
+                "loan_contract_no": r["LOAN_CONTRACT_NO"],
+                "installment_no": int(r["INSTALLMENT_NO"]),
+                "scheduled_date": r["SCHEDULED_DATE"],
+                "scheduled_total": int(r["SCHEDULED_TOTAL"] or 0),
+                "customer_no": int(r["CUSTOMER_NO"]) if r["CUSTOMER_NO"] is not None else None,
+                "customer_name": r["customer_name"],
+                "product_name": r["PRODUCT_NAME_SNAPSHOT"],
+                "days_left": int(r["days_left"] or 0),
+            }
+            for r in upcoming_rows
+        ],
+    }
 
 
 async def list_repayments(
@@ -143,6 +245,9 @@ async def get_contract_repayment_detail(loan_contract_no: str) -> dict[str, Any]
             loan_contract_no,
         )
 
+    # 자금 실행 이력 — 같은 계약 detail 화면에서 함께 보여주기 위해 합쳐 반환.
+    executions = await list_exec_history(loan_contract_no)
+
     # 합계 — 정상 적용(REPAY_STATUS_CD='OK') 만 집계. CANCEL 은 누적에서 제외.
     paid_principal = sum(int(h["REPAY_PRINCIPAL"] or 0) for h in history if h["REPAY_STATUS_CD"] == "OK")
     paid_normal = sum(int(h["REPAY_NORMAL_INTEREST"] or 0) for h in history if h["REPAY_STATUS_CD"] == "OK")
@@ -224,6 +329,7 @@ async def get_contract_repayment_detail(loan_contract_no: str) -> dict[str, Any]
             }
             for h in history
         ],
+        "executions": executions,
     }
 
 

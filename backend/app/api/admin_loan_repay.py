@@ -12,9 +12,21 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Path, Query
 
 from ..service.admin_auth import CurrentAdmin, require_admin
-from ..service.admin_loan_repay import get_contract_repayment_detail, list_repayments
+from ..service.admin_loan_repay import (
+    get_contract_repayment_detail,
+    get_repayments_dashboard,
+    list_repayments,
+)
 
 router = APIRouter(prefix="/admin/loans", tags=["admin-loan-repay"])
+
+
+@router.get("/repayments/dashboard")
+async def repayments_dashboard_route(
+    admin: CurrentAdmin = Depends(require_admin),
+) -> dict:
+    """상환 메인 진입 시 진행 중 현황 카드."""
+    return await get_repayments_dashboard()
 
 
 @router.get("/repayments")

@@ -13,6 +13,7 @@ from .api.admin_auth import router as admin_auth_router
 from .api.admin_customer import router as admin_customer_router
 from .api.admin_health import router as admin_health_router
 from .api.admin_loan import router as admin_loan_router
+from .api.admin_loan_contract import router as admin_loan_contract_router
 from .api.admin_loan_repay import router as admin_loan_repay_router
 from .api.admin_overdue import router as admin_overdue_router
 from .api.auth import router as auth_router, setup_router
@@ -216,10 +217,11 @@ api.include_router(auto_transfer_router)
 api.include_router(transfer_router)
 api.include_router(loan_router)
 api.include_router(admin_auth_router)
-# admin_loan_repay 가 `/admin/loans/repayments` (literal) 와 `/repayments/{loan_contract_no}` 를 갖는다.
+# admin_loan_repay/contract 가 `/admin/loans/repayments` 와 `/admin/loans/contracts` (literal) 를 갖는다.
 # admin_loan_router 의 POST `/{application_id}/predict` / admin_attach 의 `/{application_id}/attachments`
 # 와는 GET/POST·segment 수·int 캐스팅 차이로 충돌하지 않지만, literal-first 컨벤션 준수.
 api.include_router(admin_loan_repay_router)
+api.include_router(admin_loan_contract_router)
 api.include_router(admin_loan_router)
 api.include_router(admin_attach_router)
 # admin_overdue 가 /admin/customers/overdue 와 /admin/customers/{cust}/overdue 를 갖고,
