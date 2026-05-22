@@ -323,7 +323,7 @@ async def human_review(
     employee_no: str,
     memo: str | None = None,
 ) -> dict:
-    """사람 검토 결과 등록. ADMIN_AUDIT_LOG 자동 기록."""
+    """사람 검토 결과 등록. ADMIN_AUDIT_LOG 는 AdminAuditMiddleware 가 자동 적재."""
     if human_decision_cd not in ("APPROVE", "REJECT"):
         raise ValueError("human_decision_cd 는 APPROVE/REJECT 만 허용")
 
@@ -359,21 +359,6 @@ async def human_review(
             )
             if row is None:
                 raise ValueError(f"DECISION_ID {decision_id} 없음")
-
-            await conn.execute(
-                'INSERT INTO public."ADMIN_AUDIT_LOG" '
-                '("EMPLOYEE_NO","ACTION_CD","TARGET_TABLE","TARGET_ID",'
-                ' "AFTER_JSON","RESULT_CD","REMARK") '
-                "VALUES ($1, 'LOAN_HUMAN_REVIEW', 'AI_LOAN_DECISION', $2, "
-                "        $3::jsonb, 'OK', $4)",
-                employee_no,
-                str(decision_id),
-                json.dumps({
-                    "human_decision_cd": human_decision_cd,
-                    "memo": memo,
-                }, ensure_ascii=False),
-                memo,
-            )
 
     log.info(
         "loan_decision_reviewed",

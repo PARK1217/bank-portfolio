@@ -7,6 +7,7 @@ import {
   Briefcase,
   ListTodo,
   Bot,
+  Receipt,
   Users,
   UserSearch,
   AlertOctagon,
@@ -45,6 +46,7 @@ const MENU: MenuEntry[] = [
     items: [
       { href: "/loans/review-queue", label: "검토 큐", icon: ListTodo },
       { href: "/loans/decisions", label: "AI 의사결정", icon: Bot },
+      { href: "/loans/repayments", label: "상환 내역", icon: Receipt },
     ],
   },
   {

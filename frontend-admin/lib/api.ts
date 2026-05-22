@@ -581,6 +581,111 @@ export function mapAttachmentsResponse(raw: Record<string, unknown>): Attachment
 }
 
 
+// ---------------------------------------------------------------------------
+// 대출 상환 (Phase 6 — admin_loan_repay)
+// ---------------------------------------------------------------------------
+
+export interface RepaymentListItem {
+  loan_contract_no: string;
+  repay_seq: number;
+  schedule_ref?: number | null;
+  repay_datetime?: string | null;
+  repay_type_cd?: string | null;
+  repay_principal: number;
+  repay_normal_interest: number;
+  repay_overdue_interest: number;
+  repay_total: number;
+  post_principal_balance: number;
+  withdraw_account_no?: string | null;
+  channel_cd?: string | null;
+  repay_status_cd?: string | null;
+  auto_transfer_id?: number | null;
+  unpaid_normal_interest: number;
+  unpaid_overdue_interest: number;
+  overdue_days?: number | null;
+  customer_no?: number | null;
+  customer_name?: string | null;
+  product_name?: string | null;
+  loan_type_cd?: string | null;
+}
+
+export interface RepaymentListResponse {
+  items: RepaymentListItem[];
+  count: number;
+  total: number;
+}
+
+export interface RepaymentContract {
+  loan_contract_no: string;
+  customer_no?: number | null;
+  customer_name?: string | null;
+  customer_email?: string | null;
+  product_name?: string | null;
+  loan_type_cd?: string | null;
+  repay_method_cd?: string | null;
+  contract_limit: number;
+  current_usage: number;
+  contract_rate: number;
+  overdue_spread_rate?: number | null;
+  loan_status_cd?: string | null;
+  overdue_stage_cd?: string | null;
+  contract_date?: string | null;
+  maturity_date?: string | null;
+  loan_account_no?: string | null;
+  main_deposit_account_no?: string | null;
+}
+
+export interface RepaymentSummary {
+  paid_principal_krw: number;
+  paid_normal_interest_krw: number;
+  paid_overdue_interest_krw: number;
+  paid_total_krw: number;
+  scheduled_remaining_krw: number;
+  overdue_count: number;
+  max_overdue_days: number;
+  installments_total: number;
+  installments_done: number;
+}
+
+export interface RepaymentScheduleRow {
+  installment_no: number;
+  scheduled_date?: string | null;
+  scheduled_principal: number;
+  scheduled_interest: number;
+  scheduled_total: number;
+  status_cd?: string | null;
+  post_principal_balance: number;
+  actual_repay_id?: number | null;
+  days_overdue?: number | null;
+}
+
+export interface RepaymentHistoryRow {
+  repay_seq: number;
+  schedule_ref?: number | null;
+  repay_datetime?: string | null;
+  repay_type_cd?: string | null;
+  repay_principal: number;
+  repay_normal_interest: number;
+  repay_overdue_interest: number;
+  post_principal_balance: number;
+  withdraw_account_no?: string | null;
+  channel_cd?: string | null;
+  repay_status_cd?: string | null;
+  auto_transfer_id?: number | null;
+  unpaid_normal_interest: number;
+  unpaid_overdue_interest: number;
+  overdue_days?: number | null;
+  remark?: string | null;
+}
+
+export interface RepaymentDetailResponse {
+  contract: RepaymentContract;
+  summary: RepaymentSummary;
+  schedules: RepaymentScheduleRow[];
+  history: RepaymentHistoryRow[];
+}
+
+
 export function mapOverdueItem(raw: Record<string, unknown>): OverdueListItem {
   return {
     customer_no: pick<number>(raw, ["customer_no", "CUSTOMER_NO"]) ?? 0,
