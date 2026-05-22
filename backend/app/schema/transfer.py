@@ -41,7 +41,12 @@ class TransferConfirmRequest(BaseModel):
         None, description="사용자 입력 예금주명 (실명 일치 검증용)"
     )
     amount_krw: int = Field(..., gt=0)
-    memo: str | None = Field(None, max_length=30)
+    withdraw_memo: str | None = Field(
+        None, max_length=30, description="내 통장에 표시될 메모 (출금 거래)"
+    )
+    deposit_memo: str | None = Field(
+        None, max_length=30, description="받는 분 통장에 표시될 메모 (입금 거래)"
+    )
     password_or_otp: str = Field(..., description="간편비밀번호 또는 OTP")
 
 
@@ -64,7 +69,8 @@ class TransferDetailResponse(BaseModel):
     to_account: MaskedAccount
     amount_krw: int
     fee: int = 0
-    memo: str | None = None
+    withdraw_memo: str | None = None
+    deposit_memo: str | None = None
     settlement_type: str
     settlement_status: str
     requested_at: datetime
@@ -114,7 +120,12 @@ class AutoTransferCreate(BaseModel):
     )
     valid_start_date: date
     valid_end_date: date | None = None
-    memo: str | None = Field(None, max_length=100)
+    withdraw_memo: str | None = Field(
+        None, max_length=100, description="내 통장에 표시될 메모"
+    )
+    deposit_memo: str | None = Field(
+        None, max_length=100, description="받는 분 통장에 표시될 메모"
+    )
     linked_to: str | None = Field(None, description="INSTALLMENT/LOAN/UTILITY/USER")
     linked_id: int | None = None
 
@@ -179,7 +190,12 @@ class ScheduledTransferCreate(BaseModel):
     to_holder_name: str
     amount_krw: int = Field(..., gt=0)
     scheduled_at: datetime
-    memo: str | None = Field(None, max_length=100)
+    withdraw_memo: str | None = Field(
+        None, max_length=100, description="내 통장에 표시될 메모"
+    )
+    deposit_memo: str | None = Field(
+        None, max_length=100, description="받는 분 통장에 표시될 메모"
+    )
 
 
 # ----------------------------------------------------------------------

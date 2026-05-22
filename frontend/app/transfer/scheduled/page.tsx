@@ -69,7 +69,8 @@ function ScheduledForm() {
   const [toHolder, setToHolder] = useState("");
   const [amount, setAmount] = useState("");
   const [scheduledAt, setScheduledAt] = useState("");
-  const [memo, setMemo] = useState("");
+  const [withdrawMemo, setWithdrawMemo] = useState("");
+  const [depositMemo, setDepositMemo] = useState("");
   const [submitting, setSubmitting] = useState(false);
   type VerifyStatus = "idle" | "loading" | "ok" | "not_found" | "error";
   const [verifyStatus, setVerifyStatus] = useState<VerifyStatus>("idle");
@@ -168,7 +169,8 @@ function ScheduledForm() {
           to_holder_name: toHolder || null,
           amount_krw: amountN,
           scheduled_at: dt.toISOString(),
-          memo: memo || null,
+          withdraw_memo: withdrawMemo || null,
+          deposit_memo: depositMemo || null,
         },
         { idempotent: true },
       );
@@ -296,8 +298,22 @@ function ScheduledForm() {
             )}
           </Field>
 
-          <Field label="메모 (선택)">
-            <Input maxLength={100} value={memo} onChange={(e) => setMemo(e.target.value)} />
+          <Field label="내 통장 메모 (선택)">
+            <Input
+              maxLength={100}
+              placeholder="내 통장 거래내역에 표시"
+              value={withdrawMemo}
+              onChange={(e) => setWithdrawMemo(e.target.value)}
+            />
+          </Field>
+
+          <Field label="받는 분 통장 메모 (선택)">
+            <Input
+              maxLength={100}
+              placeholder="상대방 통장에 표시"
+              value={depositMemo}
+              onChange={(e) => setDepositMemo(e.target.value)}
+            />
           </Field>
 
           <Button

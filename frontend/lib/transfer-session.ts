@@ -22,7 +22,8 @@ export interface TransferDraft {
   to_account_no: string;
   to_holder_name?: string | null;
   amount_krw: number;
-  memo?: string | null;
+  withdraw_memo?: string | null;
+  deposit_memo?: string | null;
 }
 
 function read(): TransferDraft | null {

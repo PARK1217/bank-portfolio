@@ -97,7 +97,8 @@ async def create_auto_transfer(
     monthly_exec_day: int | None,
     valid_start_date: date,
     valid_end_date: date | None,
-    memo: str | None,
+    withdraw_memo: str | None,
+    deposit_memo: str | None,
     tokens: TokenService,
 ) -> tuple[str, datetime | None]:
     """반환: (auto_token, next_execute_at)."""
@@ -115,9 +116,9 @@ async def create_auto_transfer(
             '  "CYCLE_TYPE_CD", "MONTHLY_EXEC_DAY", "VALID_START_DATE", '
             '  "VALID_END_DATE", "AUTO_STATUS_CD", "REG_CHANNEL_CD", '
             '  "MAX_RETRY_COUNT", "RETRY_INTERVAL_HOURS", "CARRY_NEXT_MONTH_YN", '
-            '  "WITHDRAW_MEMO", "DELETE_YN"'
+            '  "WITHDRAW_MEMO", "DEPOSIT_MEMO", "DELETE_YN"'
             ") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'ACTIVE', 'WEB', "
-            "          3, 6, 'N', $11, 'N') "
+            "          3, 6, 'N', $11, $12, 'N') "
             'RETURNING "AUTO_TRANSFER_ID"',
             customer_no,
             from_account_no,
@@ -129,7 +130,8 @@ async def create_auto_transfer(
             monthly_exec_day,
             _yyyymmdd(valid_start_date),
             _yyyymmdd(valid_end_date) if valid_end_date else None,
-            memo,
+            withdraw_memo,
+            deposit_memo,
         )
 
     auto_token = await tokens.issue(ResourceType.AUTO, str(auto_id), customer_no)
@@ -238,7 +240,8 @@ async def create_scheduled(
     to_holder_name: str,
     amount_krw: int,
     scheduled_at: datetime,
-    memo: str | None,
+    withdraw_memo: str | None,
+    deposit_memo: str | None,
     tokens: TokenService,
 ) -> tuple[str, datetime]:
     await fetch_account(from_account_no, customer_no)
@@ -256,8 +259,8 @@ async def create_scheduled(
             '  "CUSTOMER_NO", "WITHDRAW_ACCOUNT_NO", "DEPOSIT_ACCOUNT_NO", '
             '  "DEPOSIT_BANK_CD", "DEPOSIT_HOLDER_NAME", "TRANSFER_AMOUNT", '
             '  "CYCLE_TYPE_CD", "VALID_START_DATE", "AUTO_STATUS_CD", '
-            '  "REG_CHANNEL_CD", "WITHDRAW_MEMO", "DELETE_YN"'
-            ") VALUES ($1, $2, $3, $4, $5, $6, 'ONCE', $7, 'ACTIVE', 'WEB', $8, 'N') "
+            '  "REG_CHANNEL_CD", "WITHDRAW_MEMO", "DEPOSIT_MEMO", "DELETE_YN"'
+            ") VALUES ($1, $2, $3, $4, $5, $6, 'ONCE', $7, 'ACTIVE', 'WEB', $8, $9, 'N') "
             'RETURNING "AUTO_TRANSFER_ID"',
             customer_no,
             from_account_no,
@@ -266,7 +269,8 @@ async def create_scheduled(
             to_holder_name,
             amount_krw,
             _yyyymmdd(scheduled_at.date()),
-            memo,
+            withdraw_memo,
+            deposit_memo,
         )
     token = await tokens.issue(ResourceType.AUTO, str(auto_id), customer_no)
     return token, scheduled_at

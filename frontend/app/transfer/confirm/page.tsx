@@ -74,7 +74,8 @@ function ConfirmContent() {
           to_account_no: draft.to_account_no,
           to_holder_name: draft.to_holder_name,
           amount_krw: draft.amount_krw,
-          memo: draft.memo,
+          withdraw_memo: draft.withdraw_memo,
+          deposit_memo: draft.deposit_memo,
           password_or_otp: password,
         },
         { idempotent: true },
@@ -102,7 +103,8 @@ function ConfirmContent() {
           <Row k="입금 계좌" v={draft.to_account_no} />
           {draft.to_holder_name ? <Row k="예금주" v={draft.to_holder_name} /> : null}
           <Row k="이체 금액" v={fmt(draft.amount_krw)} highlight />
-          {draft.memo ? <Row k="메모" v={draft.memo} /> : null}
+          {draft.withdraw_memo ? <Row k="내 통장 메모" v={draft.withdraw_memo} /> : null}
+          {draft.deposit_memo ? <Row k="받는 분 통장 메모" v={draft.deposit_memo} /> : null}
           <Row k="결제 채널 (예상)" v={SETTLEMENT_TYPE_LABEL[predictedSettlement] ?? predictedSettlement} muted />
         </dl>
 

@@ -140,7 +140,8 @@ async def execute_transfer(
     to_account_no: str,
     to_holder_name: str | None,
     amount_krw: int,
-    memo: str | None,
+    withdraw_memo: str | None,
+    deposit_memo: str | None,
     password_or_otp: str,
     idempotency_key: str,
     tokens: TokenService,
@@ -225,7 +226,8 @@ async def execute_transfer(
             to_bank_cd=to_bank_cd,
             to_holder_name=to_holder_name,
             amount_krw=amount_krw,
-            memo=memo,
+            withdraw_memo=withdraw_memo,
+            deposit_memo=deposit_memo,
             idempotency_key=idempotency_key,
         )
     else:
@@ -235,7 +237,8 @@ async def execute_transfer(
             to_account_no=to_account_no,
             to_holder_name=to_holder_name,
             amount_krw=amount_krw,
-            memo=memo,
+            withdraw_memo=withdraw_memo,
+            deposit_memo=deposit_memo,
             idempotency_key=idempotency_key,
             settlement_type=settlement_type,
             customer_no=user_customer_no,
@@ -297,7 +300,8 @@ async def _process_intra_bank(
     to_bank_cd: str,
     to_holder_name: str | None,
     amount_krw: int,
-    memo: str | None,
+    withdraw_memo: str | None,
+    deposit_memo: str | None,
     idempotency_key: str,
 ) -> TransferResult:
     if from_account_no == to_account_no:
@@ -341,6 +345,7 @@ async def _process_intra_bank(
             # TRANSFER INSERT — IDEMPOTENCY_KEY UNIQUE 가정. 충돌 시 ConflictError로 전환.
             # v53 settlement_* 컬럼도 동시 채움 (DB와 API 응답 갈라짐 방지).
             try:
+                transfer_memo = withdraw_memo or deposit_memo
                 transfer_id = await conn.fetchval(
                     'INSERT INTO public."TRANSFER" ('
                     '  "WITHDRAW_ACCOUNT_NO", "WITHDRAW_BANK_CD", "WITHDRAW_HOLDER_NAME", '
@@ -351,11 +356,12 @@ async def _process_intra_bank(
                     '  "TRANSFER_TYPE_CD", "TRANSFER_STATUS_CD", '
                     '  "SETTLEMENT_TYPE", "SETTLEMENT_STATUS", '
                     '  "SETTLEMENT_REQUESTED_AT", "SETTLEMENT_COMPLETED_AT", '
-                    '  "TRANSFER_MEMO", "IDEMPOTENCY_KEY", "CANCEL_YN", "DELETE_YN"'
+                    '  "WITHDRAW_MEMO", "DEPOSIT_MEMO", "TRANSFER_MEMO", '
+                    '  "IDEMPOTENCY_KEY", "CANCEL_YN", "DELETE_YN"'
                     ') VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $11, '
                     "          'INTRA', 'SETTLED', 'INTRA_BANK', 'SETTLED', "
                     "          NOW(), NOW(), "
-                    "          $12, $13, 'N', 'N') "
+                    "          $12, $13, $14, $15, 'N', 'N') "
                     'RETURNING "TRANSFER_ID"',
                     from_account_no,
                     OWN_BANK_CODE,
@@ -368,7 +374,9 @@ async def _process_intra_bank(
                     amount_krw,
                     0,
                     now_str,
-                    memo,
+                    withdraw_memo,
+                    deposit_memo,
+                    transfer_memo,
                     idempotency_key,
                 )
             except Exception as e:
@@ -381,7 +389,7 @@ async def _process_intra_bank(
                     ) from e
                 raise
 
-            # TRANSACTION 2건 — 출금(-X), 입금(+X)
+            # TRANSACTION 2건 — 출금(-X) 통장엔 withdraw_memo, 입금(+X) 통장엔 deposit_memo
             tx_id_withdraw = await conn.fetchval(
                 'INSERT INTO public."TRANSACTION" ('
                 '  "ACCOUNT_NO", "TX_DATETIME", "TX_TYPE_CD", "TX_AMOUNT", '
@@ -399,7 +407,7 @@ async def _process_intra_bank(
                 to_bank_cd,
                 to_row["ACCOUNT_HOLDER_NAME"],
                 transfer_id,
-                memo,
+                withdraw_memo,
             )
             await conn.execute(
                 'INSERT INTO public."TRANSACTION" ('
@@ -417,7 +425,7 @@ async def _process_intra_bank(
                 OWN_BANK_CODE,
                 from_row["ACCOUNT_HOLDER_NAME"],
                 transfer_id,
-                memo,
+                deposit_memo,
             )
 
             # ACCOUNT BALANCE atomic UPDATE
@@ -464,7 +472,8 @@ async def _process_inter_bank(
     to_account_no: str,
     to_holder_name: str | None,
     amount_krw: int,
-    memo: str | None,
+    withdraw_memo: str | None,
+    deposit_memo: str | None,
     idempotency_key: str,
     settlement_type: str,
     customer_no: int,
@@ -496,6 +505,7 @@ async def _process_inter_bank(
                 )
 
             try:
+                transfer_memo = withdraw_memo or deposit_memo
                 transfer_id = await conn.fetchval(
                     'INSERT INTO public."TRANSFER" ('
                     '  "WITHDRAW_ACCOUNT_NO", "WITHDRAW_BANK_CD", "WITHDRAW_HOLDER_NAME", '
@@ -503,10 +513,11 @@ async def _process_inter_bank(
                     '  "ENTERED_HOLDER_NAME", "TRANSFER_AMOUNT", "FEE", '
                     '  "REQUEST_DATETIME", "TRANSFER_TYPE_CD", "TRANSFER_STATUS_CD", '
                     '  "SETTLEMENT_TYPE", "SETTLEMENT_STATUS", "SETTLEMENT_REQUESTED_AT", '
-                    '  "TRANSFER_MEMO", "IDEMPOTENCY_KEY", "CANCEL_YN", "DELETE_YN"'
+                    '  "WITHDRAW_MEMO", "DEPOSIT_MEMO", "TRANSFER_MEMO", '
+                    '  "IDEMPOTENCY_KEY", "CANCEL_YN", "DELETE_YN"'
                     ") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'PENDING', "
                     "          $11, 'PENDING', NOW(), "
-                    "          $12, $13, 'N', 'N') "
+                    "          $12, $13, $14, $15, 'N', 'N') "
                     'RETURNING "TRANSFER_ID"',
                     from_account_no,
                     OWN_BANK_CODE,
@@ -519,7 +530,9 @@ async def _process_inter_bank(
                     now_str,
                     type_cd,
                     settlement_type,  # KFTC_SMALL / BOK_LARGE
-                    memo,
+                    withdraw_memo,
+                    deposit_memo,
+                    transfer_memo,
                     idempotency_key,
                 )
             except Exception as e:
@@ -548,7 +561,7 @@ async def _process_inter_bank(
                 to_bank_cd,
                 to_holder_name,
                 transfer_id,
-                memo,
+                withdraw_memo,
             )
             await conn.execute(
                 'UPDATE public."ACCOUNT" SET "BALANCE" = "BALANCE" - $1, '
@@ -767,7 +780,8 @@ class TransferRow:
     deposit_holder_name: str | None
     amount: int
     fee: int
-    memo: str | None
+    withdraw_memo: str | None
+    deposit_memo: str | None
     request_dt: datetime | None
     complete_dt: datetime | None
     transfer_type_cd: str | None
@@ -794,7 +808,8 @@ async def fetch_transfer_by_tx(tx_id: int, customer_no: int) -> TransferRow:
             'SELECT "TRANSFER_ID", "WITHDRAW_ACCOUNT_NO", "WITHDRAW_BANK_CD", '
             '"WITHDRAW_BANK_NAME", "WITHDRAW_HOLDER_NAME", "DEPOSIT_ACCOUNT_NO", '
             '"DEPOSIT_BANK_CD", "DEPOSIT_BANK_NAME", "DEPOSIT_HOLDER_NAME", '
-            '"TRANSFER_AMOUNT", "FEE", "TRANSFER_MEMO", "REQUEST_DATETIME", '
+            '"TRANSFER_AMOUNT", "FEE", "WITHDRAW_MEMO", "DEPOSIT_MEMO", '
+            '"TRANSFER_MEMO", "REQUEST_DATETIME", '
             '"COMPLETE_DATETIME", "TRANSFER_TYPE_CD", "TRANSFER_STATUS_CD", '
             '"COUNTERPART_APPROVAL_NO" '
             'FROM public."TRANSFER" WHERE "TRANSFER_ID" = $1',
@@ -814,7 +829,9 @@ async def fetch_transfer_by_tx(tx_id: int, customer_no: int) -> TransferRow:
         deposit_holder_name=tr["DEPOSIT_HOLDER_NAME"],
         amount=int(tr["TRANSFER_AMOUNT"] or 0),
         fee=int(tr["FEE"] or 0),
-        memo=tr["TRANSFER_MEMO"],
+        # 분리 컬럼 우선, 없으면 (구 데이터) TRANSFER_MEMO 로 폴백
+        withdraw_memo=tr["WITHDRAW_MEMO"] or tr["TRANSFER_MEMO"],
+        deposit_memo=tr["DEPOSIT_MEMO"] or tr["TRANSFER_MEMO"],
         request_dt=_parse_dt(tr["REQUEST_DATETIME"]),
         complete_dt=_parse_dt(tr["COMPLETE_DATETIME"]),
         transfer_type_cd=tr["TRANSFER_TYPE_CD"],

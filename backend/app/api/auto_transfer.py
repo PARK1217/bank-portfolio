@@ -93,7 +93,8 @@ async def register_auto(
         monthly_exec_day=req.monthly_exec_day,
         valid_start_date=req.valid_start_date,
         valid_end_date=req.valid_end_date,
-        memo=req.memo,
+        withdraw_memo=req.withdraw_memo,
+        deposit_memo=req.deposit_memo,
         tokens=tokens,
     )
     log.info("auto_transfer_registered", cycle=req.cycle_type_cd)
@@ -190,7 +191,8 @@ async def register_scheduled(
         to_holder_name=req.to_holder_name,
         amount_krw=req.amount_krw,
         scheduled_at=req.scheduled_at,
-        memo=req.memo,
+        withdraw_memo=req.withdraw_memo,
+        deposit_memo=req.deposit_memo,
         tokens=tokens,
     )
     return AutoTransferResponse(auto_token=token, next_execute_at=when)

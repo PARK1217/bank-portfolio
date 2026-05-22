@@ -78,7 +78,8 @@ function TransferForm() {
   const [toAccount, setToAccount] = useState<string>(prefillToAccount.replace(/-/g, ""));
   const [toHolder, setToHolder] = useState<string>(prefillToHolder);
   const [amount, setAmount] = useState<string>("");
-  const [memo, setMemo] = useState<string>("");
+  const [withdrawMemo, setWithdrawMemo] = useState<string>("");
+  const [depositMemo, setDepositMemo] = useState<string>("");
 
   // 입금 계좌 verify — 당행 즉시 DB / 타행 Kafka request-reply 3s.
   // 응답에 따라 예금주 자동 표시 + 미존재 시 "다음" 버튼 차단.
@@ -181,7 +182,8 @@ function TransferForm() {
       to_account_no: verifiedAccountNo || toAccount,
       to_holder_name: toHolder || null,
       amount_krw: amountNum,
-      memo: memo || null,
+      withdraw_memo: withdrawMemo || null,
+      deposit_memo: depositMemo || null,
     });
     router.push("/transfer/confirm");
   }
@@ -301,12 +303,21 @@ function TransferForm() {
             ) : null}
           </Field>
 
-          <Field label="메모 (선택)">
+          <Field label="내 통장 메모 (선택)">
             <Input
               maxLength={30}
-              placeholder="입금 받는 분이 보는 메모"
-              value={memo}
-              onChange={(e) => setMemo(e.target.value)}
+              placeholder="내 통장 거래내역에 표시"
+              value={withdrawMemo}
+              onChange={(e) => setWithdrawMemo(e.target.value)}
+            />
+          </Field>
+
+          <Field label="받는 분 통장 메모 (선택)">
+            <Input
+              maxLength={30}
+              placeholder="상대방 통장에 표시"
+              value={depositMemo}
+              onChange={(e) => setDepositMemo(e.target.value)}
             />
           </Field>
 

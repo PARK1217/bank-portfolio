@@ -70,7 +70,8 @@ async def _fetch_active() -> list[dict]:
             'SELECT "AUTO_TRANSFER_ID", "CUSTOMER_NO", "WITHDRAW_ACCOUNT_NO", '
             '       "DEPOSIT_ACCOUNT_NO", "DEPOSIT_BANK_CD", "DEPOSIT_HOLDER_NAME", '
             '       "TRANSFER_AMOUNT", "CYCLE_TYPE_CD", "MONTHLY_EXEC_DAY", '
-            '       "VALID_START_DATE", "VALID_END_DATE", "WITHDRAW_MEMO" '
+            '       "VALID_START_DATE", "VALID_END_DATE", '
+            '       "WITHDRAW_MEMO", "DEPOSIT_MEMO" '
             'FROM public."AUTO_TRANSFER" '
             "WHERE \"AUTO_STATUS_CD\" = 'ACTIVE' AND \"DELETE_YN\" = 'N'"
         )
@@ -171,7 +172,8 @@ async def _try_execute(row: dict, now: datetime) -> str:
                 to_bank_cd=to_bank,
                 to_holder_name=row["DEPOSIT_HOLDER_NAME"],
                 amount_krw=amount,
-                memo=row["WITHDRAW_MEMO"],
+                withdraw_memo=row["WITHDRAW_MEMO"],
+                deposit_memo=row["DEPOSIT_MEMO"],
                 idempotency_key=idem,
             )
         elif amount >= LARGE_AMOUNT_THRESHOLD:
@@ -194,7 +196,8 @@ async def _try_execute(row: dict, now: datetime) -> str:
                 to_account_no=row["DEPOSIT_ACCOUNT_NO"],
                 to_holder_name=row["DEPOSIT_HOLDER_NAME"],
                 amount_krw=amount,
-                memo=row["WITHDRAW_MEMO"],
+                withdraw_memo=row["WITHDRAW_MEMO"],
+                deposit_memo=row["DEPOSIT_MEMO"],
                 idempotency_key=idem,
                 settlement_type=settlement_type,
                 customer_no=customer_no,
@@ -207,7 +210,8 @@ async def _try_execute(row: dict, now: datetime) -> str:
                 to_account_no=row["DEPOSIT_ACCOUNT_NO"],
                 to_holder_name=row["DEPOSIT_HOLDER_NAME"],
                 amount_krw=amount,
-                memo=row["WITHDRAW_MEMO"],
+                withdraw_memo=row["WITHDRAW_MEMO"],
+                deposit_memo=row["DEPOSIT_MEMO"],
                 idempotency_key=idem,
                 settlement_type=settlement_type,
                 customer_no=customer_no,

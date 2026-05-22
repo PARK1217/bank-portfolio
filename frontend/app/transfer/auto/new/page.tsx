@@ -99,7 +99,8 @@ function NewAutoTransferForm() {
   const [dayOfWeek, setDayOfWeek] = useState("MON");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  const [memo, setMemo] = useState("");
+  const [withdrawMemo, setWithdrawMemo] = useState("");
+  const [depositMemo, setDepositMemo] = useState("");
   const [linkedTo, setLinkedTo] = useState<"USER" | "INSTALLMENT" | "LOAN" | "UTILITY">("USER");
   const [submitting, setSubmitting] = useState(false);
 
@@ -210,7 +211,8 @@ function NewAutoTransferForm() {
           schedule_rule,
           valid_start_date: startDate,
           valid_end_date: endDate || null,
-          memo: memo || null,
+          withdraw_memo: withdrawMemo || null,
+          deposit_memo: depositMemo || null,
           linked_to: linkedTo,
           linked_id: null,
         },
@@ -434,8 +436,22 @@ function NewAutoTransferForm() {
             </select>
           </Field>
 
-          <Field label="메모 (선택)">
-            <Input maxLength={100} value={memo} onChange={(e) => setMemo(e.target.value)} />
+          <Field label="내 통장 메모 (선택)">
+            <Input
+              maxLength={100}
+              placeholder="내 통장 거래내역에 표시"
+              value={withdrawMemo}
+              onChange={(e) => setWithdrawMemo(e.target.value)}
+            />
+          </Field>
+
+          <Field label="받는 분 통장 메모 (선택)">
+            <Input
+              maxLength={100}
+              placeholder="상대방 통장에 표시"
+              value={depositMemo}
+              onChange={(e) => setDepositMemo(e.target.value)}
+            />
           </Field>
 
           <Button
