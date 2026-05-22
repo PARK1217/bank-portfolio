@@ -311,9 +311,15 @@ export default function RepaymentDetailPage() {
                     </THead>
                     <TBody>
                       {data.schedules.map((s) => {
-                        // SCHEDULE.actual_repay_id ↔ HISTORY.repay_seq (PK) 매칭.
-                        // 1:1 매칭 — 매칭된 HISTORY 가 없으면 null.
-                        const h = data.history.find((h) => h.repay_seq === s.actual_repay_id) ?? null;
+                        // 1차: SCHEDULE.actual_repay_id ↔ HISTORY.repay_seq (PK) 직접 매핑.
+                        // 2차 폴백: HISTORY.schedule_ref ↔ SCHEDULE.installment_no — 시드 데이터처럼
+                        // SCHEDULE.actual_repay_id 가 NULL 이지만 HISTORY 쪽이 회차를 가리키는 경우.
+                        const h =
+                          data.history.find((h) => h.repay_seq === s.actual_repay_id) ??
+                          data.history.find(
+                            (h) => h.schedule_ref === s.installment_no && h.repay_status_cd === "OK",
+                          ) ??
+                          null;
                         return <CombinedRow key={s.installment_no} s={s} h={h} />;
                       })}
                     </TBody>
@@ -325,10 +331,16 @@ export default function RepaymentDetailPage() {
 
           {/* 매칭 안 된 잔여 이력 (취소·중도상환 등 회차 외 처리) */}
           {(() => {
-            const matchedSeqs = new Set(
+            // 양방향 매칭 — actual_repay_id 또는 schedule_ref 로 회차에 묶인 것 제외.
+            const installmentSet = new Set(data.schedules.map((s) => s.installment_no));
+            const matchedRepaySeqs = new Set(
               data.schedules.map((s) => s.actual_repay_id).filter((v): v is number => v != null),
             );
-            const orphan = data.history.filter((h) => !matchedSeqs.has(h.repay_seq));
+            const orphan = data.history.filter(
+              (h) =>
+                !matchedRepaySeqs.has(h.repay_seq) &&
+                !(h.repay_status_cd === "OK" && h.schedule_ref != null && installmentSet.has(h.schedule_ref)),
+            );
             if (orphan.length === 0) return null;
             return (
               <Card>
