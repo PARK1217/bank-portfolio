@@ -45,20 +45,20 @@ export default function DashboardPage() {
 
         const decisions: DecisionItem[] = decisionsRaw.items.map(mapDecisionItem);
 
-        const today = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+        // created_at 은 백엔드가 ISO("2026-05-22T...") 와 VARCHAR("20260522...") 둘 다 반환 가능 — 양쪽 prefix 매칭.
+        const todayIso = new Date().toISOString().slice(0, 10);     // "2026-05-22"
+        const todayCompact = todayIso.replace(/-/g, "");            // "20260522"
         const todayDecisions = decisions.filter(
-          (d) => d.created_at && d.created_at.slice(0, 8) === today,
+          (d) => !!d.created_at && (d.created_at.startsWith(todayIso) || d.created_at.startsWith(todayCompact)),
         );
         const autoA = todayDecisions.filter((d) => d.decision_cd === "AUTO_APPROVE").length;
         const autoR = todayDecisions.filter((d) => d.decision_cd === "AUTO_REJECT").length;
         const upCount = health.items.filter((h) => h.status_cd === "UP").length;
 
-        // 일자가 ISO/14자 모두 가능 — slice(0,8) 매칭 안 되면 fallback 으로 오늘 전체로 표시
-        const todayMatched = todayDecisions.length > 0;
         setData({
           reviewQueueCount: queueRaw.count,
-          todayAutoApprove: todayMatched ? autoA : decisions.filter((d) => d.decision_cd === "AUTO_APPROVE").length,
-          todayAutoReject: todayMatched ? autoR : decisions.filter((d) => d.decision_cd === "AUTO_REJECT").length,
+          todayAutoApprove: autoA,
+          todayAutoReject: autoR,
           overdueCount: overdueRaw.count,
           healthUp: upCount,
           healthTotal: health.items.length,
