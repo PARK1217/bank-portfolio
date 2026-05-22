@@ -8,6 +8,7 @@ import { Protected } from "@/components/protected";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
+import { StagedLoader } from "@/components/staged-loader";
 import { api } from "@/lib/api";
 import { showApiError } from "@/lib/toast";
 import { cn } from "@/lib/utils";
@@ -66,6 +67,18 @@ const TIER_BADGE: Record<string, { label: string; color: string }> = {
   FAQ: { label: "FAQ", color: "bg-success/15 text-success" },
   VECTOR: { label: "약관 검색", color: "bg-primary/15 text-primary" },
 };
+
+// LLM 응답 대기 중 단계별 메시지 — 단조로운 "답변 생성 중…" 대신 사용자에게
+// 진행 단계를 짐작할 단서 제공. 3-tier RAG 순서(키워드 → FAQ → 약관 검색 → LLM 합성)
+// 와 대략 매칭. 마지막 메시지는 작업이 길어져도 그대로 머무름.
+const CHATBOT_LOADING_MESSAGES = [
+  "질문 이해 중…",
+  "관련 FAQ 와 약관 찾는 중…",
+  "찾은 내용 비교·정렬하고 있어요",
+  "이건 좀 깊게 들어가야 할 것 같네요",
+  "답변 정리하는 중…",
+];
+
 
 const CONFIDENCE_BADGE: Record<string, { label: string; color: string }> = {
   HIGH: { label: "신뢰도 높음", color: "text-success" },
@@ -207,9 +220,12 @@ function ChatScreen() {
           ))
         )}
         {sending ? (
-          <div className="flex items-center gap-2 px-2 text-xs text-muted-foreground">
-            <Spinner size="sm" />
-            <span>답변 생성 중…</span>
+          <div className="px-2">
+            <StagedLoader
+              messages={CHATBOT_LOADING_MESSAGES}
+              intervalMs={2500}
+              className="text-xs"
+            />
           </div>
         ) : null}
       </div>
