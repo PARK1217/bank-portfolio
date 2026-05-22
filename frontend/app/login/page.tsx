@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
-import { api } from "@/lib/api";
+import { toast } from "sonner";
+import { api, ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { showApiError } from "@/lib/toast";
 import { Button } from "@/components/ui/button";
@@ -49,6 +50,13 @@ function LoginForm() {
       const next = safeNextPath(searchParams.get("next"));
       router.push(res.requires_device_otp ? "/setup/otp" : next);
     } catch (err) {
+      if (err instanceof ApiError && err.code === "E_ACCOUNT_LOCKED") {
+        toast.error(err.message, {
+          description: "비밀번호 재설정 화면으로 이동해요.",
+        });
+        router.push("/password/reset");
+        return;
+      }
       showApiError(err, "로그인에 실패했습니다.");
     } finally {
       setLoading(false);

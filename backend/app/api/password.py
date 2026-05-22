@@ -259,9 +259,14 @@ async def reset_password(req: ResetRequest) -> ResetResponse:
 
     pool = get_pool()
     async with pool.acquire() as conn:
+        # 비번 재설정과 함께 로그인 잠금 해제: LOGIN_FAIL_COUNT=0 + 5052(잠금)→5050(정상) 복원.
         await conn.execute(
             'UPDATE public."CUSTOMER" '
-            'SET "PASSWORD" = $1, "UPDATED_AT" = NOW() '
+            'SET "PASSWORD" = $1, '
+            '    "LOGIN_FAIL_COUNT" = 0, '
+            '    "CUST_STATUS_CD" = CASE WHEN "CUST_STATUS_CD" = \'5052\' '
+            '                            THEN \'5050\' ELSE "CUST_STATUS_CD" END, '
+            '    "UPDATED_AT" = NOW() '
             'WHERE "CUSTOMER_NO" = $2 AND "DELETE_YN" = \'N\'',
             hash_password(req.new_password),
             sess["customer_no"],

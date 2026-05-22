@@ -15,6 +15,7 @@ E_EXTERNAL = "E_EXTERNAL"                        # 502 (LLM / 마이데이터 / 
 
 # 인증
 E_UNAUTHORIZED = "E_UNAUTHORIZED"                # 401
+E_ACCOUNT_LOCKED = "E_ACCOUNT_LOCKED"            # 401 (5회 연속 실패 → 잠금, 비번 재설정 필요)
 
 # 공통 비즈니스
 E_NOT_FOUND = "E_NOT_FOUND"                      # 404 (본인 외 자원 접근 포함)

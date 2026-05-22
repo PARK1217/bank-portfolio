@@ -15,7 +15,12 @@ import structlog
 from fastapi import APIRouter, Depends
 
 from ..db import get_pool
-from ..errors import E_OTP_ALREADY_ACTIVE, E_UNAUTHORIZED, E_VALIDATION
+from ..errors import (
+    E_ACCOUNT_LOCKED,
+    E_OTP_ALREADY_ACTIVE,
+    E_UNAUTHORIZED,
+    E_VALIDATION,
+)
 from ..exceptions import AuthError, BusinessError, ConflictError
 from ..schema.auth import (
     LoginRequest,
@@ -41,6 +46,19 @@ log = structlog.get_logger("auth")
 
 # 사용자 열거 공격 방지 — 이메일/비번 실패 메시지 통일.
 _LOGIN_FAIL_MSG = "이메일 또는 비밀번호가 일치하지 않습니다."
+_LOGIN_LOCK_MSG = (
+    "5회 연속 실패로 계정이 잠겼어요. "
+    "비밀번호 재설정 후 다시 로그인해주세요."
+)
+_LOGIN_MAX_ATTEMPTS = 5
+
+# 미가입 이메일에 대한 카운트 (in-memory) — 사용자 열거 방지 차원에서 UX 일관 유지.
+# 등록된 이메일은 CUSTOMER.LOGIN_FAIL_COUNT 컬럼에 영구화.
+_unknown_email_fail_count: dict[str, int] = {}
+
+
+def _fail_msg(count: int) -> str:
+    return f"{_LOGIN_FAIL_MSG} ({count}/{_LOGIN_MAX_ATTEMPTS})"
 
 
 @router.post("/login", response_model=LoginResponse)
@@ -51,20 +69,56 @@ async def login(
     pool = get_pool()
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
-            'SELECT "CUSTOMER_NO", "PASSWORD", "CUST_STATUS_CD", "DELETE_YN" '
+            'SELECT "CUSTOMER_NO", "PASSWORD", "CUST_STATUS_CD", "DELETE_YN", '
+            '       COALESCE("LOGIN_FAIL_COUNT", 0) AS fail_count '
             'FROM public."CUSTOMER" WHERE "EMAIL" = $1',
             req.email,
         )
 
+    # 미가입 이메일 — in-memory 카운트만, 영구 잠금 없음.
     if row is None or row["DELETE_YN"] == "Y":
-        raise AuthError(E_UNAUTHORIZED, _LOGIN_FAIL_MSG)
+        nxt = _unknown_email_fail_count.get(req.email, 0) + 1
+        _unknown_email_fail_count[req.email] = nxt
+        # UX 일관: 5회 도달해도 잠금 동선 진입 X (실제 잠금 대상 없음), 카운트만 그대로.
+        raise AuthError(E_UNAUTHORIZED, _fail_msg(min(nxt, _LOGIN_MAX_ATTEMPTS)))
+
+    # 이미 잠긴 계정 — 비번 정합 여부 상관없이 즉시 잠금 응답.
+    if row["CUST_STATUS_CD"] == "5052":
+        raise AuthError(E_ACCOUNT_LOCKED, _LOGIN_LOCK_MSG)
+
     if not verify_password(req.password, row["PASSWORD"] or ""):
-        raise AuthError(E_UNAUTHORIZED, _LOGIN_FAIL_MSG)
+        # 비번 불일치 — DB LOGIN_FAIL_COUNT++ 후 5도달 시 잠금 발동.
+        new_count = int(row["fail_count"]) + 1
+        async with pool.acquire() as conn:
+            if new_count >= _LOGIN_MAX_ATTEMPTS:
+                await conn.execute(
+                    'UPDATE public."CUSTOMER" '
+                    'SET "LOGIN_FAIL_COUNT" = $1, "CUST_STATUS_CD" = \'5052\' '
+                    'WHERE "CUSTOMER_NO" = $2',
+                    new_count, int(row["CUSTOMER_NO"]),
+                )
+                raise AuthError(E_ACCOUNT_LOCKED, _LOGIN_LOCK_MSG)
+            await conn.execute(
+                'UPDATE public."CUSTOMER" SET "LOGIN_FAIL_COUNT" = $1 '
+                'WHERE "CUSTOMER_NO" = $2',
+                new_count, int(row["CUSTOMER_NO"]),
+            )
+        raise AuthError(E_UNAUTHORIZED, _fail_msg(new_count))
+
     if row["CUST_STATUS_CD"] != "5050":
         # 5051=휴면 / 5053=탈퇴. 상태별 메시지/복구 흐름은 명세 시트 확정 후 분기.
         raise AuthError(E_UNAUTHORIZED, "사용할 수 없는 계정입니다.")
 
     customer_no = int(row["CUSTOMER_NO"])
+    # 정상 로그인 — 누적 카운트 초기화 + 미가입 in-memory 도 정리(같은 이메일 재시도 흔적 제거).
+    if int(row["fail_count"]) > 0:
+        async with pool.acquire() as conn:
+            await conn.execute(
+                'UPDATE public."CUSTOMER" SET "LOGIN_FAIL_COUNT" = 0 '
+                'WHERE "CUSTOMER_NO" = $1',
+                customer_no,
+            )
+    _unknown_email_fail_count.pop(req.email, None)
     token, expires_in = issue_access_token(customer_no)
 
     # 마지막 접속 일시 업데이트 — CUSTOMER.LAST_ACCESS_DT 형식: yyyymmddhhmmss
