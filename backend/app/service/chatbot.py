@@ -439,6 +439,47 @@ async def chat_send(
 # FAQ 목록 / 약관 검색 / 출처 조회 / 피드백
 # ---------------------------------------------------------------------------
 
+def list_sessions(customer_no: int) -> list[dict]:
+    """본인의 챗봇 세션 목록 — SCR-CB-004 history 화면용.
+
+    `_SESSIONS` in-memory dict 라 backend reload 시 유실. v53 AI_CHATBOT_SESSION
+    DB 영구화는 후속 작업 인계 노트 참조.
+    """
+    out = []
+    for sid, sess in _SESSIONS.items():
+        if sess["customer_no"] != customer_no:
+            continue
+        msgs = sess.get("messages") or []
+        last_snippet = None
+        for m in reversed(msgs):
+            if m.get("role_cd") == "ASSISTANT" and m.get("content"):
+                last_snippet = m["content"][:80]
+                break
+        if last_snippet is None and msgs:
+            last_snippet = (msgs[-1].get("content") or "")[:80]
+        out.append({
+            "session_id": int(sid),
+            "started_at": sess.get("started_at"),
+            "ended_at": None,
+            "status_cd": "ACTIVE",
+            "last_message_snippet": last_snippet,
+        })
+    # 최신순
+    out.sort(key=lambda x: (x["started_at"] or datetime.min), reverse=True)
+    return out
+
+
+def get_session(customer_no: int, session_id: int) -> dict:
+    """세션 상세 — 본인 검증 후 messages 전체 반환."""
+    sess = _SESSIONS.get(session_id)
+    if not sess or sess["customer_no"] != customer_no:
+        raise NotFoundError(E_NOT_FOUND, "세션을 찾을 수 없습니다.")
+    return {
+        "session_id": int(session_id),
+        "messages": list(sess.get("messages") or []),
+    }
+
+
 def list_faq(category: str | None) -> list[dict]:
     items = _FAQ_CORPUS if category is None else [
         f for f in _FAQ_CORPUS if f["category"] == category

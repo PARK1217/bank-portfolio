@@ -31,8 +31,10 @@ from ..schema.chatbot import (
 from ..service.auth import CurrentCustomer, current_customer, get_token_service
 from ..service.chatbot import (
     chat_send,
+    get_session,
     get_source,
     list_faq,
+    list_sessions,
     search_terms,
 )
 from ..service.chatbot_feedback import submit_feedback_db
@@ -125,6 +127,89 @@ async def post_feedback(
 ) -> dict:
     await submit_feedback_db(user.customer_no, req.message_id, req.rating, req.comment)
     return {"received": True}
+
+
+# ---------------------------------------------------------------------------
+# 세션 목록·상세 (SCR-CB-004 history + chat 페이지의 기존 세션 히스토리 로드)
+# ---------------------------------------------------------------------------
+
+@router.get("/sessions")
+async def get_sessions_list(
+    user: CurrentCustomer = Depends(current_customer),
+) -> dict:
+    items = list_sessions(user.customer_no)
+    return {"sessions": items}
+
+
+@router.get("/sessions/{session_id}")
+async def get_session_detail(
+    session_id: int,
+    user: CurrentCustomer = Depends(current_customer),
+) -> dict:
+    return get_session(user.customer_no, session_id)
+
+
+# ---------------------------------------------------------------------------
+# 프론트 path 별칭 — 화면이 호출하는 path 와 백엔드 path 가 어긋난 케이스 정합
+# ---------------------------------------------------------------------------
+
+@router.get("/terms-search", response_model=TermsSearchResponse)
+async def get_terms_search_alias(
+    query: str = Query(..., min_length=1),
+    user: CurrentCustomer = Depends(current_customer),
+    tokens: TokenService = Depends(get_token_service),
+) -> TermsSearchResponse:
+    """frontend `chatbot/terms-search/page.tsx` 가 `?query=` 로 호출하는 경로."""
+    items = await search_terms(query, tokens, user.customer_no)
+    return TermsSearchResponse(
+        query=query,
+        items=[TermsSearchItem(**i) for i in items],
+    )
+
+
+@router.get("/source/{doc_token}", response_model=ChatSourceResponse)
+async def get_chat_source_alias(
+    doc_token: str,
+    user: CurrentCustomer = Depends(current_customer),
+    tokens: TokenService = Depends(get_token_service),
+) -> ChatSourceResponse:
+    """frontend `chatbot/source/[docToken]/page.tsx` 가 단수형으로 호출."""
+    src = await get_source(doc_token, tokens, user.customer_no)
+    return ChatSourceResponse(
+        doc_token=src["doc_token"],
+        terms_id=src["terms_id"],
+        title=src["title"],
+        version=src["version"],
+        effective_date=src["effective_date"],
+        clauses=[ChatSourceClause(**c) for c in src["clauses"]],
+    )
+
+
+# ---------------------------------------------------------------------------
+# 상담원 연결 (SCR-CB-006 handoff) — 시연용 mock
+# ---------------------------------------------------------------------------
+
+@router.post("/handoff")
+async def post_handoff(
+    body: dict,
+    user: CurrentCustomer = Depends(current_customer),
+) -> dict:
+    """상담원 연결 신청 mock. COMPLAINT 시스템 전체가 미구현이라 token 만 반환.
+
+    실제 흐름이 동작하려면 backend 의 `complaints` 라우터 + COMPLAINT 테이블 시드 필요.
+    프론트 `/complaints/{token}` 페이지는 backend 미구현으로 404 떨어짐 (WORKBOARD 인계).
+    """
+    import uuid
+    complaint_token = uuid.uuid4().hex
+    log.info(
+        "chatbot_handoff_mock",
+        customer_no=user.customer_no,
+        session_id=body.get("session_id"),
+        category=body.get("category"),
+        content_len=len(body.get("content") or ""),
+        complaint_token=complaint_token,
+    )
+    return {"complaint_token": complaint_token}
 
 
 @router.get("/suggestions", response_model=ChatSuggestionsResponse)
