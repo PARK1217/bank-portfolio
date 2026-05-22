@@ -14,13 +14,25 @@ import { showApiError } from "@/lib/toast";
 /** SCR-AU-011 비밀번호 찾기·재설정. 본인인증 → 새 비밀번호 설정. */
 
 
+// 본인인증 mock 인증번호 — 운영 전환 시 인증사 문자로 대체.
+const MOCK_AUTH_CODE = "123456";
+
+const CARRIERS: { code: string; label: string }[] = [
+  { code: "SKT", label: "SKT" },
+  { code: "KT", label: "KT" },
+  { code: "LGU", label: "LG U+" },
+  { code: "MVNO", label: "알뜰폰(MVNO)" },
+];
+
 export default function Page() {
   const router = useRouter();
   const [stage, setStage] = useState<"IDENT" | "AUTH" | "RESET" | "DONE">("IDENT");
   const [email, setEmail] = useState("");
+  const [name, setName] = useState("");
+  const [birthDate, setBirthDate] = useState("");
+  const [carrier, setCarrier] = useState("SKT");
   const [phone, setPhone] = useState("");
   const [authCode, setAuthCode] = useState("");
-  const [devAuthCode, setDevAuthCode] = useState<string | null>(null);
   const [verificationId, setVerificationId] = useState("");
   const [newPw, setNewPw] = useState("");
   const [newPwConfirm, setNewPwConfirm] = useState("");
@@ -39,17 +51,21 @@ export default function Page() {
     if (loading) return;
     setLoading(true);
     try {
-      const res = await api.post<{ sent: boolean; dev_auth_code?: string | null }>(
+      await api.post<{ sent: boolean }>(
         "/api/password/reset/init",
-        { email, phone },
+        {
+          email,
+          name: name.trim(),
+          birth_date: birthDate.replace(/[^0-9]/g, ""),
+          carrier,
+          phone,
+        },
         { token: null },
       );
-      const code = res.dev_auth_code ?? null;
-      setDevAuthCode(code);
       setStage("AUTH");
-      if (code) {
-        toast.info(`인증번호: ${code}`, { description: "mock SMS — 운영 전환 시 본인인증사로 대체됩니다." });
-      }
+      toast.info("인증번호를 발송했어요.", {
+        description: "mock 환경 — 화면 안내의 6자리 코드를 그대로 입력하세요.",
+      });
     } catch (err) {
       showApiError(err, "본인 확인을 시작하지 못했습니다.");
     } finally {
@@ -123,10 +139,53 @@ export default function Page() {
                 <Input type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
               </label>
               <label className="block space-y-1.5">
-                <span className="text-xs text-muted-foreground">휴대폰 *</span>
-                <Input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} required />
+                <span className="text-xs text-muted-foreground">이름 *</span>
+                <Input
+                  autoComplete="name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                />
               </label>
-              <Button type="submit" className="w-full" disabled={loading}>
+              <label className="block space-y-1.5">
+                <span className="text-xs text-muted-foreground">생년월일 (8자리) *</span>
+                <Input
+                  inputMode="numeric"
+                  autoComplete="bday"
+                  placeholder="19820315"
+                  maxLength={8}
+                  value={birthDate}
+                  onChange={(e) => setBirthDate(e.target.value.replace(/[^0-9]/g, "").slice(0, 8))}
+                  pattern="\d{8}"
+                  required
+                />
+              </label>
+              <label className="block space-y-1.5">
+                <span className="text-xs text-muted-foreground">이동통신사 *</span>
+                <select
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                  value={carrier}
+                  onChange={(e) => setCarrier(e.target.value)}
+                >
+                  {CARRIERS.map((c) => (
+                    <option key={c.code} value={c.code}>
+                      {c.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block space-y-1.5">
+                <span className="text-xs text-muted-foreground">휴대폰 *</span>
+                <Input type="tel" autoComplete="tel" value={phone} onChange={(e) => setPhone(e.target.value)} required />
+              </label>
+              <p className="text-[11px] text-muted-foreground">
+                NICE·PASS 등 본인인증사 연동 자리예요. 시연 환경은 mock 검증으로 대체됩니다.
+              </p>
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={loading || !email || !name.trim() || birthDate.length !== 8 || !phone}
+              >
                 {loading ? "확인 중…" : "인증번호 발송"}
               </Button>
             </form>
@@ -135,13 +194,11 @@ export default function Page() {
           {stage === "AUTH" ? (
             <form onSubmit={verifyAuthCode} className="space-y-3">
               <p className="text-xs text-muted-foreground">{phone} 로 인증번호가 발송되었습니다.</p>
-              {devAuthCode ? (
-                <div className="rounded-md border border-dashed border-primary/40 bg-primary/5 p-3 text-center">
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground">mock SMS · 임시 안내</p>
-                  <p className="mt-1 font-mono text-2xl font-bold tracking-[0.4em] text-primary">{devAuthCode}</p>
-                  <p className="mt-1 text-[11px] text-muted-foreground">운영 전환 시 본인인증사 문자로 대체됩니다.</p>
-                </div>
-              ) : null}
+              <div className="rounded-md border border-dashed border-primary/40 bg-primary/5 p-3 text-center">
+                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">mock SMS · 시연용 안내</p>
+                <p className="mt-1 font-mono text-2xl font-bold tracking-[0.4em] text-primary">{MOCK_AUTH_CODE}</p>
+                <p className="mt-1 text-[11px] text-muted-foreground">운영 전환 시 본인인증사 문자로 대체됩니다.</p>
+              </div>
               <label className="block space-y-1.5">
                 <span className="text-xs text-muted-foreground">6자리 인증번호 *</span>
                 <Input

@@ -17,16 +17,22 @@ def issue_access_token(customer_no: int) -> tuple[str, int]:
     """JWT 발급. 반환: (token, expires_in_seconds).
 
     jti 클레임으로 토큰별 고유 ID 부여 — 로그아웃 시 해당 jti 만 블랙리스트 처리.
+    발급 시점에 (jti, customer_no, exp) 를 session 인덱스에 적재 — 비번 변경 등
+    customer 단위 일괄 폐기를 위해.
     """
+    from .session import record_issued
     now = datetime.now(timezone.utc)
     expires_in = settings.JWT_EXPIRE_MINUTES * 60
+    jti = uuid.uuid4().hex
+    exp_ts = int((now + timedelta(seconds=expires_in)).timestamp())
     payload = {
         "sub": str(customer_no),
-        "jti": uuid.uuid4().hex,
+        "jti": jti,
         "iat": int(now.timestamp()),
-        "exp": int((now + timedelta(seconds=expires_in)).timestamp()),
+        "exp": exp_ts,
     }
     token = pyjwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
+    record_issued(jti, customer_no, exp_ts)
     return token, expires_in
 
 
