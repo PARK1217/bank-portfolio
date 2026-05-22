@@ -27,9 +27,12 @@ import structlog
 from ..db import get_pool
 from ..errors import E_NOT_FOUND
 from ..exceptions import NotFoundError
+from ..observability import get_tracer
 from .chatbot_suggestions import follow_up_questions
 from .llm import chat_completion as _llm_chat_completion
 from .token import ResourceType, TokenService
+
+_tracer = get_tracer("banking.chatbot")
 
 log = structlog.get_logger("chatbot")
 
@@ -220,12 +223,19 @@ def corpora_stats() -> dict[str, int]:
 # 메시지 전송 (3-tier 매칭)
 # ---------------------------------------------------------------------------
 
+def _doc_metadata_json(category: str | None, question: str | None) -> str:
+    import json as _json
+    return _json.dumps({"category": category or "", "question": question or ""}, ensure_ascii=False)
+
+
 async def chat_send(
     customer_no: int,
     message: str,
     session_id: int | None,
     tokens: TokenService,
 ) -> dict:
+    # FastAPI 자동 span 이 root 역할. 여기선 retrieve / generate 두 sub span 으로 분리해
+    # Phoenix 의 RAG 트리 (RETRIEVER → LLM) 를 그린다. OpenInference 컨벤션 따름.
     if session_id is None or session_id not in _SESSIONS:
         session_id = _NEXT_SESSION_ID[0]
         _NEXT_SESSION_ID[0] += 1
@@ -250,19 +260,40 @@ async def chat_send(
     _NEXT_MESSAGE_ID[0] += 1
     sess["messages"].append(user_msg)
 
-    # 벡터 검색 — 코사인 거리 작을수록 의미가 가까움 (`<=>` 0 = 동일).
-    query_vec = _embed_query(message)
-    pool = get_pool()
-    async with pool.acquire() as conn:
-        rows = await conn.fetch(
-            'SELECT "FAQ_ID", "CATEGORY", "QUESTION", "ANSWER", '
-            '"EMBEDDING" <=> $1::vector AS distance '
-            'FROM public."AI_FAQ" '
-            'WHERE "STATUS_CD" = \'ACTIVE\' '
-            '  AND ("DELETE_YN" IS NULL OR "DELETE_YN" = \'N\') '
-            'ORDER BY distance LIMIT 5',
-            query_vec,
-        )
+    # 임베딩 + 벡터 검색 — Retriever span
+    with _tracer.start_as_current_span("chatbot.rag.retrieve") as retr:
+        retr.set_attribute("openinference.span.kind", "RETRIEVER")
+        retr.set_attribute("input.value", message[:2000])
+        retr.set_attribute("embedding.model_name", "jhgan/ko-sroberta-multitask")
+        retr.set_attribute("retrieval.top_k", 5)
+        retr.set_attribute("session.id", session_id)
+        retr.set_attribute("user.id", customer_no)
+        query_vec = _embed_query(message)
+        pool = get_pool()
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                'SELECT "FAQ_ID", "CATEGORY", "QUESTION", "ANSWER", '
+                '"EMBEDDING" <=> $1::vector AS distance '
+                'FROM public."AI_FAQ" '
+                'WHERE "STATUS_CD" = \'ACTIVE\' '
+                '  AND ("DELETE_YN" IS NULL OR "DELETE_YN" = \'N\') '
+                'ORDER BY distance LIMIT 5',
+                query_vec,
+            )
+        for i, r in enumerate(rows):
+            retr.set_attribute(f"retrieval.documents.{i}.document.id", str(r["FAQ_ID"]))
+            retr.set_attribute(
+                f"retrieval.documents.{i}.document.content",
+                (r["ANSWER"] or "")[:600],
+            )
+            retr.set_attribute(
+                f"retrieval.documents.{i}.document.score",
+                float(1.0 - float(r["distance"])),
+            )
+            retr.set_attribute(
+                f"retrieval.documents.{i}.document.metadata",
+                _doc_metadata_json(r["CATEGORY"], r["QUESTION"]),
+            )
 
     faq_hits = [r for r in rows if r["CATEGORY"] != "TERMS"]
     terms_hits = [r for r in rows if r["CATEGORY"] == "TERMS"]

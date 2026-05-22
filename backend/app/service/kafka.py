@@ -23,7 +23,10 @@ from typing import Any, Awaitable, Callable
 import structlog
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
 
+from ..observability import get_tracer
+
 log = structlog.get_logger("kafka")
+_tracer = get_tracer("banking.kafka")
 
 # 토픽 상수
 TOPIC_SETTLEMENT_REQUESTED = "transfer.settlement.requested"
@@ -81,12 +84,26 @@ async def send_event(topic: str, payload: dict[str, Any], key: str | None = None
     if _producer is None:
         log.warning("kafka_send_skipped_no_producer", topic=topic)
         return False
-    try:
-        await _producer.send_and_wait(topic, value=payload, key=key)
-        return True
-    except Exception as exc:
-        log.error("kafka_send_failed", topic=topic, error=str(exc))
-        return False
+    # OpenTelemetry messaging 컨벤션 — span.kind=PRODUCER 가 의미 있는 trace 트리.
+    with _tracer.start_as_current_span(f"kafka.publish {topic}") as span:
+        span.set_attribute("messaging.system", "kafka")
+        span.set_attribute("messaging.destination.name", topic)
+        span.set_attribute("messaging.operation", "publish")
+        if key:
+            span.set_attribute("messaging.kafka.message.key", str(key))
+        # 메시지 본문 일부 (debug 용, 너무 크면 잘림)
+        try:
+            import json as _json
+            span.set_attribute("messaging.message.body.preview", _json.dumps(payload, ensure_ascii=False)[:500])
+        except Exception:
+            pass
+        try:
+            await _producer.send_and_wait(topic, value=payload, key=key)
+            return True
+        except Exception as exc:
+            span.record_exception(exc)
+            log.error("kafka_send_failed", topic=topic, error=str(exc))
+            return False
 
 
 # ---------------------------------------------------------------------------

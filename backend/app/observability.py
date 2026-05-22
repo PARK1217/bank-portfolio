@@ -4,10 +4,16 @@
 register/exporter 초기화가 조용히 실패하도록 try/except 로 감싼다 — 트레이스가 안 보일 뿐
 서비스 자체는 계속 동작.
 
-작동:
-  1. `phoenix.otel.register(project_name=..., endpoint=...)` 로 글로벌 TracerProvider 설정
-  2. `FastAPIInstrumentor.instrument_app(app)` — 모든 라우트가 자동 span 캡처
-  3. `HTTPXClientInstrumentor().instrument()` — LLM 호출(Groq/Mistral/HF) httpx span 캡처
+자동 계측 4종
+  1. FastAPI — 모든 라우트가 자동 span (HTTP method/route/status)
+  2. HTTPX  — LLM 호출(Groq/Mistral/HF) 외부 httpx span
+  3. asyncpg — DB 쿼리 자동 span (SQL statement attr)
+  4. Phoenix register() — OTLP 글로벌 TracerProvider
+
+수동 계측 (각 모듈에서 `get_tracer()` 로 가져와 직접 span 생성)
+  - service/llm.py: LLM 호출에 OpenInference 의미 속성 부여
+  - service/chatbot.py: RAG 흐름(retrieve / generate) 부모-자식 span
+  - service/kafka.py: 메시지 publish span
 
 Phoenix UI: `http://localhost:6006` 에서 trace 확인.
 """
@@ -25,7 +31,7 @@ _initialized = False
 
 
 def init_tracing(app: FastAPI) -> bool:
-    """Phoenix OTLP exporter + FastAPI/HTTPX 자동 계측 등록.
+    """Phoenix OTLP exporter + FastAPI/HTTPX/asyncpg 자동 계측 등록.
 
     Returns:
         True 면 정상 등록, False 면 미설정 또는 실패(서비스 계속 정상 동작).
@@ -57,9 +63,41 @@ def init_tracing(app: FastAPI) -> bool:
         register(project_name=project, endpoint=f"{endpoint}/v1/traces")
         FastAPIInstrumentor.instrument_app(app)
         HTTPXClientInstrumentor().instrument()
+        # asyncpg 자동 계측 — DB 쿼리 SQL/duration/exception 캡처.
+        try:
+            from opentelemetry.instrumentation.asyncpg import AsyncPGInstrumentor
+            AsyncPGInstrumentor().instrument()
+        except Exception as e:  # pragma: no cover
+            log.warning("phoenix_asyncpg_instr_failed", error=str(e))
         _initialized = True
         log.info("phoenix_initialized", project=project, endpoint=endpoint)
         return True
     except Exception as e:
         log.warning("phoenix_init_failed", error=str(e))
         return False
+
+
+def get_tracer(name: str):
+    """모듈별 tracer — Phoenix 미가동이면 noop tracer 반환(서비스 영향 X)."""
+    try:
+        from opentelemetry import trace
+        return trace.get_tracer(name)
+    except Exception:  # pragma: no cover
+        from contextlib import contextmanager
+
+        class _NoopTracer:
+            @contextmanager
+            def start_as_current_span(self, name: str, **kw):  # type: ignore[no-untyped-def]
+                yield _NoopSpan()
+
+        class _NoopSpan:
+            def set_attribute(self, *a, **kw):  # type: ignore[no-untyped-def]
+                return None
+
+            def set_status(self, *a, **kw):  # type: ignore[no-untyped-def]
+                return None
+
+            def record_exception(self, *a, **kw):  # type: ignore[no-untyped-def]
+                return None
+
+        return _NoopTracer()
