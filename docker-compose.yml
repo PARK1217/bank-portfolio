@@ -18,9 +18,11 @@ services:
       - ./db/01_schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
       - ./db/02_seed.sql:/docker-entrypoint-initdb.d/02_seed.sql:ro
       # 시드 999999 (회귀 자격증명) PARTY 보강 — 02_seed 후순위 적재로 PARTY/INDIVIDUAL_PARTY/CUSTOMER UPDATE.
-      # 다른 db/0[3-9]*.sql, db/1[01]*.sql 은 외부 적용(`docker exec -i postgres psql ...`) 또는
-      # 마이그레이션 수동 워크플로우로 처리 — fresh init 자동 마운트 대상은 회귀 베이스라인만.
+      # 다른 db/0[3-9]*.sql, db/1[013]*.sql 은 외부 적용(`docker exec -i postgres psql ...`) 또는
+      # 마이그레이션 수동 워크플로우로 처리 — fresh init 자동 마운트 대상은 회귀 베이스라인 + 시연 필수 시드.
       - ./db/12_seed_999999_party.sql:/docker-entrypoint-initdb.d/12_seed_999999_party.sql:ro
+      # 시연용 HUMAN_REVIEW 큐 2건 (가이드 §9.2.6 사람+AI 협업 어필) — fresh init 자동 적용.
+      - ./db/14_human_review_seed.sql:/docker-entrypoint-initdb.d/14_human_review_seed.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U bank -d bank"]
       interval: 5s
