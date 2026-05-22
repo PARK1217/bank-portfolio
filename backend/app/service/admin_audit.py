@@ -41,6 +41,9 @@ _EXPLICIT_ACTIONS: dict[tuple[str, str], str] = {
     ("GET",  "/api/admin/loans/decisions"):                    "LOAN_DECISIONS_LIST",
     ("POST", "/api/admin/loans/:id/predict"):                  "LOAN_PREDICT",
     ("GET",  "/api/admin/loans/:id/attachments"):              "LOAN_ATTACHMENTS",
+    ("POST", "/api/admin/loans/:id/attachments/:id/verify"):   "LOAN_ATTACH_VERIFY",
+    ("POST", "/api/admin/loans/:id/attachments/:id/reject"):   "LOAN_ATTACH_REJECT",
+    ("GET",  "/api/admin/loans/:id/attachments/:id/file"):     "LOAN_ATTACH_FILE",
     ("POST", "/api/admin/loans/decisions/:id/review"):         "LOAN_HUMAN_REVIEW",
     ("GET",  "/api/admin/customers/overdue"):                  "OVERDUE_LIST",
     ("GET",  "/api/admin/customers/:id/overdue"):              "OVERDUE_DETAIL",
@@ -55,6 +58,9 @@ _TARGET_TABLE_RULES: list[tuple[re.Pattern[str], str, int | None]] = [
     # (pattern, target_table, group_index for TARGET_ID; None=ID 미사용)
     (re.compile(r"^/api/admin/loans/(\d+)/predict$"),                 "LOAN_APPLICATION", 1),
     (re.compile(r"^/api/admin/loans/(\d+)/attachments$"),             "LOAN_APPLICATION", 1),
+    (re.compile(r"^/api/admin/loans/\d+/attachments/(\d+)/verify$"),  "ATTACHED_DOC", 1),
+    (re.compile(r"^/api/admin/loans/\d+/attachments/(\d+)/reject$"),  "ATTACHED_DOC", 1),
+    (re.compile(r"^/api/admin/loans/\d+/attachments/(\d+)/file$"),    "ATTACHED_DOC", 1),
     (re.compile(r"^/api/admin/loans/decisions/(\d+)/review$"),        "AI_LOAN_DECISION", 1),
     (re.compile(r"^/api/admin/loans/decisions$"),                    "AI_LOAN_DECISION", None),
     (re.compile(r"^/api/admin/loans/review-queue$"),                 "AI_LOAN_DECISION", None),
@@ -180,4 +186,140 @@ def redact(payload: dict[str, Any]) -> dict[str, Any]:
     return {
         k: ("***" if k.lower() in _SENSITIVE_KEYS else v)
         for k, v in payload.items()
+    }
+
+
+# ---------------------------------------------------------------------------
+# 조회 (관리자 콘솔 /audit 화면용)
+# ---------------------------------------------------------------------------
+
+async def list_audit_logs(
+    *,
+    query: str | None = None,
+    employee_no: str | None = None,
+    action_cd: str | None = None,
+    result_cd: str | None = None,
+    target_table: str | None = None,
+    date_from: str | None = None,  # 'YYYY-MM-DD'
+    date_to: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> dict[str, Any]:
+    from datetime import datetime, timedelta
+
+    pool = get_pool()
+    clauses: list[str] = []
+    params: list[Any] = []
+
+    def _parse_date(s: str) -> datetime | None:
+        for fmt in ("%Y-%m-%d", "%Y%m%d"):
+            try:
+                return datetime.strptime(s, fmt)
+            except ValueError:
+                continue
+        return None
+
+    if query:
+        params.append(f"%{query}%")
+        params.append(f"%{query}%")
+        i1, i2 = len(params) - 1, len(params)
+        clauses.append(f'("EMPLOYEE_NO" ILIKE ${i1} OR "TARGET_ID" ILIKE ${i2})')
+    if employee_no:
+        params.append(employee_no)
+        clauses.append(f'"EMPLOYEE_NO" = ${len(params)}')
+    if action_cd:
+        params.append(action_cd)
+        clauses.append(f'"ACTION_CD" = ${len(params)}')
+    if result_cd:
+        params.append(result_cd)
+        clauses.append(f'"RESULT_CD" = ${len(params)}')
+    if target_table:
+        params.append(target_table)
+        clauses.append(f'"TARGET_TABLE" = ${len(params)}')
+    if date_from:
+        dt = _parse_date(date_from)
+        if dt is not None:
+            params.append(dt)
+            clauses.append(f'"CREATED_AT" >= ${len(params)}')
+    if date_to:
+        dt = _parse_date(date_to)
+        if dt is not None:
+            params.append(dt + timedelta(days=1))
+            clauses.append(f'"CREATED_AT" < ${len(params)}')
+
+    where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
+
+    async with pool.acquire() as conn:
+        total = await conn.fetchval(
+            f'SELECT COUNT(*) FROM public."ADMIN_AUDIT_LOG"{where}',
+            *params,
+        )
+        params_paged = [*params, limit, offset]
+        rows = await conn.fetch(
+            f'SELECT "AUDIT_ID","EMPLOYEE_NO","ACTION_CD","TARGET_TABLE","TARGET_ID",'
+            f'       "RESULT_CD","ACCESS_IP","USER_AGENT","REMARK","CREATED_AT",'
+            f'       "BEFORE_JSON","AFTER_JSON" '
+            f'FROM public."ADMIN_AUDIT_LOG"{where} '
+            f'ORDER BY "AUDIT_ID" DESC '
+            f"LIMIT ${len(params_paged) - 1} OFFSET ${len(params_paged)}",
+            *params_paged,
+        )
+
+    items = [
+        {
+            "audit_id": int(r["AUDIT_ID"]),
+            "employee_no": r["EMPLOYEE_NO"],
+            "action_cd": r["ACTION_CD"],
+            "target_table": r["TARGET_TABLE"],
+            "target_id": r["TARGET_ID"],
+            "result_cd": r["RESULT_CD"],
+            "access_ip": r["ACCESS_IP"],
+            "user_agent": r["USER_AGENT"],
+            "remark": r["REMARK"],
+            "created_at": r["CREATED_AT"],
+            "before_json": r["BEFORE_JSON"],
+            "after_json": r["AFTER_JSON"],
+        }
+        for r in rows
+    ]
+    return {"items": items, "count": len(items), "total": int(total or 0)}
+
+
+async def list_audit_facets() -> dict[str, Any]:
+    """필터 드롭다운용 distinct 값 — action_cd / employee_no / target_table."""
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        actions = await conn.fetch(
+            'SELECT "ACTION_CD" AS v, COUNT(*) AS c FROM public."ADMIN_AUDIT_LOG" '
+            'GROUP BY "ACTION_CD" ORDER BY 2 DESC LIMIT 50'
+        )
+        employees = await conn.fetch(
+            'SELECT "EMPLOYEE_NO" AS v, COUNT(*) AS c FROM public."ADMIN_AUDIT_LOG" '
+            'GROUP BY "EMPLOYEE_NO" ORDER BY 2 DESC LIMIT 50'
+        )
+        tables = await conn.fetch(
+            'SELECT "TARGET_TABLE" AS v, COUNT(*) AS c FROM public."ADMIN_AUDIT_LOG" '
+            'WHERE "TARGET_TABLE" IS NOT NULL '
+            'GROUP BY "TARGET_TABLE" ORDER BY 2 DESC LIMIT 50'
+        )
+        stats = await conn.fetchrow(
+            'SELECT '
+            '  COUNT(*) AS total, '
+            '  COUNT(*) FILTER (WHERE "RESULT_CD" = \'OK\') AS ok, '
+            '  COUNT(*) FILTER (WHERE "RESULT_CD" = \'DENIED\') AS denied, '
+            '  COUNT(*) FILTER (WHERE "RESULT_CD" = \'ERROR\') AS err, '
+            '  COUNT(*) FILTER (WHERE "CREATED_AT" >= CURRENT_DATE) AS today '
+            'FROM public."ADMIN_AUDIT_LOG"'
+        )
+    return {
+        "actions": [{"value": r["v"], "count": int(r["c"])} for r in actions],
+        "employees": [{"value": r["v"], "count": int(r["c"])} for r in employees],
+        "target_tables": [{"value": r["v"], "count": int(r["c"])} for r in tables],
+        "stats": {
+            "total": int(stats["total"] or 0),
+            "ok": int(stats["ok"] or 0),
+            "denied": int(stats["denied"] or 0),
+            "error": int(stats["err"] or 0),
+            "today": int(stats["today"] or 0),
+        },
     }

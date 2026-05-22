@@ -8,6 +8,7 @@ from .api.account import router as account_router
 from .api.account_open import router as account_open_router
 from .api.admin_account import router as admin_account_router
 from .api.admin_attach import router as admin_attach_router
+from .api.admin_audit import router as admin_audit_router
 from .api.admin_auth import router as admin_auth_router
 from .api.admin_customer import router as admin_customer_router
 from .api.admin_health import router as admin_health_router
@@ -221,6 +222,7 @@ api.include_router(admin_attach_router)
 api.include_router(admin_overdue_router)
 api.include_router(admin_customer_router)
 api.include_router(admin_account_router)
+api.include_router(admin_audit_router)
 api.include_router(admin_health_router)
 api.include_router(chatbot_router)
 api.include_router(notification_router)
