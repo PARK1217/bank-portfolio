@@ -268,6 +268,174 @@ export interface ExternalHealth {
 
 
 // ---------------------------------------------------------------------------
+// 회원 관리 / 계좌 관리 (Phase D)
+// ---------------------------------------------------------------------------
+
+export interface CustomerListItem {
+  customer_no: number;
+  name?: string | null;
+  email?: string | null;
+  grade_cd?: string | null;
+  status_cd?: string | null;
+  birth_date?: string | null;
+  join_datetime?: string | null;
+  marketing_agree_yn?: string | null;
+  account_count: number;
+  total_balance: number;
+  loan_count: number;
+}
+
+export interface CustomerListResponse {
+  items: CustomerListItem[];
+  count: number;
+  total: number;
+}
+
+export interface CustomerContact {
+  contact_type_cd: string;
+  value: string;
+  primary_yn?: string | null;
+  verified_yn?: string | null;
+}
+
+export interface CustomerAddress {
+  addr_type_cd: string;
+  postal_code?: string | null;
+  line1?: string | null;
+  line2?: string | null;
+  primary_yn?: string | null;
+}
+
+export interface CustomerAccount {
+  account_no: string;
+  account_type_cd: string;
+  status_cd: string;
+  balance: number;
+  alias?: string | null;
+  daily_withdraw_limit: number;
+  daily_transfer_limit: number;
+  primary_yn?: string | null;
+  open_date?: string | null;
+  limited_yn?: string | null;
+  hidden_yn?: string | null;
+}
+
+export interface CustomerLoan {
+  loan_contract_no: string;
+  product_name?: string | null;
+  loan_type_cd?: string | null;
+  contract_limit: number;
+  current_usage: number;
+  contract_rate: number;
+  overdue_spread_rate?: number | null;
+  loan_status_cd?: string | null;
+  overdue_stage_cd?: string | null;
+  contract_date?: string | null;
+  maturity_date?: string | null;
+}
+
+export interface CustomerDelegation {
+  delegation_id: number;
+  target_cust_no?: number | null;
+  agent_cust_no?: number | null;
+  role_type_cd?: string | null;
+  inquiry_perm?: string | null;
+  withdraw_perm?: string | null;
+  transfer_perm?: string | null;
+  close_perm?: string | null;
+  start_date?: string | null;
+  direction: "AS_TARGET" | "AS_AGENT";
+}
+
+export interface CustomerDetail {
+  customer: {
+    customer_no: number;
+    party_id?: number | null;
+    name?: string | null;
+    email?: string | null;
+    grade_cd?: string | null;
+    status_cd?: string | null;
+    join_datetime?: string | null;
+    marketing_agree_yn?: string | null;
+    privacy_agree_yn?: string | null;
+    party_type_cd?: string | null;
+    birth_date?: string | null;
+    gender?: string | null;
+    current_employer?: string | null;
+    annual_income?: number | null;
+  };
+  contacts: CustomerContact[];
+  addresses: CustomerAddress[];
+  accounts: CustomerAccount[];
+  loans: CustomerLoan[];
+  delegations: CustomerDelegation[];
+}
+
+export interface AccountListItem {
+  account_no: string;
+  customer_no?: number | null;
+  customer_name?: string | null;
+  account_type_cd: string;
+  status_cd: string;
+  balance: number;
+  holder_name?: string | null;
+  alias?: string | null;
+  open_date?: string | null;
+  limited_yn?: string | null;
+  primary_yn?: string | null;
+  daily_withdraw_limit: number;
+  daily_transfer_limit: number;
+  hidden_yn?: string | null;
+}
+
+export interface AccountListResponse {
+  items: AccountListItem[];
+  count: number;
+  total: number;
+}
+
+export interface AccountTxItem {
+  transaction_id: number;
+  tx_datetime?: string | null;
+  amount: number;
+  balance_after: number;
+  tx_type_cd?: string | null;
+  counterpart_account_no?: string | null;
+  counterpart_bank_name?: string | null;
+  counterpart_holder_name?: string | null;
+  memo?: string | null;
+}
+
+export interface AccountDetail {
+  account: {
+    account_no: string;
+    customer_no?: number | null;
+    customer_name?: string | null;
+    customer_email?: string | null;
+    customer_grade_cd?: string | null;
+    customer_status_cd?: string | null;
+    account_type_cd: string;
+    status_cd: string;
+    balance: number;
+    pending_withdraw: number;
+    holder_name?: string | null;
+    alias?: string | null;
+    open_date?: string | null;
+    close_date?: string | null;
+    last_tx_datetime?: string | null;
+    limited_yn?: string | null;
+    primary_yn?: string | null;
+    hidden_yn?: string | null;
+    daily_withdraw_limit: number;
+    daily_transfer_limit: number;
+    pwd_error_count: number;
+    cumulative_interest: number;
+  };
+  recent_transactions: AccountTxItem[];
+}
+
+
+// ---------------------------------------------------------------------------
 // 어댑터 — 백엔드가 일부 엔드포인트에서 asyncpg Record 컬럼을 대문자로 그대로
 // 반환(`DECISION_ID`/`SCORE`/`PARTY_NAME` 등). 프론트 타입(snake_case 소문자)
 // 으로 안전하게 매핑하기 위한 도우미.

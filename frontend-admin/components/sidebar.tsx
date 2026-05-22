@@ -8,7 +8,10 @@ import {
   ListTodo,
   Bot,
   Users,
+  UserSearch,
   AlertOctagon,
+  Wallet,
+  Search,
   Activity,
   Sparkles,
   ScrollText,
@@ -47,7 +50,15 @@ const MENU: MenuEntry[] = [
   {
     label: "회원 관리",
     icon: Users,
-    items: [{ href: "/overdue", label: "연체 추적", icon: AlertOctagon }],
+    items: [
+      { href: "/customers", label: "회원 검색", icon: UserSearch },
+      { href: "/overdue", label: "연체 추적", icon: AlertOctagon },
+    ],
+  },
+  {
+    label: "계좌 관리",
+    icon: Wallet,
+    items: [{ href: "/accounts", label: "계좌 검색", icon: Search }],
   },
   { href: "/health", label: "외부망 헬스", icon: Activity },
   { href: "/observability", label: "AI 관측 (Phoenix)", icon: Sparkles },

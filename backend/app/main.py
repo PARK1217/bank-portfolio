@@ -6,8 +6,10 @@ from fastapi.responses import JSONResponse
 
 from .api.account import router as account_router
 from .api.account_open import router as account_open_router
+from .api.admin_account import router as admin_account_router
 from .api.admin_attach import router as admin_attach_router
 from .api.admin_auth import router as admin_auth_router
+from .api.admin_customer import router as admin_customer_router
 from .api.admin_health import router as admin_health_router
 from .api.admin_loan import router as admin_loan_router
 from .api.admin_overdue import router as admin_overdue_router
@@ -213,7 +215,12 @@ api.include_router(loan_router)
 api.include_router(admin_auth_router)
 api.include_router(admin_loan_router)
 api.include_router(admin_attach_router)
+# admin_overdue 가 /admin/customers/overdue 와 /admin/customers/{cust}/overdue 를 갖고,
+# admin_customer 가 /admin/customers 와 /admin/customers/{cust_no} 를 갖는다.
+# overdue 라우터를 먼저 등록해 /overdue 경로가 {cust_no} 다이내믹과 안 부딪히게 한다.
 api.include_router(admin_overdue_router)
+api.include_router(admin_customer_router)
+api.include_router(admin_account_router)
 api.include_router(admin_health_router)
 api.include_router(chatbot_router)
 api.include_router(notification_router)
