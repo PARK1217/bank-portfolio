@@ -16,11 +16,11 @@ import { showApiError } from "@/lib/toast";
 
 export default function Page() {
   const router = useRouter();
-  const [stage, setStage] = useState<"IDENT" | "OTP" | "RESET" | "DONE">("IDENT");
+  const [stage, setStage] = useState<"IDENT" | "AUTH" | "RESET" | "DONE">("IDENT");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
-  const [residentNo, setResidentNo] = useState("");
-  const [otp, setOtp] = useState("");
+  const [authCode, setAuthCode] = useState("");
+  const [devAuthCode, setDevAuthCode] = useState<string | null>(null);
   const [verificationId, setVerificationId] = useState("");
   const [newPw, setNewPw] = useState("");
   const [newPwConfirm, setNewPwConfirm] = useState("");
@@ -39,13 +39,17 @@ export default function Page() {
     if (loading) return;
     setLoading(true);
     try {
-      // mock: send OTP to phone
-      await api.post(
+      const res = await api.post<{ sent: boolean; dev_auth_code?: string | null }>(
         "/api/password/reset/init",
-        { email, phone, resident_no: residentNo },
+        { email, phone },
         { token: null },
       );
-      setStage("OTP");
+      const code = res.dev_auth_code ?? null;
+      setDevAuthCode(code);
+      setStage("AUTH");
+      if (code) {
+        toast.info(`인증번호: ${code}`, { description: "mock SMS — 운영 전환 시 본인인증사로 대체됩니다." });
+      }
     } catch (err) {
       showApiError(err, "본인 확인을 시작하지 못했습니다.");
     } finally {
@@ -53,20 +57,20 @@ export default function Page() {
     }
   }
 
-  async function verifyOtp(e: React.FormEvent) {
+  async function verifyAuthCode(e: React.FormEvent) {
     e.preventDefault();
     if (loading) return;
     setLoading(true);
     try {
       const res = await api.post<{ verification_id: string }>(
         "/api/password/reset/verify",
-        { email, otp_code: otp },
+        { email, auth_code: authCode },
         { token: null },
       );
       setVerificationId(res.verification_id);
       setStage("RESET");
     } catch (err) {
-      showApiError(err, "OTP 인증에 실패했습니다.");
+      showApiError(err, "인증번호 확인에 실패했습니다.");
     } finally {
       setLoading(false);
     }
@@ -122,33 +126,36 @@ export default function Page() {
                 <span className="text-xs text-muted-foreground">휴대폰 *</span>
                 <Input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} required />
               </label>
-              <label className="block space-y-1.5">
-                <span className="text-xs text-muted-foreground">주민번호 앞 6자리 *</span>
-                <Input pattern="\d{6}" maxLength={6} value={residentNo} onChange={(e) => setResidentNo(e.target.value.replace(/[^0-9]/g, ""))} required />
-              </label>
               <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? "확인 중…" : "OTP 발송"}
+                {loading ? "확인 중…" : "인증번호 발송"}
               </Button>
             </form>
           ) : null}
 
-          {stage === "OTP" ? (
-            <form onSubmit={verifyOtp} className="space-y-3">
-              <p className="text-xs text-muted-foreground">{phone} 로 OTP 코드가 발송되었습니다.</p>
+          {stage === "AUTH" ? (
+            <form onSubmit={verifyAuthCode} className="space-y-3">
+              <p className="text-xs text-muted-foreground">{phone} 로 인증번호가 발송되었습니다.</p>
+              {devAuthCode ? (
+                <div className="rounded-md border border-dashed border-primary/40 bg-primary/5 p-3 text-center">
+                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground">mock SMS · 임시 안내</p>
+                  <p className="mt-1 font-mono text-2xl font-bold tracking-[0.4em] text-primary">{devAuthCode}</p>
+                  <p className="mt-1 text-[11px] text-muted-foreground">운영 전환 시 본인인증사 문자로 대체됩니다.</p>
+                </div>
+              ) : null}
               <label className="block space-y-1.5">
-                <span className="text-xs text-muted-foreground">6자리 OTP *</span>
+                <span className="text-xs text-muted-foreground">6자리 인증번호 *</span>
                 <Input
                   inputMode="numeric"
                   autoComplete="one-time-code"
                   maxLength={6}
-                  value={otp}
-                  onChange={(e) => setOtp(e.target.value.replace(/[^0-9]/g, "").slice(0, 6))}
+                  value={authCode}
+                  onChange={(e) => setAuthCode(e.target.value.replace(/[^0-9]/g, "").slice(0, 6))}
                   pattern="\d{6}"
                   required
                 />
               </label>
-              <Button type="submit" className="w-full" disabled={loading || !/^\d{6}$/.test(otp)}>
-                {loading ? "확인 중…" : "OTP 확인"}
+              <Button type="submit" className="w-full" disabled={loading || !/^\d{6}$/.test(authCode)}>
+                {loading ? "확인 중…" : "인증번호 확인"}
               </Button>
             </form>
           ) : null}
