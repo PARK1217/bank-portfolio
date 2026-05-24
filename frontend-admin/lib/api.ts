@@ -791,6 +791,100 @@ export interface LoanContractListResponse {
 
 
 // ---------------------------------------------------------------------------
+// 자동이체 워커 모니터링 (admin_auto_transfer)
+// ---------------------------------------------------------------------------
+
+export interface AutoTransferItem {
+  auto_transfer_id: number;
+  customer_no?: number | null;
+  customer_name?: string | null;
+  withdraw_account_no?: string | null;
+  deposit_account_no?: string | null;
+  deposit_bank_cd?: string | null;
+  deposit_bank_name?: string | null;
+  deposit_holder_name?: string | null;
+  transfer_amount: number;
+  cycle_type_cd?: string | null;
+  monthly_exec_day?: number | null;
+  valid_start_date?: string | null;
+  valid_end_date?: string | null;
+  auto_status_cd?: string | null;
+  reg_channel_cd?: string | null;
+  withdraw_memo?: string | null;
+  deposit_memo?: string | null;
+  created_at?: string | null;
+}
+
+export interface AutoTransferListResponse {
+  items: AutoTransferItem[];
+  count: number;
+  total: number;
+}
+
+export interface AutoTransferExecRow {
+  scheduled_date?: string | null;
+  biz_day_adjusted?: string | null;
+  exec_datetime?: string | null;
+  exec_status_cd?: string | null;
+  delay_reason_cd?: string | null;
+  transfer_id?: number | null;
+  transaction_id?: number | null;
+}
+
+export interface AutoTransferDetail {
+  auto_transfer: AutoTransferItem & {
+    customer_email?: string | null;
+    max_retry_count?: number | null;
+    retry_interval_hours?: number | null;
+    failure_action_cd?: string | null;
+    carry_next_month_yn?: string | null;
+  };
+  executions: AutoTransferExecRow[];
+}
+
+export interface AutoTransferExecHistoryItem extends AutoTransferExecRow {
+  auto_transfer_id: number;
+  customer_no?: number | null;
+  customer_name?: string | null;
+  withdraw_account_no?: string | null;
+  deposit_account_no?: string | null;
+  deposit_holder_name?: string | null;
+  transfer_amount: number;
+}
+
+export interface AutoTransferExecHistoryResponse {
+  items: AutoTransferExecHistoryItem[];
+  count: number;
+  total: number;
+}
+
+export interface AutoTransferDashboard {
+  active_count: number;
+  complete_count: number;
+  cancel_count: number;
+  due_today: number;
+  month_success: number;
+  month_fail: number;
+  month_delay: number;
+  month_success_rate: number | null;
+  delay_reason_top: { reason_cd: string; count: number }[];
+  upcoming: {
+    auto_transfer_id: number;
+    customer_no?: number | null;
+    customer_name?: string | null;
+    withdraw_account_no?: string | null;
+    deposit_account_no?: string | null;
+    deposit_bank_name?: string | null;
+    deposit_holder_name?: string | null;
+    transfer_amount: number;
+    cycle_type_cd?: string | null;
+    monthly_exec_day?: number | null;
+    next_due_date?: string | null;
+  }[];
+}
+
+
+// ---------------------------------------------------------------------------
 // 회원·계좌 액션 이력 (admin_customer_action / admin_account_action)
 // ---------------------------------------------------------------------------
 

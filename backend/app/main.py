@@ -11,6 +11,7 @@ from .api.admin_account_action import router as admin_account_action_router
 from .api.admin_attach import router as admin_attach_router
 from .api.admin_audit import router as admin_audit_router
 from .api.admin_auth import router as admin_auth_router
+from .api.admin_auto_transfer import router as admin_auto_transfer_router
 from .api.admin_customer import router as admin_customer_router
 from .api.admin_customer_action import router as admin_customer_action_router
 from .api.admin_fds import router as admin_fds_router
@@ -241,6 +242,7 @@ api.include_router(admin_fds_router)
 api.include_router(admin_account_action_router)
 api.include_router(admin_account_router)
 api.include_router(admin_transaction_router)
+api.include_router(admin_auto_transfer_router)
 api.include_router(admin_audit_router)
 api.include_router(admin_health_router)
 api.include_router(admin_product_router)

@@ -500,6 +500,69 @@ export function docCategoryLabel(code: string | null | undefined): string {
   return DOC_CATEGORY_LABEL[code] ?? code;
 }
 
+// AUTO_TRANSFER.AUTO_STATUS_CD
+const AUTO_TRANSFER_STATUS_LABEL: Record<string, string> = {
+  ACTIVE: "활성",
+  COMPLETE: "완료",
+  CANCEL: "해지",
+  PAUSED: "정지",
+};
+export function autoTransferStatusLabel(code: string | null | undefined): string {
+  if (!code) return "-";
+  return AUTO_TRANSFER_STATUS_LABEL[code] ?? code;
+}
+export const AUTO_TRANSFER_STATUS_OPTIONS: { value: string; label: string }[] = [
+  { value: "ACTIVE", label: "활성" },
+  { value: "COMPLETE", label: "완료" },
+  { value: "CANCEL", label: "해지" },
+];
+
+// AUTO_TRANSFER.CYCLE_TYPE_CD
+const CYCLE_TYPE_LABEL: Record<string, string> = {
+  ONCE: "1회성",
+  MONTHLY: "매월",
+  WEEKLY: "매주",
+};
+export function cycleTypeLabel(code: string | null | undefined): string {
+  if (!code) return "-";
+  return CYCLE_TYPE_LABEL[code] ?? code;
+}
+export const CYCLE_TYPE_OPTIONS: { value: string; label: string }[] = [
+  { value: "ONCE", label: "1회성" },
+  { value: "MONTHLY", label: "매월" },
+];
+
+// AUTO_TRANSFER_EXEC.EXEC_STATUS_CD (워커 코드)
+const AUTO_EXEC_STATUS_LABEL: Record<string, string> = {
+  SUCCESS: "성공",
+  FAIL: "실패",
+  DELAY: "지연",
+  PENDING: "예정",
+};
+export function autoExecStatusLabel(code: string | null | undefined): string {
+  if (!code) return "-";
+  return AUTO_EXEC_STATUS_LABEL[code] ?? code;
+}
+export const AUTO_EXEC_STATUS_OPTIONS: { value: string; label: string }[] = [
+  { value: "SUCCESS", label: "성공" },
+  { value: "FAIL", label: "실패" },
+  { value: "DELAY", label: "지연" },
+];
+
+// AUTO_TRANSFER_EXEC.DELAY_REASON_CD (varchar(8) — 워커 매핑 코드)
+const AUTO_DELAY_REASON_LABEL: Record<string, string> = {
+  NO_BAL: "잔액 부족",
+  NO_ACCT: "계좌 없음",
+  DUP: "중복 실행",
+  BOKCLS: "한은망 마감",
+  INTERNAL: "내부 오류",
+  ERR: "기타 오류",
+};
+export function autoDelayReasonLabel(code: string | null | undefined): string {
+  if (!code) return "-";
+  return AUTO_DELAY_REASON_LABEL[code] ?? code;
+}
+
 // ACCOUNT_LIMIT_CHANGE_REQUEST.VERIFY_METHOD_CD
 const VERIFY_METHOD_LABEL: Record<string, string> = {
   ADMIN: "어드민",

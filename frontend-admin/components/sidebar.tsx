@@ -12,6 +12,7 @@ import {
   UserSearch,
   AlertOctagon,
   Wallet,
+  Repeat,
   Search,
   Activity,
   ShieldAlert,
@@ -67,6 +68,7 @@ const MENU: MenuEntry[] = [
     items: [
       { href: "/accounts", label: "계좌 검색", icon: Search },
       { href: "/transactions", label: "거래내역 검색", icon: Receipt },
+      { href: "/auto-transfers", label: "자동이체 모니터링", icon: Repeat },
     ],
   },
   { href: "/products", label: "상품 관리", icon: Package },
