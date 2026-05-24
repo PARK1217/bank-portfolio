@@ -181,6 +181,7 @@ WORKBOARD.md
 # 진행 상황 추적·테스트 시나리오 — 로컬 작업 노트, 원격에 흘리지 않음
 진척도.md
 테스트시나리오.md
+화면체크리스트.md
 
 # Frontend (Next.js) — Python의 lib/ 규칙이 frontend/lib, frontend-admin/lib 를 잡아먹지 않도록 예외
 !frontend/lib/
