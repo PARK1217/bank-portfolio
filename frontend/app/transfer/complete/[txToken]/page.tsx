@@ -79,7 +79,6 @@ function CompleteContent({ txToken }: { txToken: string }) {
   return (
     <Card>
       <CardHeader>
-        <div className="font-mono text-xs text-muted-foreground">SCR-TR-003</div>
         <CardTitle className="mt-1 flex items-center gap-2">
           {isSuccess ? "✓ 이체 완료" : isPending ? "⏳ 이체 처리 중" : "이체 결과"}
         </CardTitle>

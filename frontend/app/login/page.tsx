@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -66,9 +66,8 @@ function LoginForm() {
   return (
     <Card>
         <CardHeader>
-          <div className="font-mono text-xs text-muted-foreground">SCR-AU-001</div>
-          <CardTitle className="mt-1">로그인</CardTitle>
-          <CardDescription>아이디와 비밀번호로 로그인합니다.</CardDescription>
+          <CardTitle>로그인</CardTitle>
+          <CardDescription>이메일과 비밀번호로 로그인하세요.</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={onSubmit} className="space-y-4">

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -119,9 +119,7 @@ function ResetContent() {
   if (!status.otp_active) {
     return (
       <Card>
-        <CardHeader>
-          <div className="font-mono text-xs text-muted-foreground">SCR-SC-006</div>
-          <CardTitle className="mt-1">계좌 비밀번호 재설정</CardTitle>
+        <CardHeader>          <CardTitle className="mt-1">계좌 비밀번호 재설정</CardTitle>
           <CardDescription>
             비대면 재설정에는 OTP 등록이 필요해요.
           </CardDescription>
@@ -154,9 +152,7 @@ function ResetContent() {
   const showCurrentPin = !status.pin_locked;
   return (
     <Card>
-      <CardHeader>
-        <div className="font-mono text-xs text-muted-foreground">SCR-SC-006</div>
-        <CardTitle className="mt-1">
+      <CardHeader>        <CardTitle className="mt-1">
           {status.pin_locked ? "계좌 잠금 해제 + 비밀번호 재설정" : "계좌 비밀번호 재설정"}
         </CardTitle>
         <CardDescription>

@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { api } from "@/lib/api";
 import { useFetch } from "@/lib/use-fetch";
+import { loanApplyStatusLabel } from "@/lib/labels";
 import { showApiError } from "@/lib/toast";
 
 
@@ -202,7 +203,7 @@ function ContractContent({ appToken }: { appToken: string }) {
     return (
       <div className="rounded-md border bg-card p-6 text-center text-sm">
         <p className="text-muted-foreground">
-          심사 상태가 <span className="font-medium">{data.status_cd}</span> 이라 약정을 진행할 수 없습니다.
+          심사 상태가 <span className="font-medium">{loanApplyStatusLabel(data.status_cd)}</span> 이라 약정을 진행할 수 없습니다.
         </p>
         <Link
           href={`/loans/${appToken}/status`}
@@ -218,7 +219,6 @@ function ContractContent({ appToken }: { appToken: string }) {
     <div className="space-y-5">
       <Card>
         <CardHeader>
-          <div className="font-mono text-xs text-muted-foreground">SCR-LN-006</div>
           <CardTitle className="mt-1">대출 약정</CardTitle>
           <CardDescription>
             <strong className="text-foreground">약정 ≠ 실행.</strong> 이 단계는 계약·계좌 생성만 진행하며, 자금은 다음 실행 단계에서 입금됩니다.

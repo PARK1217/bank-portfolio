@@ -80,7 +80,6 @@ function DocsContent({ appToken }: { appToken: string }) {
   return (
     <Card>
       <CardHeader>
-        <div className="font-mono text-xs text-muted-foreground">SCR-LN-004</div>
         <CardTitle className="mt-1">대출 서류 제출</CardTitle>
         <CardDescription>심사에 필요한 서류를 모두 제출하면 다음 단계로 진행됩니다.</CardDescription>
       </CardHeader>

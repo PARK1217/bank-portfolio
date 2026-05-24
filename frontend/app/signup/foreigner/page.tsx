@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import Link from "next/link";
@@ -75,9 +75,7 @@ export default function Page() {
         </Link>
       </div>
       <Card>
-        <CardHeader>
-          <div className="font-mono text-xs text-muted-foreground">SCR-AU-006</div>
-          <CardTitle className="mt-1">외국인 가입 (Foreigner Signup)</CardTitle>
+        <CardHeader>          <CardTitle className="mt-1">외국인 가입 (Foreigner Signup)</CardTitle>
           <CardDescription>
             여권·외국인등록증 정보로 가입합니다. 비자 유효기간 이상의 거래 기간을 선택할 수 없습니다.
           </CardDescription>

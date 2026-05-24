@@ -119,7 +119,6 @@ function PrecheckDashboard({ productId }: { productId: number }) {
       {/* 입력 카드 */}
       <Card>
         <CardHeader>
-          <div className="font-mono text-xs text-muted-foreground">SCR-LN-002</div>
           <CardTitle className="mt-1">대출 한도 조회</CardTitle>
           <CardDescription>
             소득·부채 정보 한 번 입력으로 {currentProduct?.product_name ?? "대출"} 한도와 함께

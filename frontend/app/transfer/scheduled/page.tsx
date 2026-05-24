@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -197,9 +197,7 @@ function ScheduledForm() {
 
   return (
     <Card>
-      <CardHeader>
-        <div className="font-mono text-xs text-muted-foreground">SCR-TR-008</div>
-        <CardTitle className="mt-1">1회 예약 이체</CardTitle>
+      <CardHeader>        <CardTitle className="mt-1">1회 예약 이체</CardTitle>
         <CardDescription>지정한 날짜에 1회 실행됩니다. 자동이체 목록에서 함께 관리됩니다.</CardDescription>
       </CardHeader>
       <CardContent>

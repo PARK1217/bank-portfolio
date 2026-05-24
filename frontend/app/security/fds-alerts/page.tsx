@@ -21,6 +21,9 @@ interface FdsAlertItem {
   to_masked: string | null;
   score: number;
   reasons: string[];
+  fired_rules?: string[];
+  ml_anomaly?: number | null;
+  llm_explain?: string | null;
   status_cd: "PENDING" | "CONFIRMED_OK" | "REPORTED";
 }
 
@@ -102,7 +105,28 @@ function FdsAlertsContent() {
                 <div className="num-tabular">
                   {fmt(a.amount_krw)} {a.to_masked ? `→ ${a.to_masked}` : ""}
                 </div>
-                {a.reasons.length > 0 ? (
+                {a.llm_explain ? (
+                  <p className="rounded-md border border-warning/30 bg-warning/5 p-2 text-xs leading-relaxed text-foreground">
+                    {a.llm_explain}
+                  </p>
+                ) : null}
+                {a.fired_rules && a.fired_rules.length > 0 ? (
+                  <div className="flex flex-wrap gap-1">
+                    {a.reasons.map((r, i) => (
+                      <span
+                        key={i}
+                        className="inline-flex items-center rounded-full border bg-muted/40 px-2 py-0.5 text-[10px] text-muted-foreground"
+                      >
+                        {r}
+                      </span>
+                    ))}
+                    {typeof a.ml_anomaly === "number" ? (
+                      <span className="inline-flex items-center rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] text-primary">
+                        ML 이상도 {(a.ml_anomaly * 100).toFixed(0)}%
+                      </span>
+                    ) : null}
+                  </div>
+                ) : a.reasons.length > 0 ? (
                   <ul className="space-y-0.5 text-xs text-muted-foreground">
                     {a.reasons.map((r, i) => (
                       <li key={i}>· {r}</li>

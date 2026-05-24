@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -57,9 +57,7 @@ function NewDeviceForm() {
 
   return (
     <Card>
-      <CardHeader>
-        <div className="font-mono text-xs text-muted-foreground">SCR-SC-004</div>
-        <CardTitle className="mt-1">현재 기기 등록</CardTitle>
+      <CardHeader>        <CardTitle className="mt-1">현재 기기 등록</CardTitle>
         <CardDescription>
           이 기기를 신뢰 기기로 등록하면 다음부터는 OTP 추가 인증 없이 로그인할 수 있습니다.
         </CardDescription>

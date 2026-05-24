@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -74,7 +74,7 @@ export default function SignupAccountPage() {
     <main className="container max-w-md py-12 animate-fade-in">
       <Card>
         <CardHeader>
-          <div className="font-mono text-xs text-muted-foreground">SCR-AU-004 · 3/4</div>
+          <div className="text-xs text-muted-foreground">3/4</div>
           <CardTitle className="mt-1">계정 정보</CardTitle>
           <CardDescription>이메일·비밀번호·연락처를 입력하세요. (이메일이 로그인 ID 입니다)</CardDescription>
         </CardHeader>

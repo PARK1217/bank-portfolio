@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -241,9 +241,7 @@ function NewAutoTransferForm() {
 
   return (
     <Card>
-      <CardHeader>
-        <div className="font-mono text-xs text-muted-foreground">SCR-TR-005</div>
-        <CardTitle className="mt-1">자동이체 등록</CardTitle>
+      <CardHeader>        <CardTitle className="mt-1">자동이체 등록</CardTitle>
         <CardDescription>주기와 시작일을 지정하면 다음 실행 일정이 자동 계산됩니다.</CardDescription>
       </CardHeader>
       <CardContent>

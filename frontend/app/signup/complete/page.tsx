@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -29,7 +29,7 @@ export default function SignupCompletePage() {
     <main className="container max-w-md py-16 animate-fade-in">
       <Card>
         <CardHeader>
-          <div className="font-mono text-xs text-muted-foreground">SCR-AU-007 · 4/4</div>
+          <div className="text-xs text-muted-foreground">4/4</div>
           <CardTitle className="mt-1">가입이 완료되었습니다 🎉</CardTitle>
           <CardDescription>
             안전한 거래를 위해 간편비밀번호(6자리 PIN)를 설정해주세요.

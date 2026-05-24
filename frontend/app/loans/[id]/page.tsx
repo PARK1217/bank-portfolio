@@ -7,6 +7,7 @@ import { Protected } from "@/components/protected";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import { useFetch } from "@/lib/use-fetch";
+import { execTypeLabel } from "@/lib/labels";
 import { showApiError } from "@/lib/toast";
 
 
@@ -124,7 +125,7 @@ function DetailContent({ loanToken }: { loanToken: string }) {
             {data.exec_histories.map((e) => (
               <li key={e.exec_seq} className="flex justify-between p-3 text-sm">
                 <div>
-                  <div>{e.exec_type_cd}</div>
+                  <div>{execTypeLabel(e.exec_type_cd)}</div>
                   <div className="text-xs text-muted-foreground">
                     {dtFmt.format(new Date(e.exec_datetime))}
                   </div>

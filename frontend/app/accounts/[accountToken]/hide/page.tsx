@@ -49,7 +49,6 @@ export default function Page() {
         </div>
         <Card>
           <CardHeader>
-            <div className="font-mono text-xs text-muted-foreground">SCR-AC-007</div>
             <CardTitle className="mt-1">계좌 숨김 설정</CardTitle>
             <CardDescription>
               숨김 처리된 계좌는 목록·대시보드에서 보이지 않습니다. 거래 이력은 그대로 유지되며 언제든 다시 표시할 수 있습니다.

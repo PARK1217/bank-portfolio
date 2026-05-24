@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import Link from "next/link";
@@ -102,9 +102,7 @@ export default function Page() {
           </Link>
         </div>
         <Card>
-          <CardHeader>
-            <div className="font-mono text-xs text-muted-foreground">SCR-AU-009</div>
-            <CardTitle className="mt-1">생체인증 등록</CardTitle>
+          <CardHeader>            <CardTitle className="mt-1">생체인증 등록</CardTitle>
             <CardDescription>
               지문·얼굴 인식(WebAuthn) 으로 더 빠르고 안전하게 로그인하세요.
             </CardDescription>

@@ -96,7 +96,6 @@ function CloseForm({ token }: { token: string }) {
   return (
     <Card>
       <CardHeader>
-        <div className="font-mono text-xs text-muted-foreground">SCR-AC-009</div>
         <CardTitle className="mt-1">계좌 해지</CardTitle>
         <CardDescription>
           해지 후 잔액과 거래 이력은 법령에 따라 일정 기간 보관됩니다. 자동이체가 등록된 경우 먼저 해지하거나 출금계좌를 변경하세요.

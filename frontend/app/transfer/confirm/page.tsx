@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -91,9 +91,7 @@ function ConfirmContent() {
 
   return (
     <Card>
-      <CardHeader>
-        <div className="font-mono text-xs text-muted-foreground">SCR-TR-002</div>
-        <CardTitle className="mt-1">이체 확인</CardTitle>
+      <CardHeader>        <CardTitle className="mt-1">이체 확인</CardTitle>
         <CardDescription>비밀번호 또는 OTP 를 입력하면 즉시 실행됩니다.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">

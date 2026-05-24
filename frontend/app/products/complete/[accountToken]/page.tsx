@@ -40,7 +40,6 @@ function CompleteContent({ token }: { token: string }) {
   return (
     <Card>
       <CardHeader>
-        <div className="font-mono text-xs text-muted-foreground">SCR-OP-009</div>
         <CardTitle className="mt-1 flex items-center gap-2 text-2xl">
           ✓ 가입이 완료되었습니다
         </CardTitle>

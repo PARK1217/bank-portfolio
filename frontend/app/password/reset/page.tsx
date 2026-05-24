@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
@@ -125,7 +125,7 @@ export default function Page() {
       </div>
       <Card>
         <CardHeader>
-          <div className="font-mono text-xs text-muted-foreground">SCR-AU-011 · {stage} 단계</div>
+          <div className="text-xs text-muted-foreground">{stage} 단계</div>
           <CardTitle className="mt-1">비밀번호 재설정</CardTitle>
           <CardDescription>
             본인 확인 후 새 비밀번호로 재설정합니다. 재설정 시 모든 단기 토큰이 폐기되어 다시 로그인이 필요합니다.

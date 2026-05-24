@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import Link from "next/link";
@@ -62,9 +62,7 @@ function ComplaintForm() {
 
   return (
     <Card>
-      <CardHeader>
-        <div className="font-mono text-xs text-muted-foreground">SCR-CM-001</div>
-        <CardTitle className="mt-1">민원 접수</CardTitle>
+      <CardHeader>        <CardTitle className="mt-1">민원 접수</CardTitle>
         <CardDescription>접수 후 담당자가 영업일 기준 3일 이내에 회신드립니다.</CardDescription>
       </CardHeader>
       <CardContent>

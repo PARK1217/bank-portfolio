@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -54,7 +54,7 @@ export default function SignupVerifyPage() {
     <main className="container max-w-md py-12 animate-fade-in">
       <Card>
         <CardHeader>
-          <div className="font-mono text-xs text-muted-foreground">SCR-AU-003 · 2/4</div>
+          <div className="text-xs text-muted-foreground">2/4</div>
           <CardTitle className="mt-1">본인인증</CardTitle>
           <CardDescription>주민번호 / 휴대폰 / 인증번호를 입력하세요.</CardDescription>
         </CardHeader>

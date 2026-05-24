@@ -95,7 +95,6 @@ function PrepayForm({ loanToken }: { loanToken: string }) {
   return (
     <Card>
       <CardHeader>
-        <div className="font-mono text-xs text-muted-foreground">SCR-LN-010</div>
         <CardTitle className="mt-1">중도상환</CardTitle>
         <CardDescription>
           잔여 원금의 일부 또는 전부를 미리 상환합니다. 약정 후 3년 이내엔 수수료가 부과됩니다 (잔존원금의 0.5%).

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import Link from "next/link";
@@ -77,9 +77,7 @@ export default function Page() {
         </Link>
       </div>
       <Card>
-        <CardHeader>
-          <div className="font-mono text-xs text-muted-foreground">SCR-AU-005</div>
-          <CardTitle className="mt-1">사업자·법인 가입</CardTitle>
+        <CardHeader>          <CardTitle className="mt-1">사업자·법인 가입</CardTitle>
           <CardDescription>
             사업자등록증·법인등기부등본 정보로 가입합니다. 대표자 본인 인증이 필요합니다.
           </CardDescription>

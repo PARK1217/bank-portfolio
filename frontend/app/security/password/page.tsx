@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -66,9 +66,7 @@ function PasswordForm() {
 
   return (
     <Card>
-      <CardHeader>
-        <div className="font-mono text-xs text-muted-foreground">SCR-SC-002</div>
-        <CardTitle className="mt-1">비밀번호 변경</CardTitle>
+      <CardHeader>        <CardTitle className="mt-1">비밀번호 변경</CardTitle>
         <CardDescription>
           변경 즉시 모든 단기 토큰이 폐기되어 다시 로그인이 필요합니다.
         </CardDescription>

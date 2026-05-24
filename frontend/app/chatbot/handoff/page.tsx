@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { Suspense, useState } from "react";
 import Link from "next/link";
@@ -66,9 +66,7 @@ function HandoffForm() {
 
   return (
     <Card>
-      <CardHeader>
-        <div className="font-mono text-xs text-muted-foreground">SCR-CB-006</div>
-        <CardTitle className="mt-1">상담원 연결 신청</CardTitle>
+      <CardHeader>        <CardTitle className="mt-1">상담원 연결 신청</CardTitle>
         <CardDescription>
           챗봇 대화 내용을 첨부하여 상담원에게 전달합니다. 영업일 기준 3일 이내 답변드립니다.
         </CardDescription>

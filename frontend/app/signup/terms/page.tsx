@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
@@ -50,7 +50,7 @@ export default function Page() {
     <main className="container max-w-md py-12 animate-fade-in">
       <Card>
         <CardHeader>
-          <div className="font-mono text-xs text-muted-foreground">SCR-AU-002 · 가입 1/4 단계</div>
+          <div className="text-xs text-muted-foreground">가입 1/4 단계</div>
           <CardTitle className="mt-1">약관 동의</CardTitle>
           <CardDescription>
             아래 약관 항목을 눌러 본문을 끝까지 확인하시면 자동으로 동의 처리됩니다. 필수 항목 모두 동의해야 다음 단계로 진행됩니다.

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -113,9 +113,7 @@ function OtpSetupContent() {
 
   return (
     <Card>
-      <CardHeader>
-        <div className="font-mono text-xs text-muted-foreground">SCR-AU-010</div>
-        <CardTitle className="mt-1">OTP 등록</CardTitle>
+      <CardHeader>        <CardTitle className="mt-1">OTP 등록</CardTitle>
         <CardDescription>
           Google Authenticator, Authy 등 TOTP 표준 앱과 연결하여 6자리 일회용 비밀번호로 본인 인증을 강화합니다.
         </CardDescription>

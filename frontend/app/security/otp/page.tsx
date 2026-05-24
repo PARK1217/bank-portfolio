@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import Link from "next/link";
@@ -40,9 +40,7 @@ function OtpManageContent() {
 
   return (
     <Card>
-      <CardHeader>
-        <div className="font-mono text-xs text-muted-foreground">SCR-SC-005</div>
-        <CardTitle className="mt-1">OTP 재발급·변경</CardTitle>
+      <CardHeader>        <CardTitle className="mt-1">OTP 재발급·변경</CardTitle>
         <CardDescription>
           기존 OTP를 해제하고 새 OTP를 등록합니다. 해제와 등록 사이에는 일시적으로 OTP 인증이 불가합니다.
         </CardDescription>

@@ -6,6 +6,7 @@ import { useParams } from "next/navigation";
 import { Protected } from "@/components/protected";
 import { Spinner } from "@/components/ui/spinner";
 import { useFetch } from "@/lib/use-fetch";
+import { delayReasonLabel } from "@/lib/labels";
 import { showApiError } from "@/lib/toast";
 
 
@@ -92,7 +93,7 @@ function HistoryContent({ autoToken }: { autoToken: string }) {
                       {status.label}
                       {e.delay_reason_cd ? (
                         <div className="text-[10px] text-muted-foreground">
-                          {e.delay_reason_cd}
+                          {delayReasonLabel(e.delay_reason_cd)}
                         </div>
                       ) : null}
                     </td>

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
@@ -58,9 +58,7 @@ function RecallForm() {
 
   return (
     <Card>
-      <CardHeader>
-        <div className="font-mono text-xs text-muted-foreground">SCR-TR-009</div>
-        <CardTitle className="mt-1">오송금 회수 신청</CardTitle>
+      <CardHeader>        <CardTitle className="mt-1">오송금 회수 신청</CardTitle>
         <CardDescription>
           잘못 송금된 이체의 회수를 신청합니다. 수취 은행과 수취인의 동의가 필요하며, 일정 시간이 경과하면 회수가 불가할 수 있습니다.
         </CardDescription>

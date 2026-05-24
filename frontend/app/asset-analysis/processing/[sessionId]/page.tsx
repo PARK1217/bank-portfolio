@@ -40,7 +40,7 @@ function ProcessingContent({ sessionId }: { sessionId: string }) {
   return (
     <Card>
       <CardHeader>
-        <div className="font-mono text-xs text-muted-foreground">SCR-AS-003 · 세션 #{sessionId}</div>
+        <div className="text-xs text-muted-foreground">세션 #{sessionId}</div>
         <CardTitle className="mt-1">자산 분석 진행 중</CardTitle>
         <CardDescription>
           LLM 으로 거래 패턴과 페르소나를 매칭하고 있어요. 30초~1분 정도 소요됩니다.

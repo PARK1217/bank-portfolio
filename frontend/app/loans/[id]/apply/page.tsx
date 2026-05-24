@@ -79,7 +79,6 @@ function ApplyForm({ productId }: { productId: number }) {
   return (
     <Card>
       <CardHeader>
-        <div className="font-mono text-xs text-muted-foreground">SCR-LN-003</div>
         <CardTitle className="mt-1">대출 정식 신청</CardTitle>
         <CardDescription>
           신용조회 동의가 포함됩니다. 가능 한도 {fmt(draft.max_amount_krw ?? 0)} / 적용 금리{" "}

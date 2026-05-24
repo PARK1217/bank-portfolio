@@ -49,7 +49,6 @@ function LostReportForm({ token }: { token: string }) {
   return (
     <Card>
       <CardHeader>
-        <div className="font-mono text-xs text-muted-foreground">SCR-AC-010</div>
         <CardTitle className="mt-1">분실 신고</CardTitle>
         <CardDescription>
           접수 즉시 본 계좌의 거래가 정지됩니다. 신고 이후 재발행은 영업점 본인 확인 후 가능합니다.

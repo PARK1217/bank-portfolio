@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -72,9 +72,7 @@ function WithdrawUnlockContent() {
 
   return (
     <Card>
-      <CardHeader>
-        <div className="font-mono text-xs text-muted-foreground">SCR-SC-008</div>
-        <CardTitle className="mt-1">출금 제한 해제</CardTitle>
+      <CardHeader>        <CardTitle className="mt-1">출금 제한 해제</CardTitle>
         <CardDescription>
           안전한 거래를 위해 신규 가입자는 일일 출금 한도가 기본 {krw(DEFAULT_LIMIT_KRW)}로 제한됩니다.
         </CardDescription>

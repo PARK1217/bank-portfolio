@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -205,9 +205,7 @@ function TransferForm() {
 
   return (
     <Card>
-      <CardHeader>
-        <div className="font-mono text-xs text-muted-foreground">SCR-TR-001</div>
-        <CardTitle className="mt-1">즉시이체</CardTitle>
+      <CardHeader>        <CardTitle className="mt-1">즉시이체</CardTitle>
         <CardDescription>
           출금 계좌, 입금 은행·계좌, 금액을 입력하세요. 다음 단계에서 비밀번호 확인 후 실행됩니다.
         </CardDescription>

@@ -126,7 +126,6 @@ function ExecuteContent({ loanToken }: { loanToken: string }) {
     <div className="space-y-5">
       <Card>
         <CardHeader>
-          <div className="font-mono text-xs text-muted-foreground">SCR-LN-007</div>
           <CardTitle className="mt-1">대출 실행</CardTitle>
           <CardDescription>
             약정된 대출 자금을 지정 계좌로 입금합니다. <strong className="text-foreground">멱등성</strong>으로 중복 실행이 차단됩니다.

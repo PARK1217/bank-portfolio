@@ -58,7 +58,6 @@ function EditForm({ token }: { token: string }) {
   return (
     <Card>
       <CardHeader>
-        <div className="font-mono text-xs text-muted-foreground">SCR-AC-006</div>
         <CardTitle className="mt-1">별명 변경</CardTitle>
         <CardDescription>
           {accountTypeLabel(data.account.account_type_cd)} · <span className="font-mono">{data.account.account_no}</span>

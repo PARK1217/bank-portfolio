@@ -91,7 +91,6 @@ function StatusContent({ appToken }: { appToken: string }) {
     <div className="space-y-5">
       <Card>
         <CardHeader>
-          <div className="font-mono text-xs text-muted-foreground">SCR-LN-005</div>
           <CardTitle className="mt-1">{overallLabel}</CardTitle>
           <CardDescription className="font-mono text-xs">{appToken}</CardDescription>
         </CardHeader>
