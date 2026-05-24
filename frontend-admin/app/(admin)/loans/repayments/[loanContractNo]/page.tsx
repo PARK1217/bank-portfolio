@@ -17,54 +17,17 @@ import {
   type LoanExecHistoryRow,
 } from "@/lib/api";
 import { decodeId, encodeId, fmtDateTime, fmtKrw, fmtNumber, fmtPercent } from "@/lib/utils";
-
-
-const CHANNEL_LABEL: Record<string, string> = {
-  APP: "앱",
-  COUNTER: "창구",
-  AUTO: "자동이체",
-};
-const REPAY_TYPE_LABEL: Record<string, string> = {
-  SCHEDULE: "정기",
-  PREPAY: "중도",
-  OVERDUE: "연체",
-};
-const SCHEDULE_STATUS_LABEL: Record<string, string> = {
-  WAITING: "예정",
-  PENDING: "처리 중",
-  PAID: "완납",
-  OVERDUE: "연체",
-};
-const HISTORY_STATUS_LABEL: Record<string, string> = {
-  OK: "정상",
-  CANCEL: "취소",
-};
-const LOAN_STATUS_LABEL: Record<string, string> = {
-  NORMAL: "정상",
-  OVERDUE: "연체",
-  COMPLETE: "완료",
-  EXPIRED: "만기",
-  CANCEL: "해지",
-  PAUSED: "정지",
-};
-const OVERDUE_STAGE_LABEL: Record<string, string> = {
-  STAGE1: "1단계",
-  STAGE2: "2단계",
-  STAGE3: "3단계",
-};
-const LOAN_TYPE_LABEL: Record<string, string> = {
-  CREDIT: "신용",
-  MORTGAGE: "주택담보",
-  JEONSE: "전세자금",
-  BUSINESS: "사업자",
-  COLLATERAL: "담보",
-};
-const REPAY_METHOD_LABEL: Record<string, string> = {
-  EPI: "원리금 균등",
-  EP: "원금 균등",
-  MATURITY: "만기 일시",
-  BULLET: "만기 일시",
-};
+import {
+  execChannelLabel,
+  loanStatusLabel,
+  loanTypeLabel,
+  overdueStageLabel,
+  repayMethodLabel,
+  repayStatusLabel,
+  repayTypeLabel,
+  scheduleStatusLabel,
+  txChannelLabel,
+} from "@/lib/labels";
 
 
 export default function RepaymentDetailPage() {
@@ -141,11 +104,11 @@ export default function RepaymentDetailPage() {
             </div>
             <div className="flex gap-2">
               <Badge variant={data.contract.loan_status_cd === "OVERDUE" ? "destructive" : "success"}>
-                {LOAN_STATUS_LABEL[data.contract.loan_status_cd ?? ""] ?? data.contract.loan_status_cd ?? "-"}
+                {loanStatusLabel(data.contract.loan_status_cd)}
               </Badge>
               {data.contract.overdue_stage_cd ? (
                 <Badge variant="warning">
-                  {OVERDUE_STAGE_LABEL[data.contract.overdue_stage_cd] ?? data.contract.overdue_stage_cd}
+                  {overdueStageLabel(data.contract.overdue_stage_cd)}
                 </Badge>
               ) : null}
             </div>
@@ -161,11 +124,11 @@ export default function RepaymentDetailPage() {
                 <Pair label="상품" value={data.contract.product_name ?? "-"} />
                 <Pair
                   label="대출 유형"
-                  value={LOAN_TYPE_LABEL[data.contract.loan_type_cd ?? ""] ?? data.contract.loan_type_cd ?? "-"}
+                  value={loanTypeLabel(data.contract.loan_type_cd)}
                 />
                 <Pair
                   label="상환 방식"
-                  value={REPAY_METHOD_LABEL[data.contract.repay_method_cd ?? ""] ?? data.contract.repay_method_cd ?? "-"}
+                  value={repayMethodLabel(data.contract.repay_method_cd)}
                 />
                 <Pair
                   label="금리"
@@ -476,7 +439,7 @@ function CombinedRow({
         {h ? fmtKrw(actualTotal) : <span className="text-muted-foreground">-</span>}
       </TD>
       <TD className="text-xs">
-        {h ? CHANNEL_LABEL[h.channel_cd ?? ""] ?? h.channel_cd ?? "-" : (
+        {h ? txChannelLabel(h.channel_cd) : (
           <span className="text-muted-foreground">-</span>
         )}
       </TD>
@@ -496,7 +459,7 @@ function OrphanHistoryRow({ h }: { h: RepaymentHistoryRow }) {
       <TD>
         <RepayTypeBadge cd={h.repay_type_cd} />
       </TD>
-      <TD className="text-xs">{CHANNEL_LABEL[h.channel_cd ?? ""] ?? h.channel_cd ?? "-"}</TD>
+      <TD className="text-xs">{txChannelLabel(h.channel_cd)}</TD>
       <TD className="num-tabular text-right">{fmtKrw(h.repay_principal)}</TD>
       <TD className="num-tabular text-right text-muted-foreground">
         {fmtKrw(h.repay_normal_interest)}
@@ -524,7 +487,7 @@ function ScheduleStatusBadge({ cd }: { cd?: string | null }) {
     PENDING: "primary",
     OVERDUE: "destructive",
   };
-  return <Badge variant={map[cd] ?? "muted"}>{SCHEDULE_STATUS_LABEL[cd] ?? cd}</Badge>;
+  return <Badge variant={map[cd] ?? "muted"}>{scheduleStatusLabel(cd)}</Badge>;
 }
 
 
@@ -534,7 +497,7 @@ function HistoryStatusBadge({ cd }: { cd?: string | null }) {
     OK: "success",
     CANCEL: "destructive",
   };
-  return <Badge variant={map[cd] ?? "muted"}>{HISTORY_STATUS_LABEL[cd] ?? cd}</Badge>;
+  return <Badge variant={map[cd] ?? "muted"}>{repayStatusLabel(cd)}</Badge>;
 }
 
 
@@ -545,16 +508,8 @@ function RepayTypeBadge({ cd }: { cd?: string | null }) {
     PREPAY: "primary",
     OVERDUE: "destructive",
   };
-  return <Badge variant={map[cd] ?? "muted"}>{REPAY_TYPE_LABEL[cd] ?? cd}</Badge>;
+  return <Badge variant={map[cd] ?? "muted"}>{repayTypeLabel(cd)}</Badge>;
 }
-
-
-const EXEC_CHANNEL_LABEL: Record<string, string> = {
-  APP: "앱",
-  WEB: "웹",
-  COUNTER: "창구",
-  AUTO: "자동",
-};
 
 
 function ExecRow({ e }: { e: LoanExecHistoryRow }) {
@@ -565,7 +520,7 @@ function ExecRow({ e }: { e: LoanExecHistoryRow }) {
       <TD className="text-xs">{fmtDateTime(e.exec_datetime)}</TD>
       <TD>
         <Badge variant={e.exec_type_cd === "EXEC" ? "success" : "muted"}>
-          {e.exec_type_cd ?? "-"}
+          {e.exec_type_cd === "EXEC" ? "실행" : e.exec_type_cd === "CANCEL" ? "취소" : "-"}
         </Badge>
       </TD>
       <TD className={`num-tabular text-right font-semibold ${cancelled ? "text-muted-foreground line-through" : ""}`}>
@@ -578,7 +533,7 @@ function ExecRow({ e }: { e: LoanExecHistoryRow }) {
         {e.deposit_account_no ?? "-"}
       </TD>
       <TD className="text-xs">
-        {EXEC_CHANNEL_LABEL[e.channel_cd ?? ""] ?? e.channel_cd ?? "-"}
+        {execChannelLabel(e.channel_cd)}
       </TD>
       <TD className="text-xs text-muted-foreground">{e.emp_no ?? "-"}</TD>
       <TD>

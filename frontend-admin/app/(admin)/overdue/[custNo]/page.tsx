@@ -9,6 +9,14 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { api, type OverdueDetail, type OverdueContract, type OverdueScheduleItem, ApiError } from "@/lib/api";
 import { decodeId, fmtDateTime, fmtKrw, fmtPercent } from "@/lib/utils";
+import {
+  customerStatusLabel,
+  gradeLabel,
+  loanStatusLabel,
+  loanTypeLabel,
+  overdueStageLabel,
+  scheduleStatusLabel,
+} from "@/lib/labels";
 
 
 export default function OverdueDetailPage() {
@@ -64,7 +72,7 @@ export default function OverdueDetailPage() {
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">{data.customer.name ?? "회원"}</h1>
             <p className="mt-1 font-mono text-xs text-muted-foreground">
-              #{data.customer.customer_no} · {data.customer.grade_cd ?? "-"} · {data.customer.status_cd ?? "-"} · {data.customer.email ?? ""}
+              회원 #{data.customer.customer_no} · {gradeLabel(data.customer.grade_cd)} · {customerStatusLabel(data.customer.status_cd)} · {data.customer.email ?? ""}
             </p>
           </div>
 
@@ -94,12 +102,12 @@ function ContractCard({ contract }: { contract: OverdueContract }) {
           <div>
             <CardTitle className="text-base">{contract.product_name ?? "대출"}</CardTitle>
             <CardDescription className="font-mono">
-              {contract.loan_contract_no} · {contract.loan_type_cd ?? ""} · {contract.loan_status_cd ?? ""}
+              {contract.loan_contract_no} · {loanTypeLabel(contract.loan_type_cd)} · {loanStatusLabel(contract.loan_status_cd)}
             </CardDescription>
           </div>
           <div className="text-right">
             <Badge variant={contract.loan_status_cd === "OVERDUE" ? "destructive" : "muted"}>
-              {contract.overdue_stage_cd ?? contract.loan_status_cd ?? "-"}
+              {contract.overdue_stage_cd ? overdueStageLabel(contract.overdue_stage_cd) : loanStatusLabel(contract.loan_status_cd)}
             </Badge>
           </div>
         </div>
@@ -189,12 +197,14 @@ function Pair({
 function ScheduleStatusBadge({ status }: { status: string }) {
   switch (status) {
     case "PAID":
-      return <Badge variant="success">상환</Badge>;
+      return <Badge variant="success">완납</Badge>;
     case "OVERDUE":
       return <Badge variant="destructive">연체</Badge>;
     case "PENDING":
+      return <Badge variant="muted">처리 중</Badge>;
+    case "WAITING":
       return <Badge variant="muted">예정</Badge>;
     default:
-      return <Badge variant="outline">{status}</Badge>;
+      return <Badge variant="outline">{scheduleStatusLabel(status)}</Badge>;
   }
 }

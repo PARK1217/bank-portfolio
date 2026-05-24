@@ -11,6 +11,7 @@ import { api } from "@/lib/api";
 import { useFetch } from "@/lib/use-fetch";
 import { getProductOpenSession } from "@/lib/product-open-session";
 import { showApiError } from "@/lib/toast";
+import { accountTypeLabel } from "@/lib/labels";
 
 
 /** SCR-OP-004 정기예금 개설. */
@@ -201,7 +202,7 @@ function OpenDepositForm({ productId }: { productId: number }) {
             >
               {krwAccounts.map((a) => (
                 <option key={a.account_token} value={a.account_token}>
-                  {(a.alias ?? a.account_type_cd) + " · " + a.account_no + " · " + fmt(a.balance)}
+                  {(a.alias ?? accountTypeLabel(a.account_type_cd)) + " · " + a.account_no + " · " + fmt(a.balance)}
                 </option>
               ))}
             </select>

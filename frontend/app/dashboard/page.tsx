@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import { useFetch } from "@/lib/use-fetch";
 import { showApiError } from "@/lib/toast";
+import { accountTypeLabel, txTypeLabel } from "@/lib/labels";
 
 
 // ---------------------------------------------------------------------------
@@ -156,7 +157,7 @@ function DashboardContent() {
                 <Card className="transition-colors hover:bg-accent">
                   <CardHeader className="pb-2">
                     <div className="flex items-center justify-between text-xs text-muted-foreground">
-                      <span>{acct.account_type_cd}</span>
+                      <span>{accountTypeLabel(acct.account_type_cd)}</span>
                       {acct.currency !== "KRW" ? (
                         <span className="rounded bg-accent px-1.5 py-0.5">
                           {acct.currency}
@@ -231,7 +232,7 @@ function DashboardContent() {
             {data.recent_transactions.slice(0, 5).map((tx) => (
               <li key={tx.tx_token} className="flex items-start justify-between p-3 text-sm">
                 <Link href={`/transactions/${tx.tx_token}`} className="min-w-0 flex-1 hover:underline">
-                  <div className="truncate">{tx.memo ?? tx.tx_type_cd}</div>
+                  <div className="truncate">{tx.memo ?? txTypeLabel(tx.tx_type_cd)}</div>
                   <div className="text-xs text-muted-foreground">
                     {dtFmt.format(new Date(tx.tx_at))}
                     {tx.counterpart ? ` · ${tx.counterpart.bank_name ?? ""} ${tx.counterpart.masked}` : ""}

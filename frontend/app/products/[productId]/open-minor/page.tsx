@@ -104,16 +104,16 @@ function MinorForm({ productId }: { productId: number }) {
       </CardHeader>
       <CardContent>
         <form onSubmit={onSubmit} className="space-y-4">
-          <Field label="자녀 관계자 ID (PARTY_ID)" required>
+          <Field label="자녀 식별번호" required>
             <Input
               inputMode="numeric"
-              placeholder="자녀의 등록된 PARTY_ID"
+              placeholder="자녀의 식별번호 (숫자)"
               value={childPartyId}
               onChange={(e) => setChildPartyId(e.target.value.replace(/[^0-9]/g, ""))}
               required
             />
             <p className="mt-1 text-xs text-muted-foreground">
-              자녀가 PARTY로 등록되어 있어야 합니다 (가족관계 사전 등록 필요).
+              가족관계 사전 등록이 되어 있어야 합니다.
             </p>
           </Field>
 

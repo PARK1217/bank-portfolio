@@ -48,6 +48,9 @@ _EXPLICIT_ACTIONS: dict[tuple[str, str], str] = {
     ("GET",  "/api/admin/customers/overdue"):                  "OVERDUE_LIST",
     ("GET",  "/api/admin/customers/:id/overdue"):              "OVERDUE_DETAIL",
     ("GET",  "/api/admin/health/external"):                    "HEALTH_EXTERNAL_LIST",
+    ("GET",  "/api/admin/products"):                           "PRODUCT_LIST",
+    ("GET",  "/api/admin/products/:id"):                       "PRODUCT_DETAIL",
+    ("PATCH","/api/admin/products/:id/status"):                "PRODUCT_STATUS_UPDATE",
 }
 
 # ---------------------------------------------------------------------------
@@ -69,6 +72,9 @@ _TARGET_TABLE_RULES: list[tuple[re.Pattern[str], str, int | None]] = [
     (re.compile(r"^/api/admin/customers/overdue$"),                  "CUSTOMER",         None),
     (re.compile(r"^/api/admin/health/external/([^/]+)$"),            "EXTERNAL_API_HEALTH", 1),
     (re.compile(r"^/api/admin/health/external$"),                    "EXTERNAL_API_HEALTH", None),
+    (re.compile(r"^/api/admin/products/(\d+)/status$"),              "PRODUCT", 1),
+    (re.compile(r"^/api/admin/products/(\d+)$"),                     "PRODUCT", 1),
+    (re.compile(r"^/api/admin/products$"),                           "PRODUCT", None),
 ]
 
 

@@ -8,6 +8,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
 import { useFetch } from "@/lib/use-fetch";
 import { showApiError } from "@/lib/toast";
+import { txTypeLabel } from "@/lib/labels";
 
 
 interface MaskedAccount {
@@ -120,7 +121,7 @@ function TxListContent({ token }: { token: string }) {
                   href={`/transactions/${tx.tx_token}`}
                   className="min-w-0 flex-1 hover:underline"
                 >
-                  <div className="truncate">{tx.memo ?? tx.tx_type_cd}</div>
+                  <div className="truncate">{tx.memo ?? txTypeLabel(tx.tx_type_cd)}</div>
                   <div className="text-xs text-muted-foreground">
                     {dtFmt.format(new Date(tx.tx_at))}
                     {tx.counterpart

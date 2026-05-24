@@ -11,21 +11,23 @@ import { Spinner } from "@/components/ui/spinner";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { api, type LoanContractListItem, type LoanContractListResponse } from "@/lib/api";
 import { encodeId, fmtDateTime, fmtKrw, fmtNumber, fmtPercent } from "@/lib/utils";
+import {
+  LOAN_TYPE_OPTIONS,
+  REPAY_METHOD_OPTIONS,
+  loanStatusLabel,
+  loanTypeLabel,
+  overdueStageLabel,
+  repayMethodLabel,
+} from "@/lib/labels";
 
 
-const LOAN_TYPES = ["", "TERM", "CREDIT", "MORTGAGE"];
-const LOAN_TYPE_LABEL: Record<string, string> = {
-  TERM: "기한부",
-  CREDIT: "신용",
-  MORTGAGE: "담보",
-};
-const STATUSES = ["", "NEW", "NORMAL", "OVERDUE", "CLOSED"];
-const REPAY_METHODS = ["", "EPI", "OD", "BULLET"];
-const REPAY_METHOD_LABEL: Record<string, string> = {
-  EPI: "원리금균등",
-  OD: "마이너스통장",
-  BULLET: "만기일시",
-};
+const LOAN_STATUS_OPTIONS = [
+  { value: "", label: "전체" },
+  { value: "NEW", label: "신규" },
+  { value: "NORMAL", label: "정상" },
+  { value: "OVERDUE", label: "연체" },
+  { value: "CLOSED", label: "완납" },
+];
 
 
 export default function ContractsPage() {
@@ -88,7 +90,7 @@ export default function ContractsPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">실행 대출 검색</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          LOAN_CONTRACT — 계약번호·회원·상품·유형·상태·금리·약정일 필터
+          계약번호·회원·상품·유형·상태·금리·약정일 필터
         </p>
       </div>
 
@@ -107,9 +109,9 @@ export default function ContractsPage() {
                 />
               </div>
             </label>
-            <SelectField label="유형" value={loanType} onChange={setLoanType} options={LOAN_TYPES} labels={LOAN_TYPE_LABEL} />
-            <SelectField label="상태" value={status} onChange={setStatus} options={STATUSES} />
-            <SelectField label="상환 방식" value={repayMethod} onChange={setRepayMethod} options={REPAY_METHODS} labels={REPAY_METHOD_LABEL} />
+            <SelectField label="유형" value={loanType} onChange={setLoanType} options={[{ value: "", label: "전체" }, ...LOAN_TYPE_OPTIONS]} />
+            <SelectField label="상태" value={status} onChange={setStatus} options={LOAN_STATUS_OPTIONS} />
+            <SelectField label="상환 방식" value={repayMethod} onChange={setRepayMethod} options={[{ value: "", label: "전체" }, ...REPAY_METHOD_OPTIONS]} />
             <label className="space-y-1.5">
               <span className="text-[11px] font-medium text-muted-foreground">금리 최소(%)</span>
               <Input value={rateMin} onChange={(e) => setRateMin(e.target.value)} placeholder="3" className="w-20" />
@@ -221,10 +223,10 @@ function ContractRow({ row }: { row: LoanContractListItem }) {
         </div>
       </TD>
       <TD>
-        <Badge variant="muted">{LOAN_TYPE_LABEL[row.loan_type_cd ?? ""] ?? row.loan_type_cd ?? "-"}</Badge>
+        <Badge variant="muted">{loanTypeLabel(row.loan_type_cd)}</Badge>
       </TD>
       <TD className="text-xs">
-        {REPAY_METHOD_LABEL[row.repay_method_cd ?? ""] ?? row.repay_method_cd ?? "-"}
+        {repayMethodLabel(row.repay_method_cd)}
       </TD>
       <TD className="num-tabular text-right">{fmtKrw(row.contract_limit)}</TD>
       <TD className="num-tabular text-right text-muted-foreground">{fmtKrw(row.current_usage)}</TD>
@@ -265,13 +267,11 @@ function SelectField({
   value,
   onChange,
   options,
-  labels,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
-  options: string[];
-  labels?: Record<string, string>;
+  options: { value: string; label: string }[];
 }) {
   return (
     <label className="space-y-1.5">
@@ -282,8 +282,8 @@ function SelectField({
         className="h-9 rounded-md border border-input bg-background px-2 text-sm"
       >
         {options.map((o) => (
-          <option key={o} value={o}>
-            {o ? (labels?.[o] ?? o) : "전체"}
+          <option key={o.value} value={o.value}>
+            {o.label}
           </option>
         ))}
       </select>
@@ -333,8 +333,8 @@ function StatusBadge({ cd, stage }: { cd?: string | null; stage?: string | null 
   };
   return (
     <div className="flex items-center gap-1">
-      <Badge variant={map[cd] ?? "muted"}>{cd}</Badge>
-      {stage ? <Badge variant="warning">{stage}</Badge> : null}
+      <Badge variant={map[cd] ?? "muted"}>{loanStatusLabel(cd)}</Badge>
+      {stage ? <Badge variant="warning">{overdueStageLabel(stage)}</Badge> : null}
     </div>
   );
 }

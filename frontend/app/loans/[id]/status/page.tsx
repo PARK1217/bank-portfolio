@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Spinner } from "@/components/ui/spinner";
 import { useFetch } from "@/lib/use-fetch";
 import { showApiError } from "@/lib/toast";
+import { loanStepLabel } from "@/lib/labels";
 
 
 /**
@@ -107,7 +108,7 @@ function StatusContent({ appToken }: { appToken: string }) {
                   className="flex items-start justify-between gap-3 rounded-md border bg-card p-3 text-sm"
                 >
                   <div className="min-w-0 flex-1">
-                    <div className="font-medium">{s.step_cd}</div>
+                    <div className="font-medium">{loanStepLabel(s.step_cd)}</div>
                     {s.note ? (
                       <div className="text-xs text-muted-foreground">{s.note}</div>
                     ) : null}

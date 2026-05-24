@@ -12,6 +12,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { api } from "@/lib/api";
 import { useFetch } from "@/lib/use-fetch";
 import { showApiError } from "@/lib/toast";
+import { accountTypeLabel } from "@/lib/labels";
 
 
 /** SCR-AC-009 계좌 해지. 잔액 이체 대상 선택 + 본인 인증. */
@@ -103,7 +104,7 @@ function CloseForm({ token }: { token: string }) {
       </CardHeader>
       <CardContent>
         <div className="mb-4 rounded-md border bg-muted/30 p-3 text-sm">
-          <div className="font-medium">{detail.account.alias ?? detail.account.account_type_cd}</div>
+          <div className="font-medium">{detail.account.alias ?? accountTypeLabel(detail.account.account_type_cd)}</div>
           <div className="font-mono text-xs text-muted-foreground">{detail.account.account_no}</div>
           <div className="num-tabular mt-1 text-base">잔액 {fmt(balance)}</div>
         </div>
@@ -125,7 +126,7 @@ function CloseForm({ token }: { token: string }) {
                 >
                   {candidates.map((c) => (
                     <option key={c.account_token} value={c.account_token}>
-                      {(c.alias ?? c.account_type_cd) + " · " + c.account_no}
+                      {(c.alias ?? accountTypeLabel(c.account_type_cd)) + " · " + c.account_no}
                     </option>
                   ))}
                 </select>

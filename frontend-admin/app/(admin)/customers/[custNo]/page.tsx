@@ -112,7 +112,7 @@ export default function CustomerDetailPage() {
             <div>
               <h1 className="text-2xl font-semibold tracking-tight">{data.customer.name ?? "회원"}</h1>
               <p className="mt-1 font-mono text-xs text-muted-foreground">
-                #{data.customer.customer_no} · PARTY #{data.customer.party_id ?? "-"} · {data.customer.email}
+                회원 #{data.customer.customer_no} · 당사자 #{data.customer.party_id ?? "-"} · {data.customer.email}
               </p>
             </div>
             <div className="flex gap-2">

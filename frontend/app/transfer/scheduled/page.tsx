@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useFetch } from "@/lib/use-fetch";
 import { showApiError } from "@/lib/toast";
+import { accountTypeLabel } from "@/lib/labels";
 
 
 /** SCR-TR-008 1회 예약 이체 — AUTO_TRANSFER(cycle=ONCE) 1회성.
@@ -211,7 +212,7 @@ function ScheduledForm() {
             >
               {accounts.map((a) => (
                 <option key={a.account_token} value={a.account_token}>
-                  {(a.alias ?? a.account_type_cd) + " · " + a.account_no + " · " + fmt(a.balance)}
+                  {(a.alias ?? accountTypeLabel(a.account_type_cd)) + " · " + a.account_no + " · " + fmt(a.balance)}
                 </option>
               ))}
             </select>

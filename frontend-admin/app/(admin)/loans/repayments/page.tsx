@@ -16,25 +16,21 @@ import {
   type RepayDashboardResponse,
 } from "@/lib/api";
 import { encodeId, fmtDateTime, fmtKrw, fmtNumber } from "@/lib/utils";
+import {
+  REPAY_STATUS_OPTIONS,
+  REPAY_TYPE_OPTIONS,
+  repayStatusLabel,
+  repayTypeLabel,
+  txChannelLabel,
+} from "@/lib/labels";
 
 
-const REPAY_TYPES = ["", "SCHEDULE", "PREPAY", "OVERDUE"];
-const REPAY_TYPE_LABEL: Record<string, string> = {
-  SCHEDULE: "정기",
-  PREPAY: "중도",
-  OVERDUE: "연체",
-};
-const CHANNELS = ["", "APP", "COUNTER", "AUTO"];
-const CHANNEL_LABEL: Record<string, string> = {
-  APP: "앱",
-  COUNTER: "창구",
-  AUTO: "자동이체",
-};
-const STATUSES = ["", "OK", "CANCEL"];
-const STATUS_LABEL: Record<string, string> = {
-  OK: "정상",
-  CANCEL: "취소",
-};
+const CHANNEL_OPTIONS = [
+  { value: "", label: "전체" },
+  { value: "APP", label: "앱" },
+  { value: "COUNTER", label: "창구" },
+  { value: "AUTO", label: "자동이체" },
+];
 
 
 export default function RepaymentsPage() {
@@ -137,9 +133,9 @@ export default function RepaymentsPage() {
                 />
               </div>
             </label>
-            <SelectField label="구분" value={repayType} onChange={setRepayType} options={REPAY_TYPES} labels={REPAY_TYPE_LABEL} />
-            <SelectField label="채널" value={channel} onChange={setChannel} options={CHANNELS} labels={CHANNEL_LABEL} />
-            <SelectField label="상태" value={status} onChange={setStatus} options={STATUSES} labels={STATUS_LABEL} />
+            <SelectField label="구분" value={repayType} onChange={setRepayType} options={[{ value: "", label: "전체" }, ...REPAY_TYPE_OPTIONS]} />
+            <SelectField label="채널" value={channel} onChange={setChannel} options={CHANNEL_OPTIONS} />
+            <SelectField label="상태" value={status} onChange={setStatus} options={[{ value: "", label: "전체" }, ...REPAY_STATUS_OPTIONS]} />
             <label className="space-y-1.5">
               <span className="text-[11px] font-medium text-muted-foreground">시작일 (YYYYMMDD)</span>
               <Input value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} placeholder="20260101" maxLength={8} className="w-32" />
@@ -431,7 +427,7 @@ function RepayRow({ row }: { row: RepaymentListItem }) {
       <TD>
         <RepayTypeBadge cd={row.repay_type_cd} />
       </TD>
-      <TD className="text-xs">{CHANNEL_LABEL[row.channel_cd ?? ""] ?? row.channel_cd ?? "-"}</TD>
+      <TD className="text-xs">{txChannelLabel(row.channel_cd)}</TD>
       <TD className="num-tabular text-right">{fmtKrw(row.repay_principal)}</TD>
       <TD className="num-tabular text-right text-muted-foreground">{fmtKrw(row.repay_normal_interest)}</TD>
       <TD className="num-tabular text-right">
@@ -458,13 +454,11 @@ function SelectField({
   value,
   onChange,
   options,
-  labels,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
-  options: string[];
-  labels?: Record<string, string>;
+  options: { value: string; label: string }[];
 }) {
   return (
     <label className="space-y-1.5">
@@ -475,8 +469,8 @@ function SelectField({
         className="h-9 rounded-md border border-input bg-background px-2 text-sm"
       >
         {options.map((o) => (
-          <option key={o} value={o}>
-            {o ? (labels?.[o] ?? o) : "전체"}
+          <option key={o.value} value={o.value}>
+            {o.label}
           </option>
         ))}
       </select>
@@ -525,7 +519,7 @@ function RepayTypeBadge({ cd }: { cd?: string | null }) {
     PREPAY: "primary",
     OVERDUE: "destructive",
   };
-  return <Badge variant={map[cd] ?? "muted"}>{REPAY_TYPE_LABEL[cd] ?? cd}</Badge>;
+  return <Badge variant={map[cd] ?? "muted"}>{repayTypeLabel(cd)}</Badge>;
 }
 
 
@@ -535,5 +529,5 @@ function RepayStatusBadge({ cd }: { cd?: string | null }) {
     OK: "success",
     CANCEL: "destructive",
   };
-  return <Badge variant={map[cd] ?? "muted"}>{STATUS_LABEL[cd] ?? cd}</Badge>;
+  return <Badge variant={map[cd] ?? "muted"}>{repayStatusLabel(cd)}</Badge>;
 }

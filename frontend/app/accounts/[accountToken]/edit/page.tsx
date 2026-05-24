@@ -12,6 +12,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { api } from "@/lib/api";
 import { useFetch } from "@/lib/use-fetch";
 import { showApiError } from "@/lib/toast";
+import { accountTypeLabel } from "@/lib/labels";
 
 
 /** SCR-AC-006 계좌 별명 변경. */
@@ -60,7 +61,7 @@ function EditForm({ token }: { token: string }) {
         <div className="font-mono text-xs text-muted-foreground">SCR-AC-006</div>
         <CardTitle className="mt-1">별명 변경</CardTitle>
         <CardDescription>
-          {data.account.account_type_cd} · <span className="font-mono">{data.account.account_no}</span>
+          {accountTypeLabel(data.account.account_type_cd)} · <span className="font-mono">{data.account.account_no}</span>
         </CardDescription>
       </CardHeader>
       <CardContent>

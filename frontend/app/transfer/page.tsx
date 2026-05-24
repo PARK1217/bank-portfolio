@@ -12,6 +12,7 @@ import { api } from "@/lib/api";
 import { useFetch } from "@/lib/use-fetch";
 import { setTransferDraft } from "@/lib/transfer-session";
 import { showApiError } from "@/lib/toast";
+import { accountTypeLabel } from "@/lib/labels";
 
 
 // ---------------------------------------------------------------------------
@@ -222,7 +223,7 @@ function TransferForm() {
             >
               {accounts.map((a) => (
                 <option key={a.account_token} value={a.account_token}>
-                  {(a.alias ?? a.account_type_cd) + " · " + a.account_no + " · " + fmt(a.balance)}
+                  {(a.alias ?? accountTypeLabel(a.account_type_cd)) + " · " + a.account_no + " · " + fmt(a.balance)}
                 </option>
               ))}
             </select>

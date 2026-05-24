@@ -9,6 +9,7 @@ import { useFetch } from "@/lib/use-fetch";
 import { api } from "@/lib/api";
 import { showApiError } from "@/lib/toast";
 import { cn } from "@/lib/utils";
+import { notificationTypeLabel } from "@/lib/labels";
 
 
 interface NotificationItem {
@@ -116,7 +117,7 @@ function NotificationsContent() {
       ) : (
         <ul className="divide-y rounded-md border bg-card">
           {items.map((n) => {
-            const meta = TYPE_LABEL[n.type_cd] ?? { label: n.type_cd, icon: "🔔" };
+            const meta = TYPE_LABEL[n.type_cd] ?? { label: notificationTypeLabel(n.type_cd), icon: "🔔" };
             const inner = (
               <article
                 className={cn(

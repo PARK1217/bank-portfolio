@@ -10,6 +10,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { useFetch } from "@/lib/use-fetch";
 import { showApiError } from "@/lib/toast";
 import { cn } from "@/lib/utils";
+import { accountTypeLabel, txTypeLabel } from "@/lib/labels";
 
 
 interface AccountSummary {
@@ -82,7 +83,7 @@ function AccountDetailContent({ token }: { token: string }) {
   return (
     <div className="space-y-6">
       <section>
-        <div className="text-xs text-muted-foreground">{account.account_type_cd}</div>
+        <div className="text-xs text-muted-foreground">{accountTypeLabel(account.account_type_cd)}</div>
         <h1 className="text-xl font-semibold">{account.alias ?? account.account_no}</h1>
         <div className="mt-1 font-mono text-xs text-muted-foreground">{account.account_no}</div>
         <div className="num-tabular mt-3 text-3xl font-semibold">{fmt(account.balance)}</div>
@@ -156,7 +157,7 @@ function AccountDetailContent({ token }: { token: string }) {
             {recent_transactions.map((tx) => (
               <li key={tx.tx_token} className="flex items-start justify-between p-3 text-sm">
                 <Link href={`/transactions/${tx.tx_token}`} className="min-w-0 flex-1 hover:underline">
-                  <div className="truncate">{tx.memo ?? tx.tx_type_cd}</div>
+                  <div className="truncate">{tx.memo ?? txTypeLabel(tx.tx_type_cd)}</div>
                   <div className="text-xs text-muted-foreground">
                     {dtFmt.format(new Date(tx.tx_at))}
                   </div>

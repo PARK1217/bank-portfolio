@@ -46,7 +46,7 @@ export default function ReviewQueuePage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">HUMAN_REVIEW</CardTitle>
+          <CardTitle className="text-base">사람 검토 대기</CardTitle>
           <CardDescription>행 클릭 → 신청 상세 + ML 추론 + 라벨링</CardDescription>
         </CardHeader>
         <CardContent>

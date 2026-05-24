@@ -14,23 +14,21 @@ import {
   type AdminTransactionItem,
   type AdminTransactionListResponse,
 } from "@/lib/api";
-import { encodeId, fmtDateTime, fmtKrw, fmtNumber, fmtTxType } from "@/lib/utils";
+import { encodeId, fmtDateTime, fmtKrw, fmtNumber } from "@/lib/utils";
+import {
+  TX_TYPE_OPTIONS,
+  TX_STATUS_OPTIONS,
+  txChannelLabel,
+  txStatusLabel,
+  txTypeLabel,
+} from "@/lib/labels";
 
 
-const TX_TYPES = ["", "DEPOSIT", "WITHDRAW", "TRANSFER", "INTEREST", "FEE", "CORRECTION", "REVERSAL", "LOAN_EXEC", "LOAN_REPAY"];
-const STATUSES = ["", "COMPLETE", "SETTLED", "PENDING", "FAILED", "CANCELED"];
-const STATUS_LABEL: Record<string, string> = {
-  COMPLETE: "완료",
-  SETTLED: "정산",
-  PENDING: "대기",
-  FAILED: "실패",
-  CANCELED: "취소",
-};
-const OWN_BANKS = ["", "Y", "N"];
-const OWN_BANK_LABEL: Record<string, string> = {
-  Y: "당행",
-  N: "타행",
-};
+const OWN_BANK_OPTIONS = [
+  { value: "", label: "전체" },
+  { value: "Y", label: "당행" },
+  { value: "N", label: "타행" },
+];
 
 
 export default function TransactionsPage() {
@@ -90,7 +88,7 @@ export default function TransactionsPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">거래내역 검색</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          TRANSACTION — 시간 역순 · 계좌·회원·일자·금액·유형·채널·상대 필터
+          시간 역순 · 계좌·회원·일자·금액·유형·채널·상대 필터
         </p>
       </div>
 
@@ -118,9 +116,9 @@ export default function TransactionsPage() {
                 className="w-44"
               />
             </label>
-            <SelectField label="유형" value={txType} onChange={setTxType} options={TX_TYPES} labels={Object.fromEntries(TX_TYPES.filter(Boolean).map((t) => [t, fmtTxType(t)]))} />
-            <SelectField label="상태" value={status} onChange={setStatus} options={STATUSES} labels={STATUS_LABEL} />
-            <SelectField label="당행/타행" value={ownBank} onChange={setOwnBank} options={OWN_BANKS} labels={OWN_BANK_LABEL} />
+            <SelectField label="유형" value={txType} onChange={setTxType} options={[{ value: "", label: "전체" }, ...TX_TYPE_OPTIONS]} />
+            <SelectField label="상태" value={status} onChange={setStatus} options={[{ value: "", label: "전체" }, ...TX_STATUS_OPTIONS]} />
+            <SelectField label="당행/타행" value={ownBank} onChange={setOwnBank} options={OWN_BANK_OPTIONS} />
             <label className="space-y-1.5">
               <span className="text-[11px] font-medium text-muted-foreground">시작일</span>
               <Input value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} placeholder="20260101" maxLength={8} className="w-28" />
@@ -236,7 +234,7 @@ function TxRow({ row }: { row: AdminTransactionItem }) {
         </div>
       </TD>
       <TD>
-        <Badge variant={isOut ? "muted" : "success"}>{fmtTxType(row.tx_type_cd)}</Badge>
+        <Badge variant={isOut ? "muted" : "success"}>{txTypeLabel(row.tx_type_cd)}</Badge>
         {row.own_bank_yn === "N" ? <span className="ml-1 text-[10px] text-muted-foreground">타행</span> : null}
       </TD>
       <TD className={`num-tabular text-right font-semibold ${isOut ? "text-destructive" : "text-success"}`}>
@@ -259,7 +257,7 @@ function TxRow({ row }: { row: AdminTransactionItem }) {
           <span className="text-muted-foreground">-</span>
         )}
       </TD>
-      <TD className="text-xs text-muted-foreground">{row.tx_channel_cd ?? "-"}</TD>
+      <TD className="text-xs text-muted-foreground">{txChannelLabel(row.tx_channel_cd)}</TD>
       <TD>
         <StatusBadge cd={row.tx_status_cd} cancel={row.cancel_yn} />
       </TD>
@@ -276,13 +274,11 @@ function SelectField({
   value,
   onChange,
   options,
-  labels,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
-  options: string[];
-  labels?: Record<string, string>;
+  options: { value: string; label: string }[];
 }) {
   return (
     <label className="space-y-1.5">
@@ -293,8 +289,8 @@ function SelectField({
         className="h-9 rounded-md border border-input bg-background px-2 text-sm"
       >
         {options.map((o) => (
-          <option key={o} value={o}>
-            {o ? (labels?.[o] ?? o) : "전체"}
+          <option key={o.value} value={o.value}>
+            {o.label}
           </option>
         ))}
       </select>
@@ -346,5 +342,5 @@ function StatusBadge({ cd, cancel }: { cd?: string | null; cancel?: string | nul
     FAILED: "destructive",
     CANCELED: "destructive",
   };
-  return <Badge variant={map[cd] ?? "muted"}>{STATUS_LABEL[cd] ?? cd}</Badge>;
+  return <Badge variant={map[cd] ?? "muted"}>{txStatusLabel(cd)}</Badge>;
 }

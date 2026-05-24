@@ -12,6 +12,7 @@ import { useFetch } from "@/lib/use-fetch";
 import { getProductOpenSession } from "@/lib/product-open-session";
 import { showApiError } from "@/lib/toast";
 import { cn } from "@/lib/utils";
+import { accountTypeLabel } from "@/lib/labels";
 
 
 /**
@@ -226,7 +227,7 @@ function OpenInstallmentForm({ productId }: { productId: number }) {
               >
                 {krwAccounts.map((a) => (
                   <option key={a.account_token} value={a.account_token}>
-                    {(a.alias ?? a.account_type_cd) + " · " + a.account_no}
+                    {(a.alias ?? accountTypeLabel(a.account_type_cd)) + " · " + a.account_no}
                   </option>
                 ))}
               </select>

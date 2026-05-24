@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import { useFetch } from "@/lib/use-fetch";
 import { showApiError } from "@/lib/toast";
+import { accountTypeLabel } from "@/lib/labels";
 
 
 interface AccountSummary {
@@ -75,7 +76,7 @@ function AccountsContent() {
               <Card className="transition-colors hover:bg-accent">
                 <CardHeader className="pb-2">
                   <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span>{acct.account_type_cd}</span>
+                    <span>{accountTypeLabel(acct.account_type_cd)}</span>
                     {acct.currency !== "KRW" ? (
                       <span className="rounded bg-accent px-1.5 py-0.5">{acct.currency}</span>
                     ) : null}

@@ -8,6 +8,18 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import { useFetch } from "@/lib/use-fetch";
 import { showApiError } from "@/lib/toast";
+import { complaintTypeLabel } from "@/lib/labels";
+
+
+const COMPLAINT_STEP_LABEL: Record<string, string> = {
+  RECEIVED: "접수",
+  REVIEWING: "검토 중",
+  ASSIGNED: "담당자 배정",
+  IN_PROGRESS: "처리 중",
+  RESOLVED: "처리 완료",
+  CLOSED: "종결",
+  REJECTED: "반려",
+};
 
 
 /** SCR-CM-003 민원 처리 이력 상세. */
@@ -66,7 +78,7 @@ function ComplaintDetailContent({ token }: { token: string }) {
     <div className="space-y-5">
       <header>
         <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span>{data.complaint_type_cd}</span>
+          <span>{complaintTypeLabel(data.complaint_type_cd)}</span>
           <span className={status.color}>{status.label}</span>
         </div>
         <h1 className="mt-1 text-xl font-semibold">{data.title}</h1>
@@ -105,7 +117,7 @@ function ComplaintDetailContent({ token }: { token: string }) {
                     {dtFmt.format(new Date(s.occurred_at))}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <div className="font-medium">{s.step_cd}</div>
+                    <div className="font-medium">{COMPLAINT_STEP_LABEL[s.step_cd] ?? s.step_cd}</div>
                     {s.note ? <div className="text-xs text-muted-foreground">{s.note}</div> : null}
                     {s.actor ? <div className="text-[10px] text-muted-foreground">담당 {s.actor}</div> : null}
                   </div>

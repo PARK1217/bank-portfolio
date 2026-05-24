@@ -17,6 +17,7 @@ import {
   ShieldAlert,
   Sparkles,
   ScrollText,
+  Package,
   LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -68,6 +69,7 @@ const MENU: MenuEntry[] = [
       { href: "/transactions", label: "거래내역 검색", icon: Receipt },
     ],
   },
+  { href: "/products", label: "상품 관리", icon: Package },
   { href: "/fds", label: "의심거래 (FDS)", icon: ShieldAlert },
   { href: "/health", label: "외부망 헬스", icon: Activity },
   { href: "/observability", label: "AI 관측 (Phoenix)", icon: Sparkles },

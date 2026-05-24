@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import { useFetch } from "@/lib/use-fetch";
 import { showApiError } from "@/lib/toast";
+import { txTypeLabel } from "@/lib/labels";
 
 
 interface MaskedAccount {
@@ -88,7 +89,7 @@ function TxDetailContent({ token }: { token: string }) {
   return (
     <div className="space-y-6">
       <section>
-        <div className="text-xs text-muted-foreground">{data.tx_type_cd}</div>
+        <div className="text-xs text-muted-foreground">{txTypeLabel(data.tx_type_cd)}</div>
         <div
           className={`num-tabular text-3xl font-semibold ${
             isWithdraw ? "text-destructive" : "text-success"

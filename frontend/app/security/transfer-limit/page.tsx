@@ -10,6 +10,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { api } from "@/lib/api";
 import { useFetch } from "@/lib/use-fetch";
 import { showApiError } from "@/lib/toast";
+import { accountTypeLabel, limitRequestStatusLabel } from "@/lib/labels";
 
 
 /** SCR-SC-006 이체·출금 한도 변경 — 7일 점검 흐름.
@@ -207,7 +208,7 @@ function AccountLimitCard({ account }: { account: AccountSummary }) {
   return (
     <Card>
       <CardHeader className="pb-2">
-        <CardTitle className="text-base">{account.alias ?? account.account_type_cd}</CardTitle>
+        <CardTitle className="text-base">{account.alias ?? accountTypeLabel(account.account_type_cd)}</CardTitle>
         <div className="font-mono text-xs text-muted-foreground">{account.account_no}</div>
       </CardHeader>
       <CardContent className="space-y-4 pt-0">
@@ -242,7 +243,7 @@ function AccountLimitCard({ account }: { account: AccountSummary }) {
                       <span className="text-foreground">{TYPE_LABEL[h.limit_type_cd]}</span>{" "}
                       {fmt(h.old_limit_krw)} → {fmt(h.new_limit_krw)}{" "}
                       <span className="text-muted-foreground">
-                        · {h.status_cd}{" "}
+                        · {limitRequestStatusLabel(h.status_cd)}{" "}
                         {h.applied_datetime
                           ? `(${dtFmt.format(new Date(h.applied_datetime))})`
                           : h.canceled_datetime

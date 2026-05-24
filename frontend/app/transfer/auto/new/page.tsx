@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useFetch } from "@/lib/use-fetch";
 import { showApiError } from "@/lib/toast";
+import { accountTypeLabel } from "@/lib/labels";
 
 
 /** SCR-TR-005 자동이체 등록. AUTO_TRANSFER 신규 + SCHEDULE_RULE jsonb (격주/N요일). */
@@ -256,7 +257,7 @@ function NewAutoTransferForm() {
             >
               {accounts.map((a) => (
                 <option key={a.account_token} value={a.account_token}>
-                  {(a.alias ?? a.account_type_cd) + " · " + a.account_no + " · " + fmt(a.balance)}
+                  {(a.alias ?? accountTypeLabel(a.account_type_cd)) + " · " + a.account_no + " · " + fmt(a.balance)}
                 </option>
               ))}
             </select>
@@ -274,7 +275,7 @@ function NewAutoTransferForm() {
                   <optgroup label="내 계좌 (자유입출금 / 적금 / 외화)">
                     {incomingMyAccounts.map((a) => (
                       <option key={`MY-${a.account_no}`} value={`MY:${a.account_no}`}>
-                        {(a.alias ?? a.account_type_cd) + " · " + a.account_no}
+                        {(a.alias ?? accountTypeLabel(a.account_type_cd)) + " · " + a.account_no}
                       </option>
                     ))}
                   </optgroup>
