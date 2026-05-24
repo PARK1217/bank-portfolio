@@ -49,6 +49,7 @@ _EXPLICIT_ACTIONS: dict[tuple[str, str], str] = {
     ("GET",  "/api/admin/customers/:id/overdue"):              "OVERDUE_DETAIL",
     ("GET",  "/api/admin/health/external"):                    "HEALTH_EXTERNAL_LIST",
     ("GET",  "/api/admin/products"):                           "PRODUCT_LIST",
+    ("POST", "/api/admin/products"):                           "PRODUCT_CREATE",
     ("GET",  "/api/admin/products/:id"):                       "PRODUCT_DETAIL",
     ("PATCH","/api/admin/products/:id/status"):                "PRODUCT_STATUS_UPDATE",
 }

@@ -21,8 +21,8 @@ from typing import Any
 import structlog
 
 from ..db import get_pool
-from ..errors import E_NOT_FOUND, E_VALIDATION
-from ..exceptions import BusinessError, NotFoundError
+from ..errors import E_IDEMPOTENCY_CONFLICT, E_NOT_FOUND, E_VALIDATION
+from ..exceptions import BusinessError, ConflictError, NotFoundError
 
 log = structlog.get_logger("admin_product")
 
@@ -33,6 +33,17 @@ ALLOWED_STATUSES = {"SALE", "SUSPEND", "CLOSED"}
 # 타입 분류 (집계 분기용)
 _LOAN_TYPES = {"LOAN"}
 _DEPOSIT_LIKE_TYPES = {"SAVING", "DEPOSIT", "INSTALL", "FOREIGN"}
+ALLOWED_TYPES = _LOAN_TYPES | _DEPOSIT_LIKE_TYPES
+
+# 타입별 PRODUCT_ID 분류 시작점 — 운영 컨벤션 (시드 정합).
+# 자동 발급 시 새 ID 는 같은 타입의 MAX+1 또는 분류 시작점 중 큰 값.
+_TYPE_ID_BASE: dict[str, int] = {
+    "SAVING":  100,
+    "FOREIGN": 100,
+    "DEPOSIT": 200,
+    "INSTALL": 300,
+    "LOAN":    400,
+}
 
 
 def _row_to_list_item(r: Any) -> dict:
@@ -320,3 +331,119 @@ async def update_product_status(
         employee_no=employee_no,
     )
     return {"product_id": product_id, "prev_status": prev_status, "new_status": new_status}
+
+
+# ---------------------------------------------------------------------------
+# 신규 등록
+# ---------------------------------------------------------------------------
+
+async def create_product(
+    *,
+    product_id: int | None,
+    product_name: str,
+    product_type_cd: str,
+    product_status_cd: str = "SALE",
+    special_yn: bool = False,
+    min_amount: int | None = None,
+    max_amount: int | None = None,
+    sale_start_date: str | None = None,
+    sale_end_date: str | None = None,
+    owner_dept: str | None = None,
+    product_desc: str | None = None,
+    product_features: str | None = None,
+    employee_no: str,
+) -> dict:
+    """새 상품 등록.
+
+    `product_id` 가 None 이면 같은 타입 분류 코드 안의 MAX+1 로 자동 발급
+    (시드 컨벤션: 1xx=SAVING/FOREIGN, 2xx=DEPOSIT, 3xx=INSTALL, 4xx=LOAN).
+    명시 입력 시 중복은 409.
+    """
+    name = (product_name or "").strip()
+    if not name:
+        raise BusinessError(E_VALIDATION, "상품명을 입력해주세요.")
+    type_cd = (product_type_cd or "").strip().upper()
+    if type_cd not in ALLOWED_TYPES:
+        raise BusinessError(
+            E_VALIDATION,
+            f"지원하지 않는 상품 종류예요. 사용 가능: {', '.join(sorted(ALLOWED_TYPES))}",
+        )
+    status_cd = (product_status_cd or "SALE").strip().upper()
+    if status_cd not in ALLOWED_STATUSES:
+        raise BusinessError(
+            E_VALIDATION,
+            f"지원하지 않는 판매 상태예요. 사용 가능: {', '.join(sorted(ALLOWED_STATUSES))}",
+        )
+    if min_amount is not None and max_amount is not None and min_amount > max_amount:
+        raise BusinessError(E_VALIDATION, "최소 금액이 최대 금액보다 클 수 없어요.")
+    for label, ds in (("판매 시작", sale_start_date), ("판매 종료", sale_end_date)):
+        if ds and (len(ds) != 8 or not ds.isdigit()):
+            raise BusinessError(E_VALIDATION, f"{label}일은 YYYYMMDD 형식이어야 해요.")
+    if sale_start_date and sale_end_date and sale_start_date > sale_end_date:
+        raise BusinessError(E_VALIDATION, "판매 시작일이 종료일보다 늦을 수 없어요.")
+
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            # PRODUCT_ID 결정 — 명시 입력 우선, 없으면 타입 분류 안에서 MAX+1
+            if product_id is None:
+                base = _TYPE_ID_BASE.get(type_cd, 100)
+                next_id = await conn.fetchval(
+                    'SELECT COALESCE(MAX("PRODUCT_ID"), $1) + 1 '
+                    'FROM public."PRODUCT" '
+                    'WHERE "PRODUCT_TYPE_CD" = $2',
+                    base,
+                    type_cd,
+                )
+                # 같은 타입이 한 건도 없으면 base+1 부터 시작 (예: SAVING base=100 → 101)
+                product_id = int(next_id)
+            else:
+                if not (1 <= product_id <= 32767):
+                    raise BusinessError(E_VALIDATION, "상품 코드는 1~32767 범위여야 해요.")
+                exists = await conn.fetchval(
+                    'SELECT 1 FROM public."PRODUCT" WHERE "PRODUCT_ID" = $1',
+                    product_id,
+                )
+                if exists:
+                    raise ConflictError(
+                        E_IDEMPOTENCY_CONFLICT,
+                        f"이미 사용 중인 상품 코드예요 (PRODUCT_ID={product_id}).",
+                    )
+
+            await conn.execute(
+                'INSERT INTO public."PRODUCT" ('
+                '  "PRODUCT_ID", "PRODUCT_NAME", "PRODUCT_TYPE_CD", "PRODUCT_STATUS_CD", '
+                '  "SPECIAL_YN", "MIN_AMOUNT", "MAX_AMOUNT", '
+                '  "SALE_START_DATE", "SALE_END_DATE", '
+                '  "OWNER_DEPT", "PRODUCT_DESC", "PRODUCT_FEATURES", '
+                '  "LAUNCH_DATE", "CREATED_BY", "DELETE_YN"'
+                ") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, "
+                "  to_char(CURRENT_DATE, 'YYYYMMDD'), $13, 'N')",
+                product_id,
+                name[:80],
+                type_cd,
+                status_cd,
+                "Y" if special_yn else "N",
+                int(min_amount) if min_amount is not None else None,
+                int(max_amount) if max_amount is not None else None,
+                sale_start_date,
+                sale_end_date,
+                (owner_dept or None) and owner_dept.strip()[:50],
+                product_desc,
+                product_features and product_features[:500],
+                str(employee_no)[:20],
+            )
+
+    log.info(
+        "admin_product_created",
+        product_id=product_id,
+        product_name=name,
+        type_cd=type_cd,
+        employee_no=employee_no,
+    )
+    return {
+        "product_id": product_id,
+        "product_name": name,
+        "product_type_cd": type_cd,
+        "product_status_cd": status_cd,
+    }

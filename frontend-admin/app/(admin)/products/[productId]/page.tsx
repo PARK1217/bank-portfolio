@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { api, ApiError } from "@/lib/api";
 import { fmtKrw, fmtNumber } from "@/lib/utils";
-import { StatusBadge } from "../page";
+import { StatusBadge } from "@/components/product-status-badge";
 
 
 interface ProductDetail {

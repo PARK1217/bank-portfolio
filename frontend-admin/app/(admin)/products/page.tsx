@@ -2,13 +2,15 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { Package } from "lucide-react";
+import { Package, Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import { Badge } from "@/components/ui/badge";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { api } from "@/lib/api";
 import { fmtKrw, fmtNumber } from "@/lib/utils";
+import { StatusBadge } from "@/components/product-status-badge";
 
 
 interface ProductListItem {
@@ -90,19 +92,27 @@ export default function ProductsPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-end justify-between">
+      <div className="flex items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">상품 관리</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             판매 상품 카탈로그 · 가입자 · 잔액 · 판매 상태 토글
           </p>
         </div>
-        {items ? (
-          <div className="text-right">
-            <div className="text-xs text-muted-foreground">총 {items.length}건</div>
-            <div className="num-tabular text-xl font-semibold">{fmtKrw(totalBalance)}</div>
-          </div>
-        ) : null}
+        <div className="flex items-center gap-3">
+          {items ? (
+            <div className="text-right">
+              <div className="text-xs text-muted-foreground">총 {items.length}건</div>
+              <div className="num-tabular text-xl font-semibold">{fmtKrw(totalBalance)}</div>
+            </div>
+          ) : null}
+          <Link href="/products/new">
+            <Button>
+              <Plus className="mr-1 h-4 w-4" />
+              새 상품 등록
+            </Button>
+          </Link>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
@@ -241,9 +251,3 @@ function FilterSelect({
 }
 
 
-export function StatusBadge({ status }: { status: string }) {
-  if (status === "SALE") return <Badge variant="success">판매중</Badge>;
-  if (status === "SUSPEND") return <Badge variant="warning">판매중지</Badge>;
-  if (status === "CLOSED") return <Badge variant="muted">판매종료</Badge>;
-  return <Badge variant="outline">{status}</Badge>;
-}
