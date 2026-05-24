@@ -17,7 +17,15 @@ import {
   type AccountLimitHistoryRow,
   type AccountStatusHistoryRow,
 } from "@/lib/api";
-import { decodeId, encodeId, fmtDateTime, fmtKrw, fmtTxType } from "@/lib/utils";
+import { decodeId, encodeId, fmtDateTime, fmtKrw } from "@/lib/utils";
+import {
+  accountStatusLabel,
+  accountTypeLabel,
+  customerStatusLabel,
+  gradeLabel,
+  limitRequestStatusLabel,
+  txTypeLabel,
+} from "@/lib/labels";
 
 
 const ACCT_STATUSES = ["NORMAL", "5050", "LIMITED", "LOCKED", "DORMANT", "CLOSED"];
@@ -94,13 +102,13 @@ export default function AccountDetailPage() {
             <div>
               <h1 className="text-2xl font-semibold tracking-tight font-mono">{data.account.account_no}</h1>
               <p className="mt-1 text-sm text-muted-foreground">
-                {data.account.account_type_cd} · {data.account.holder_name ?? "-"}
+                {accountTypeLabel(data.account.account_type_cd)} · {data.account.holder_name ?? "-"}
                 {data.account.alias ? ` · ${data.account.alias}` : ""}
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
               <Badge variant={data.account.status_cd === "NORMAL" || data.account.status_cd === "5050" ? "success" : "warning"}>
-                {data.account.status_cd}
+                {accountStatusLabel(data.account.status_cd)}
               </Badge>
               {data.account.primary_yn === "Y" ? <Badge variant="primary">주거래</Badge> : null}
               {data.account.limited_yn === "Y" ? <Badge variant="warning">제한</Badge> : null}
@@ -152,8 +160,8 @@ export default function AccountDetailPage() {
             </CardHeader>
             <CardContent>
               <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm md:grid-cols-4">
-                <Pair label="유형" value={data.account.account_type_cd} />
-                <Pair label="상태" value={data.account.status_cd} />
+                <Pair label="유형" value={accountTypeLabel(data.account.account_type_cd)} />
+                <Pair label="상태" value={accountStatusLabel(data.account.status_cd)} />
                 <Pair label="개설일" value={fmtDateTime(data.account.open_date)} />
                 <Pair label="해지일" value={fmtDateTime(data.account.close_date)} />
                 <Pair label="마지막 거래" value={fmtDateTime(data.account.last_tx_datetime)} />
@@ -184,8 +192,8 @@ export default function AccountDetailPage() {
                     }
                   />
                   <Pair label="이메일" value={data.account.customer_email ?? "-"} />
-                  <Pair label="등급" value={data.account.customer_grade_cd ?? "-"} />
-                  <Pair label="회원 상태" value={data.account.customer_status_cd ?? "-"} />
+                  <Pair label="등급" value={gradeLabel(data.account.customer_grade_cd)} />
+                  <Pair label="회원 상태" value={customerStatusLabel(data.account.customer_status_cd)} />
                 </dl>
               </CardContent>
             </Card>
@@ -220,7 +228,7 @@ export default function AccountDetailPage() {
                         <TD className="text-xs text-muted-foreground">{fmtDateTime(t.tx_datetime)}</TD>
                         <TD>
                           <Badge variant={t.amount >= 0 ? "success" : "muted"}>
-                            {fmtTxType(t.tx_type_cd)}
+                            {txTypeLabel(t.tx_type_cd)}
                           </Badge>
                         </TD>
                         <TD
@@ -600,7 +608,7 @@ function AcctLimitHistoryCard({ items }: { items: AccountLimitHistoryRow[] }) {
                   </TD>
                   <TD>
                     <Badge variant={h.status_cd === "APPLIED" ? "success" : h.status_cd === "CANCELED" ? "destructive" : "muted"}>
-                      {h.status_cd}
+                      {limitRequestStatusLabel(h.status_cd)}
                     </Badge>
                   </TD>
                   <TD className="text-xs">

@@ -11,10 +11,22 @@ import { Spinner } from "@/components/ui/spinner";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { api, type AccountListResponse } from "@/lib/api";
 import { encodeId, fmtKrw, fmtDateTime } from "@/lib/utils";
+import { accountStatusLabel, accountTypeLabel } from "@/lib/labels";
 
 
-const TYPES = ["", "SAVING", "DEPOSIT", "INSTALL", "FOREIGN"];
-const STATUSES = ["", "NORMAL", "5050", "LIMITED", "LOCKED", "CLOSED"];
+const TYPES: { value: string; label: string }[] = [
+  { value: "SAVING", label: "입출금" },
+  { value: "DEPOSIT", label: "정기예금" },
+  { value: "INSTALL", label: "적금" },
+  { value: "FOREIGN", label: "외화" },
+];
+const STATUSES: { value: string; label: string }[] = [
+  { value: "NORMAL", label: "정상" },
+  { value: "5050", label: "정상(시드)" },
+  { value: "LIMITED", label: "거래제한" },
+  { value: "LOCKED", label: "잠금" },
+  { value: "CLOSED", label: "해지" },
+];
 
 
 export default function AccountsPage() {
@@ -58,7 +70,7 @@ export default function AccountsPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">계좌 검색</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          계좌번호 · 예금주 · customer_no 부분 일치 / 유형·상태 필터
+          계좌번호 · 예금주 · 회원번호 부분 일치 / 유형·상태 필터
         </p>
       </div>
 
@@ -72,7 +84,7 @@ export default function AccountsPage() {
                 <Input
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder="계좌번호 / 예금주 / customer_no"
+                  placeholder="계좌번호 / 예금주 / 회원번호"
                   className="pl-8"
                 />
               </div>
@@ -84,9 +96,10 @@ export default function AccountsPage() {
                 onChange={(e) => setAccountTypeCd(e.target.value)}
                 className="h-9 rounded-md border border-input bg-background px-2 text-sm"
               >
+                <option value="">전체</option>
                 {TYPES.map((t) => (
-                  <option key={t} value={t}>
-                    {t || "전체"}
+                  <option key={t.value} value={t.value}>
+                    {t.label}
                   </option>
                 ))}
               </select>
@@ -98,9 +111,10 @@ export default function AccountsPage() {
                 onChange={(e) => setStatusCd(e.target.value)}
                 className="h-9 rounded-md border border-input bg-background px-2 text-sm"
               >
+                <option value="">전체</option>
                 {STATUSES.map((s) => (
-                  <option key={s} value={s}>
-                    {s || "전체"}
+                  <option key={s.value} value={s.value}>
+                    {s.label}
                   </option>
                 ))}
               </select>
@@ -157,7 +171,7 @@ export default function AccountsPage() {
                         {row.account_no}
                       </Link>
                     </TD>
-                    <TD>{row.account_type_cd}</TD>
+                    <TD>{accountTypeLabel(row.account_type_cd)}</TD>
                     <TD>
                       <StatusBadge status={row.status_cd} />
                     </TD>
@@ -197,8 +211,9 @@ export default function AccountsPage() {
 
 
 function StatusBadge({ status }: { status: string }) {
-  if (status === "NORMAL" || status === "5050") return <Badge variant="success">{status}</Badge>;
-  if (status === "LIMITED") return <Badge variant="warning">{status}</Badge>;
-  if (status === "LOCKED" || status === "CLOSED") return <Badge variant="destructive">{status}</Badge>;
-  return <Badge variant="muted">{status}</Badge>;
+  const label = accountStatusLabel(status);
+  if (status === "NORMAL" || status === "5050") return <Badge variant="success">{label}</Badge>;
+  if (status === "LIMITED") return <Badge variant="warning">{label}</Badge>;
+  if (status === "LOCKED" || status === "CLOSED") return <Badge variant="destructive">{label}</Badge>;
+  return <Badge variant="muted">{label}</Badge>;
 }

@@ -19,6 +19,15 @@ import {
   type CustomerStatusHistoryRow,
 } from "@/lib/api";
 import { decodeId, encodeId, fmtDateTime, fmtKrw, fmtNumber, fmtPercent } from "@/lib/utils";
+import {
+  accountStatusLabel,
+  accountTypeLabel,
+  addrTypeLabel,
+  contactTypeLabel,
+  customerStatusLabel,
+  gradeLabel,
+  loanStatusLabel,
+} from "@/lib/labels";
 
 
 const CUST_STATUSES = ["5050", "LIMITED", "LOCKED", "DORMANT"];
@@ -28,7 +37,14 @@ const CUST_STATUS_LABEL: Record<string, string> = {
   LOCKED: "잠금",
   DORMANT: "휴면",
 };
-const CUST_GRADES = ["VIP", "G100", "GENERAL", "MINOR", "SENIOR", "STUDENT"];
+const CUST_GRADES = ["VIP", "GENERAL", "MINOR", "SENIOR", "STUDENT"];
+const CUST_GRADE_LABEL: Record<string, string> = {
+  VIP: "VIP",
+  GENERAL: "일반",
+  MINOR: "미성년",
+  SENIOR: "시니어",
+  STUDENT: "학생",
+};
 
 
 export default function CustomerDetailPage() {
@@ -100,9 +116,9 @@ export default function CustomerDetailPage() {
               </p>
             </div>
             <div className="flex gap-2">
-              <Badge variant="primary">{data.customer.grade_cd ?? "-"}</Badge>
+              <Badge variant="primary">{gradeLabel(data.customer.grade_cd)}</Badge>
               <Badge variant={data.customer.status_cd === "5050" ? "success" : "warning"}>
-                {data.customer.status_cd ?? "-"}
+                {customerStatusLabel(data.customer.status_cd)}
               </Badge>
             </div>
           </div>
@@ -148,7 +164,7 @@ export default function CustomerDetailPage() {
                   <ul className="space-y-1.5 text-sm">
                     {data.contacts.map((c, i) => (
                       <li key={i} className="flex items-center justify-between">
-                        <span className="text-xs text-muted-foreground">{c.contact_type_cd}</span>
+                        <span className="text-xs text-muted-foreground">{contactTypeLabel(c.contact_type_cd)}</span>
                         <span className="num-tabular">{c.value}</span>
                         {c.primary_yn === "Y" ? <Badge variant="primary">대표</Badge> : null}
                       </li>
@@ -171,7 +187,7 @@ export default function CustomerDetailPage() {
                     {data.addresses.map((a, i) => (
                       <li key={i}>
                         <div className="flex items-center gap-2">
-                          <span className="text-xs text-muted-foreground">{a.addr_type_cd}</span>
+                          <span className="text-xs text-muted-foreground">{addrTypeLabel(a.addr_type_cd)}</span>
                           {a.primary_yn === "Y" ? <Badge variant="primary">대표</Badge> : null}
                         </div>
                         <div className="text-sm">
@@ -216,10 +232,10 @@ export default function CustomerDetailPage() {
                             {a.account_no}
                           </Link>
                         </TD>
-                        <TD>{a.account_type_cd}</TD>
+                        <TD>{accountTypeLabel(a.account_type_cd)}</TD>
                         <TD>
                           <Badge variant={a.status_cd === "5050" || a.status_cd === "NORMAL" ? "success" : "warning"}>
-                            {a.status_cd}
+                            {accountStatusLabel(a.status_cd)}
                           </Badge>
                         </TD>
                         <TD className="num-tabular text-right font-medium">{fmtKrw(a.balance)}</TD>
@@ -277,7 +293,7 @@ export default function CustomerDetailPage() {
                         </TD>
                         <TD>
                           <Badge variant={l.loan_status_cd === "OVERDUE" ? "destructive" : "success"}>
-                            {l.loan_status_cd ?? "-"}
+                            {loanStatusLabel(l.loan_status_cd)}
                           </Badge>
                         </TD>
                         <TD className="text-xs text-muted-foreground">{fmtDateTime(l.contract_date)}</TD>
@@ -491,7 +507,7 @@ function GradeActionForm({
 
   async function submit() {
     if (disabled) return;
-    if (!window.confirm(`등급을 [${currentGrade}] → [${newGrade}] 로 변경할까요?`)) return;
+    if (!window.confirm(`등급을 [${CUST_GRADE_LABEL[currentGrade] ?? currentGrade}] → [${CUST_GRADE_LABEL[newGrade] ?? newGrade}] 로 변경할까요?`)) return;
     setSubmitting(true);
     setErr(null);
     setOk(null);
@@ -517,7 +533,7 @@ function GradeActionForm({
       <div className="flex items-center gap-2 text-sm font-medium">
         <Award className="h-3.5 w-3.5 text-primary" />
         등급 변경
-        <span className="text-[10px] text-muted-foreground">현재 {currentGrade || "-"}</span>
+        <span className="text-[10px] text-muted-foreground">현재 {CUST_GRADE_LABEL[currentGrade] ?? currentGrade ?? "-"}</span>
       </div>
       <div className="grid grid-cols-3 gap-2">
         <select
@@ -527,7 +543,7 @@ function GradeActionForm({
         >
           {CUST_GRADES.map((g) => (
             <option key={g} value={g}>
-              {g}
+              {CUST_GRADE_LABEL[g] ?? g}
             </option>
           ))}
         </select>
@@ -620,7 +636,7 @@ function GradeHistoryCard({ items }: { items: CustomerGradeHistoryRow[] }) {
                   <TD className="text-xs text-muted-foreground">
                     {h.grade_end_date ? fmtDateTime(h.grade_end_date) : <Badge variant="primary">현재</Badge>}
                   </TD>
-                  <TD className="text-xs font-medium">{h.grade_cd ?? "-"}</TD>
+                  <TD className="text-xs font-medium">{gradeLabel(h.grade_cd)}</TD>
                   <TD className="text-xs">{h.reason_cd ?? "-"}</TD>
                   <TD className="font-mono text-[10px] text-muted-foreground">{h.created_by ?? "-"}</TD>
                 </TR>

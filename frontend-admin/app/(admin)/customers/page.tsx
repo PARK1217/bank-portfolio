@@ -11,10 +11,12 @@ import { Spinner } from "@/components/ui/spinner";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { api, type CustomerListResponse } from "@/lib/api";
 import { encodeId, fmtKrw, fmtNumber, fmtDateTime } from "@/lib/utils";
-
-
-const GRADES = ["", "VIP", "GENERAL", "MINOR", "SENIOR", "STUDENT"];
-const STATUSES = ["", "5050", "LIMITED", "LOCKED", "DORMANT"];
+import {
+  CUSTOMER_STATUS_OPTIONS,
+  GRADE_OPTIONS,
+  customerStatusLabel,
+  gradeLabel,
+} from "@/lib/labels";
 
 
 export default function CustomersPage() {
@@ -58,7 +60,7 @@ export default function CustomersPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">회원 검색</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          customer_no · 이메일 · 이름 부분 일치 검색 / 등급·상태 필터
+          회원번호 · 이메일 · 이름 부분 일치 검색 / 등급·상태 필터
         </p>
       </div>
 
@@ -72,7 +74,7 @@ export default function CustomersPage() {
                 <Input
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder="customer_no / 이메일 / 이름"
+                  placeholder="회원번호 / 이메일 / 이름"
                   className="pl-8"
                 />
               </div>
@@ -84,9 +86,10 @@ export default function CustomersPage() {
                 onChange={(e) => setGradeCd(e.target.value)}
                 className="h-9 rounded-md border border-input bg-background px-2 text-sm"
               >
-                {GRADES.map((g) => (
-                  <option key={g} value={g}>
-                    {g || "전체"}
+                 <option value="">전체</option>
+                {GRADE_OPTIONS.map((g) => (
+                  <option key={g.value} value={g.value}>
+                    {g.label}
                   </option>
                 ))}
               </select>
@@ -98,9 +101,10 @@ export default function CustomersPage() {
                 onChange={(e) => setStatusCd(e.target.value)}
                 className="h-9 rounded-md border border-input bg-background px-2 text-sm"
               >
-                {STATUSES.map((s) => (
-                  <option key={s} value={s}>
-                    {s || "전체"}
+                <option value="">전체</option>
+                {CUSTOMER_STATUS_OPTIONS.map((s) => (
+                  <option key={s.value} value={s.value}>
+                    {s.label}
                   </option>
                 ))}
               </select>
@@ -193,7 +197,7 @@ function GradeBadge({ grade }: { grade?: string | null }) {
     SENIOR: "warning",
     MINOR: "success",
   };
-  return <Badge variant={map[grade] ?? "muted"}>{grade}</Badge>;
+  return <Badge variant={map[grade] ?? "muted"}>{gradeLabel(grade)}</Badge>;
 }
 
 
@@ -203,7 +207,10 @@ function StatusBadge({ status }: { status?: string | null }) {
     "5050": "success",
     LIMITED: "warning",
     LOCKED: "destructive",
+    "5052": "destructive",
     DORMANT: "muted",
+    "5051": "muted",
+    "5053": "muted",
   };
-  return <Badge variant={map[status] ?? "muted"}>{status}</Badge>;
+  return <Badge variant={map[status] ?? "muted"}>{customerStatusLabel(status)}</Badge>;
 }
