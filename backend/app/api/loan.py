@@ -46,6 +46,7 @@ from ..service.loan import (
     fetch_application_status,
     fetch_loan_detail,
     fetch_loan_products,
+    fetch_precheck_profile,
     fetch_repay_schedule,
     precheck_dsr,
     resolve_app,
@@ -101,6 +102,14 @@ async def list_loan_products() -> LoanProductListResponse:
 # ---------------------------------------------------------------------------
 # LN-002
 # ---------------------------------------------------------------------------
+
+@router.get("/precheck/profile")
+async def precheck_profile(
+    user: CurrentCustomer = Depends(current_customer),
+) -> dict:
+    """본행 데이터로 연소득 추정 + 당사 부채 합계 prefill — 화면 초기 진입 시 사용."""
+    return await fetch_precheck_profile(user.customer_no)
+
 
 @router.post("/precheck", response_model=LoanPrecheckResponse)
 async def precheck(req: LoanPrecheckRequest) -> LoanPrecheckResponse:

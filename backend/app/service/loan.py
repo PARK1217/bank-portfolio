@@ -79,6 +79,68 @@ class PrecheckResult:
     rejection_code: str | None
 
 
+async def fetch_precheck_profile(customer_no: int) -> dict:
+    """본행 데이터로 prefill 할 연소득 추정 + 당사 부채 원리금 합계.
+
+    - annual_income_estimate : INDIVIDUAL_PARTY.ANNUAL_INCOME (가입 시 신고)
+    - internal_debt_annual_krw : 본행 LOAN_CONTRACT NORMAL/OVERDUE 의 월납입(EPI) × 12 합계
+    - loan_contracts: [{loan_contract_no, product_name, monthly_payment_krw}] — 분해 표시용
+    """
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        # 1) 연소득 — INDIVIDUAL_PARTY.ANNUAL_INCOME
+        income = await conn.fetchval(
+            'SELECT COALESCE(ip."ANNUAL_INCOME", 0) '
+            'FROM public."CUSTOMER" c '
+            'LEFT JOIN public."INDIVIDUAL_PARTY" ip ON ip."PARTY_ID" = c."PARTY_ID" '
+            'WHERE c."CUSTOMER_NO" = $1',
+            customer_no,
+        )
+        # 2) 본행 보유 대출 (NORMAL/OVERDUE) — 월납입 EPI 환산
+        rows = await conn.fetch(
+            'SELECT "LOAN_CONTRACT_NO", "PRODUCT_NAME_SNAPSHOT", '
+            '       "CURRENT_USAGE", "CONTRACT_RATE", '
+            '       "CONTRACT_DATE", "MATURITY_DATE" '
+            'FROM public."LOAN_CONTRACT" '
+            'WHERE "CUSTOMER_NO" = $1 '
+            "  AND \"LOAN_STATUS_CD\" IN ('NORMAL','OVERDUE') AND \"DELETE_YN\" = 'N'",
+            customer_no,
+        )
+
+    contracts = []
+    total_annual = 0
+    for r in rows:
+        principal = int(r["CURRENT_USAGE"] or 0)
+        rate = float(r["CONTRACT_RATE"] or 0)
+        # 잔여 개월수 — 계약일~만기 차로 단순 산출, 산출 불가 시 60개월 기본.
+        n = 60
+        try:
+            d1 = datetime.strptime((r["CONTRACT_DATE"] or "")[:8], "%Y%m%d").date()
+            d2 = datetime.strptime((r["MATURITY_DATE"] or "")[:8], "%Y%m%d").date()
+            n = max(1, (d2.year - d1.year) * 12 + (d2.month - d1.month))
+        except ValueError:
+            pass
+        mr = rate / 100 / 12
+        if mr <= 0:
+            monthly = principal / n if n > 0 else 0
+        else:
+            monthly = principal * mr * (1 + mr) ** n / ((1 + mr) ** n - 1)
+        annual = int(monthly * 12)
+        contracts.append({
+            "loan_contract_no": r["LOAN_CONTRACT_NO"],
+            "product_name": r["PRODUCT_NAME_SNAPSHOT"],
+            "monthly_payment_krw": int(monthly),
+            "annual_payment_krw": annual,
+        })
+        total_annual += annual
+
+    return {
+        "annual_income_estimate": int(income or 0),
+        "internal_debt_annual_krw": total_annual,
+        "loan_contracts": contracts,
+    }
+
+
 def precheck_dsr(
     annual_income: int,
     annual_debt_total: int,

@@ -31,6 +31,17 @@ interface LoanProduct {
   max_amount: number;
 }
 
+interface PrecheckProfile {
+  annual_income_estimate: number;
+  internal_debt_annual_krw: number;
+  loan_contracts: {
+    loan_contract_no: string;
+    product_name: string | null;
+    monthly_payment_krw: number;
+    annual_payment_krw: number;
+  }[];
+}
+
 const krw = new Intl.NumberFormat("ko-KR");
 const fmt = (n: number) => `${krw.format(Math.round(n))}원`;
 const fmtShort = (n: number) => {
@@ -53,17 +64,21 @@ const DSR_WARN = 60;
 function PrecheckDashboard({ productId }: { productId: number }) {
   const router = useRouter();
   const [income, setIncome] = useState("");
-  const [debt, setDebt] = useState("");
+  const [externalDebt, setExternalDebt] = useState("");
   const [desired, setDesired] = useState("");
   const [periodMonths, setPeriodMonths] = useState("36");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<PrecheckResponse | null>(null);
   const [products, setProducts] = useState<LoanProduct[]>([]);
   const [currentProduct, setCurrentProduct] = useState<LoanProduct | null>(null);
+  const [profile, setProfile] = useState<PrecheckProfile | null>(null);
+  const [incomeEdited, setIncomeEdited] = useState(false);
 
   const num = (s: string) => parseInt(s.replace(/[^0-9]/g, ""), 10) || 0;
   const incomeN = num(income);
-  const debtN = num(debt);
+  const externalDebtN = num(externalDebt);
+  const internalDebtN = profile?.internal_debt_annual_krw ?? 0;
+  const debtN = internalDebtN + externalDebtN;
   const desiredN = num(desired);
   const periodN = parseInt(periodMonths, 10);
 
@@ -79,6 +94,21 @@ function PrecheckDashboard({ productId }: { productId: number }) {
       }
     })();
   }, [productId]);
+
+  // 본행 데이터 prefill — 진입 시 1회.
+  useEffect(() => {
+    void (async () => {
+      try {
+        const p = await api.get<PrecheckProfile>("/api/loans/precheck/profile");
+        setProfile(p);
+        if (p.annual_income_estimate > 0) {
+          setIncome(String(p.annual_income_estimate));
+        }
+      } catch {
+        /* 프로필 조회 실패 시에도 수기 입력으로 동작 가능 */
+      }
+    })();
+  }, []);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -131,18 +161,79 @@ function PrecheckDashboard({ productId }: { productId: number }) {
               <Input
                 inputMode="numeric"
                 value={income ? krw.format(incomeN) : ""}
-                onChange={(e) => setIncome(e.target.value)}
+                onChange={(e) => {
+                  setIncome(e.target.value);
+                  setIncomeEdited(true);
+                }}
                 placeholder="예: 50,000,000"
                 required
               />
+              {profile && profile.annual_income_estimate > 0 ? (
+                <p className="text-[11px] text-muted-foreground">
+                  당행 등록 연 소득 <strong className="text-foreground">{fmt(profile.annual_income_estimate)}</strong>{" "}
+                  으로 자동 입력했어요.
+                  {incomeEdited && incomeN !== profile.annual_income_estimate ? (
+                    <>
+                      {" "}
+                      <button
+                        type="button"
+                        className="text-primary hover:underline"
+                        onClick={() => {
+                          setIncome(String(profile.annual_income_estimate));
+                          setIncomeEdited(false);
+                        }}
+                      >
+                        원래대로
+                      </button>
+                    </>
+                  ) : (
+                    " 다르면 수정해주세요."
+                  )}
+                </p>
+              ) : profile ? (
+                <p className="text-[11px] text-muted-foreground">
+                  당행에 등록된 연 소득이 없어요. 직접 입력해주세요.
+                </p>
+              ) : null}
             </Field>
             <Field label="연간 총 부채 원리금 (원)">
+              <div className="rounded-md border border-border bg-muted/30 p-2.5 space-y-1.5 text-xs">
+                <div className="flex items-baseline justify-between">
+                  <span className="text-muted-foreground">
+                    당행 보유 대출{" "}
+                    {profile ? (
+                      <span className="text-[10px]">({profile.loan_contracts.length}건)</span>
+                    ) : null}
+                  </span>
+                  <span className="num-tabular font-medium">{fmt(internalDebtN)}</span>
+                </div>
+                {profile && profile.loan_contracts.length > 0 ? (
+                  <ul className="space-y-0.5 pl-2">
+                    {profile.loan_contracts.map((c) => (
+                      <li
+                        key={c.loan_contract_no}
+                        className="flex items-baseline justify-between text-[10px] text-muted-foreground"
+                      >
+                        <span className="truncate">{c.product_name ?? "대출"}</span>
+                        <span className="num-tabular">{fmt(c.annual_payment_krw)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+                <p className="text-[10px] text-muted-foreground">
+                  당행 데이터로 자동 계산 (월 상환액 × 12).
+                </p>
+              </div>
               <Input
                 inputMode="numeric"
-                value={debt ? krw.format(debtN) : ""}
-                onChange={(e) => setDebt(e.target.value)}
-                placeholder="없으면 0"
+                value={externalDebt ? krw.format(externalDebtN) : ""}
+                onChange={(e) => setExternalDebt(e.target.value)}
+                placeholder="타행 대출 연간 원리금 (없으면 0)"
               />
+              <p className="text-[11px] text-muted-foreground">
+                타행 대출이 있다면 연간 원리금을 입력해주세요. 합산{" "}
+                <strong className="text-foreground num-tabular">{fmt(debtN)}</strong> 으로 DSR 계산됩니다.
+              </p>
             </Field>
             <Field label="희망 대출 금액 (원)" required>
               <Input
