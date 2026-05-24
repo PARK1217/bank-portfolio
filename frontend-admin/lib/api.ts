@@ -892,6 +892,70 @@ export interface AccountLimitHistoryRow {
 }
 
 
+// ---------------------------------------------------------------------------
+// FDS (의심거래)
+// ---------------------------------------------------------------------------
+
+export interface FdsListItem {
+  customer_no: number;
+  detect_seq: number;
+  customer_name?: string | null;
+  detect_datetime?: string | null;
+  total_score?: number | null;
+  judgment_cd?: string | null;
+  investigation_status_cd: string;
+  extra_auth_success?: string | null;
+  access_ip?: string | null;
+  access_country?: string | null;
+  response_time_ms?: number | null;
+  remark?: string | null;
+  transaction_id?: number | null;
+  account_no?: string | null;
+}
+
+export interface FdsListResponse {
+  items: FdsListItem[];
+  count: number;
+  total: number;
+}
+
+export interface FdsDashboardResponse {
+  pending: number;
+  today_detected: number;
+  high_risk_pending: number;
+  by_judgment: Array<{ judgment_cd: string; count: number }>;
+}
+
+export interface FdsTransactionContext {
+  transaction_id: number;
+  account_no?: string | null;
+  tx_datetime?: string | null;
+  tx_type_cd?: string | null;
+  tx_amount: number;
+  post_tx_balance: number;
+  counterpart_account_no?: string | null;
+  counterpart_bank_cd?: string | null;
+  counterpart_holder_name?: string | null;
+  own_bank_yn?: string | null;
+  tx_status_cd?: string | null;
+  tx_memo?: string | null;
+}
+
+export interface FdsDetectionFull extends FdsListItem {
+  customer_email?: string | null;
+  investigator_emp_no?: string | null;
+  reviewer_emp_no?: string | null;
+  investigation_detail?: string | null;
+  investigation_conclusion?: string | null;
+  linked_restriction_id?: number | null;
+}
+
+export interface FdsDetailResponse {
+  detection: FdsDetectionFull;
+  transaction: FdsTransactionContext | null;
+}
+
+
 export function mapOverdueItem(raw: Record<string, unknown>): OverdueListItem {
   return {
     customer_no: pick<number>(raw, ["customer_no", "CUSTOMER_NO"]) ?? 0,

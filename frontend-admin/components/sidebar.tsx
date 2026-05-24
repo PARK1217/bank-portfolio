@@ -14,11 +14,13 @@ import {
   Wallet,
   Search,
   Activity,
+  ShieldAlert,
   Sparkles,
   ScrollText,
   LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { authLevelLabel } from "@/lib/labels";
 import { useAdminAuth } from "@/lib/auth";
 
 
@@ -66,6 +68,7 @@ const MENU: MenuEntry[] = [
       { href: "/transactions", label: "거래내역 검색", icon: Receipt },
     ],
   },
+  { href: "/fds", label: "의심거래 (FDS)", icon: ShieldAlert },
   { href: "/health", label: "외부망 헬스", icon: Activity },
   { href: "/observability", label: "AI 관측 (Phoenix)", icon: Sparkles },
   { href: "/audit", label: "감사 로그", icon: ScrollText },
@@ -114,7 +117,7 @@ export function Sidebar() {
             <div className="text-[11px] text-sidebar-foreground/80">
               <div className="font-medium text-sidebar-foreground">{admin.name}</div>
               <div className="font-mono text-[10px] text-sidebar-foreground/60">
-                {admin.employee_no} · {admin.auth_level_cd}
+                사번 {admin.employee_no} · {authLevelLabel(admin.auth_level_cd)}
               </div>
             </div>
             <button

@@ -13,11 +13,13 @@ from .api.admin_audit import router as admin_audit_router
 from .api.admin_auth import router as admin_auth_router
 from .api.admin_customer import router as admin_customer_router
 from .api.admin_customer_action import router as admin_customer_action_router
+from .api.admin_fds import router as admin_fds_router
 from .api.admin_health import router as admin_health_router
 from .api.admin_loan import router as admin_loan_router
 from .api.admin_loan_contract import router as admin_loan_contract_router
 from .api.admin_loan_repay import router as admin_loan_repay_router
 from .api.admin_overdue import router as admin_overdue_router
+from .api.admin_product import router as admin_product_router
 from .api.admin_transaction import router as admin_transaction_router
 from .api.auth import router as auth_router, setup_router
 from .api.auto_transfer import router as auto_transfer_router
@@ -235,11 +237,13 @@ api.include_router(admin_overdue_router)
 # (`/{cust}/status`, `/{cust}/grade` 등) 가 base 의 `/{customer_no}` GET 보다 우선 매칭되도록.
 api.include_router(admin_customer_action_router)
 api.include_router(admin_customer_router)
+api.include_router(admin_fds_router)
 api.include_router(admin_account_action_router)
 api.include_router(admin_account_router)
 api.include_router(admin_transaction_router)
 api.include_router(admin_audit_router)
 api.include_router(admin_health_router)
+api.include_router(admin_product_router)
 api.include_router(chatbot_router)
 api.include_router(notification_router)
 api.include_router(notice_router)
