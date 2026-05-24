@@ -61,7 +61,10 @@ const MENU: MenuEntry[] = [
   {
     label: "계좌 관리",
     icon: Wallet,
-    items: [{ href: "/accounts", label: "계좌 검색", icon: Search }],
+    items: [
+      { href: "/accounts", label: "계좌 검색", icon: Search },
+      { href: "/transactions", label: "거래내역 검색", icon: Receipt },
+    ],
   },
   { href: "/health", label: "외부망 헬스", icon: Activity },
   { href: "/observability", label: "AI 관측 (Phoenix)", icon: Sparkles },

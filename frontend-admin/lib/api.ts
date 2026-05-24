@@ -824,6 +824,59 @@ export interface AccountStatusHistoryRow {
   employee_no?: string | null;
 }
 
+// ---------------------------------------------------------------------------
+// 거래내역 통합 검색 (admin_transaction)
+// ---------------------------------------------------------------------------
+
+export interface AdminTransactionItem {
+  transaction_id: number;
+  account_no?: string | null;
+  account_type_cd?: string | null;
+  customer_no?: number | null;
+  customer_name?: string | null;
+  tx_datetime?: string | null;
+  tx_type_cd?: string | null;
+  tx_amount: number;
+  post_tx_balance: number;
+  counterpart_account_no?: string | null;
+  counterpart_bank_name?: string | null;
+  counterpart_holder_name?: string | null;
+  own_bank_yn?: string | null;
+  tx_channel_cd?: string | null;
+  tx_status_cd?: string | null;
+  failure_reason_cd?: string | null;
+  memo?: string | null;
+  cancel_yn?: string | null;
+}
+
+export interface AdminTransactionListResponse {
+  items: AdminTransactionItem[];
+  count: number;
+  total: number;
+  sum_in_krw: number;
+  sum_out_krw: number;
+}
+
+export interface AdminTransactionDetail {
+  transaction: AdminTransactionItem & {
+    counterpart_bank_cd?: string | null;
+    transfer_id?: number | null;
+    exec_seq_ref?: number | null;
+    repay_seq_ref?: number | null;
+    original_tx_ref?: number | null;
+    idempotency_key?: string | null;
+    created_at?: string | null;
+  };
+  owner: {
+    customer_no?: number | null;
+    customer_name?: string | null;
+    customer_email?: string | null;
+    account_type_cd?: string | null;
+    account_status_cd?: string | null;
+  };
+}
+
+
 export interface AccountLimitHistoryRow {
   request_id: number;
   limit_type_cd: string;       // DAILY_WITHDRAW | DAILY_TRANSFER
