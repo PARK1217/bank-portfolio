@@ -37,6 +37,8 @@ class AccountListResponse(BaseModel):
 
 class LoanSummaryItem(BaseModel):
     loan_token: str
+    product_name: str | None = None
+    loan_contract_no_masked: str
     principal: int
     balance: int
     next_payment_date: date | None = None

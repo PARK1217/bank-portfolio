@@ -29,6 +29,8 @@ interface AccountSummary {
 
 interface LoanSummaryItem {
   loan_token: string;
+  product_name: string | null;
+  loan_contract_no_masked: string;
   principal: number;
   balance: number;
   next_payment_date: string | null;
@@ -166,26 +168,31 @@ function DashboardContent() {
             {data.loans.map((loan) => (
               <li
                 key={loan.loan_token}
-                className={`flex items-center justify-between p-3 text-sm ${
+                className={`flex items-start justify-between gap-3 p-3 text-sm ${
                   loan.overdue_days > 0 ? "text-destructive" : ""
                 }`}
               >
-                <Link
-                  href={`/loans/${loan.loan_token}`}
-                  className="flex-1 truncate hover:underline"
-                >
-                  대출 잔액 <span className="num-tabular">{formatKrw(loan.balance)}</span>
-                  <span className="ml-2 text-xs text-muted-foreground">
-                    원금 {formatKrw(loan.principal)}
-                  </span>
+                <Link href={`/loans/${loan.loan_token}`} className="min-w-0 flex-1 hover:underline">
+                  <div className="truncate font-medium">{loan.product_name ?? "대출"}</div>
+                  <div className="font-mono text-[10px] text-muted-foreground">
+                    {loan.loan_contract_no_masked}
+                  </div>
+                  <div className="mt-0.5 text-xs text-muted-foreground">
+                    잔액 <span className="num-tabular font-medium text-foreground">{formatKrw(loan.balance)}</span>
+                    <span className="mx-1">·</span>
+                    원금 <span className="num-tabular">{formatKrw(loan.principal)}</span>
+                  </div>
                 </Link>
-                {loan.overdue_days > 0 ? (
-                  <span className="text-xs">연체 {loan.overdue_days}일</span>
-                ) : loan.next_payment_date ? (
-                  <span className="text-xs text-muted-foreground">
-                    다음 상환 {loan.next_payment_date}
-                  </span>
-                ) : null}
+                <div className="shrink-0 text-right text-xs">
+                  {loan.overdue_days > 0 ? (
+                    <span className="font-semibold">연체 {loan.overdue_days}일</span>
+                  ) : loan.next_payment_date ? (
+                    <>
+                      <div className="text-muted-foreground">다음 상환</div>
+                      <div className="num-tabular text-foreground">{loan.next_payment_date}</div>
+                    </>
+                  ) : null}
+                </div>
               </li>
             ))}
           </ul>
