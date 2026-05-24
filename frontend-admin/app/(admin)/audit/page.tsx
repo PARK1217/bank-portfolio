@@ -10,7 +10,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { api, type AuditFacets, type AuditListResponse, type AuditLogItem } from "@/lib/api";
 import { fmtDateTime, fmtNumber } from "@/lib/utils";
-import { actionCdLabel, resultCdLabel } from "@/lib/labels";
+import { actionCdLabel, resultCdLabel, targetTableLabel } from "@/lib/labels";
 
 
 const RESULTS: { value: string; label: string }[] = [
@@ -272,7 +272,7 @@ function AuditRow({
         <TD className="text-xs">
           {row.target_table ? (
             <>
-              <span className="text-muted-foreground">{row.target_table}</span>
+              <span>{targetTableLabel(row.target_table)}</span>
               {row.target_id ? <span className="ml-1 font-mono">/{row.target_id}</span> : null}
             </>
           ) : (

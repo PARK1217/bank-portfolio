@@ -12,6 +12,7 @@ import { encodeId, fmtDateTime, fmtKrw } from "@/lib/utils";
 import {
   accountStatusLabel,
   accountTypeLabel,
+  failureReasonLabel,
   txChannelLabel,
   txStatusLabel,
   txTypeLabel,
@@ -130,7 +131,7 @@ export default function TransactionDetailPage() {
                 <Pair label="유형" value={txTypeLabel(data.transaction.tx_type_cd)} />
                 <Pair label="채널" value={txChannelLabel(data.transaction.tx_channel_cd)} />
                 <Pair label="상태" value={txStatusLabel(data.transaction.tx_status_cd)} />
-                <Pair label="실패 사유" value={data.transaction.failure_reason_cd ?? "-"} />
+                <Pair label="실패 사유" value={failureReasonLabel(data.transaction.failure_reason_cd)} />
                 <Pair label="당행/타행" value={data.transaction.own_bank_yn === "Y" ? "당행" : data.transaction.own_bank_yn === "N" ? "타행" : "-"} />
                 <Pair label="취소 여부" value={data.transaction.cancel_yn ?? "-"} />
                 <Pair label="원거래 참조" value={data.transaction.original_tx_ref != null ? <Link href={`/transactions/${data.transaction.original_tx_ref}`} className="hover:underline">#{data.transaction.original_tx_ref}</Link> : "-"} />

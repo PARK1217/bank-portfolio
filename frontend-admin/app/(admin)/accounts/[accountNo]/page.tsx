@@ -24,6 +24,7 @@ import {
   customerStatusLabel,
   gradeLabel,
   limitRequestStatusLabel,
+  reasonCdLabel,
   txTypeLabel,
   verifyMethodLabel,
 } from "@/lib/labels";
@@ -563,7 +564,7 @@ function AcctStatusHistoryCard({ items }: { items: AccountStatusHistoryRow[] }) 
                     {" → "}
                     <span className="font-medium">{h.new_value ?? "-"}</span>
                   </TD>
-                  <TD className="text-xs">{h.reason_cd ?? "-"}</TD>
+                  <TD className="text-xs">{reasonCdLabel(h.reason_cd)}</TD>
                   <TD className="font-mono text-[10px] text-muted-foreground">{h.employee_no ?? "-"}</TD>
                 </TR>
               ))}

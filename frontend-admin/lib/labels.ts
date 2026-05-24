@@ -374,6 +374,75 @@ export const FDS_JUDGMENT_OPTIONS: { value: string; label: string }[] = [
   { value: "BLOCK", label: "차단" },
 ];
 
+// DELEGATION.ROLE_TYPE_CD / CONTRACT_PARTICIPANT.ROLE_TYPE_CD
+const ROLE_TYPE_LABEL: Record<string, string> = {
+  OWNER: "본인",
+  JOINT: "공동명의",
+  SPOUSE: "배우자",
+  PARENT: "친권자",
+  GUARDIAN: "친권자",
+  MINOR: "미성년 자녀",
+  CHILD: "자녀",
+};
+export function roleTypeLabel(code: string | null | undefined): string {
+  if (!code) return "-";
+  return ROLE_TYPE_LABEL[code] ?? code;
+}
+
+// ADMIN_AUDIT_LOG.TARGET_TABLE — 한글 영역명. 원본 코드는 보조로 같이 노출 권장.
+const TARGET_TABLE_LABEL: Record<string, string> = {
+  CUSTOMER: "회원",
+  ACCOUNT: "계좌",
+  TRANSACTION: "거래",
+  AI_LOAN_DECISION: "AI 의사결정",
+  LOAN_APPLICATION: "대출 신청",
+  LOAN_CONTRACT: "대출 계약",
+  ATTACHED_DOC: "첨부서류",
+  ADMIN_SESSION: "관리자 세션",
+  EXTERNAL_API_HEALTH: "외부 API 헬스",
+  PRODUCT: "상품",
+  FDS_DETECTION: "FDS 탐지",
+  EMPLOYEE_MASTER: "직원",
+  COMPLAINT: "민원",
+};
+export function targetTableLabel(code: string | null | undefined): string {
+  if (!code) return "-";
+  return TARGET_TABLE_LABEL[code] ?? code;
+}
+
+// CUSTOMER_STATUS_HISTORY.REASON_CD / 기타 상태 변경 사유
+const REASON_CD_LABEL: Record<string, string> = {
+  UNLOCK: "잠금 해제",
+  FRAUD_LOCK: "사기 의심 잠금",
+  DORMANT_TRIGGER: "휴면 전환",
+  DORMANT_RECOVERY: "휴면 복원",
+  ADMIN_FORCE: "관리자 강제",
+  USER_REQUEST: "본인 요청",
+  KYC_REVERIFY: "KYC 재검증",
+  COMPLIANCE: "컴플라이언스",
+  PWD_FAIL: "비밀번호 실패",
+};
+export function reasonCdLabel(code: string | null | undefined): string {
+  if (!code) return "-";
+  return REASON_CD_LABEL[code] ?? code;
+}
+
+// TRANSACTION.FAILURE_REASON_CD
+const FAILURE_REASON_LABEL: Record<string, string> = {
+  INSUFFICIENT_BALANCE: "잔액 부족",
+  LIMIT_EXCEEDED: "한도 초과",
+  ACCOUNT_LOCKED: "계좌 잠금",
+  FRAUD_BLOCK: "FDS 차단",
+  TIMEOUT: "시간 초과",
+  EXTERNAL_REJECT: "외부 거부",
+  CANCELED: "취소됨",
+  WRONG_ACCOUNT: "계좌 오류",
+};
+export function failureReasonLabel(code: string | null | undefined): string {
+  if (!code) return "-";
+  return FAILURE_REASON_LABEL[code] ?? code;
+}
+
 // ADMIN_AUDIT_LOG.ACTION_CD — 자주 보이는 액션만 한글 매핑, 그 외는 raw 그대로.
 const ACTION_LABEL: Record<string, string> = {
   AUTH_LOGIN: "로그인",

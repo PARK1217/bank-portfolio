@@ -27,6 +27,8 @@ import {
   customerStatusLabel,
   gradeLabel,
   loanStatusLabel,
+  reasonCdLabel,
+  roleTypeLabel,
 } from "@/lib/labels";
 
 
@@ -333,7 +335,7 @@ export default function CustomerDetailPage() {
                             {d.direction === "AS_TARGET" ? "수임" : "위임"}
                           </Badge>
                         </TD>
-                        <TD>{d.role_type_cd ?? "-"}</TD>
+                        <TD>{roleTypeLabel(d.role_type_cd)}</TD>
                         <TD>
                           <PartyRef name={d.target_name} custNo={d.target_cust_no} />
                         </TD>
@@ -592,7 +594,7 @@ function StatusHistoryCard({ items }: { items: CustomerStatusHistoryRow[] }) {
                     {" → "}
                     <span className="font-medium">{CUST_STATUS_LABEL[h.new_status_cd] ?? h.new_status_cd}</span>
                   </TD>
-                  <TD className="text-xs">{h.reason_cd ?? "-"}</TD>
+                  <TD className="text-xs">{reasonCdLabel(h.reason_cd)}</TD>
                   <TD className="font-mono text-[10px] text-muted-foreground">{h.employee_no ?? "-"}</TD>
                   <TD className="text-xs text-muted-foreground max-w-[160px] truncate" title={h.remark ?? ""}>
                     {h.remark ?? "-"}
@@ -637,7 +639,7 @@ function GradeHistoryCard({ items }: { items: CustomerGradeHistoryRow[] }) {
                     {h.grade_end_date ? fmtDateTime(h.grade_end_date) : <Badge variant="primary">현재</Badge>}
                   </TD>
                   <TD className="text-xs font-medium">{gradeLabel(h.grade_cd)}</TD>
-                  <TD className="text-xs">{h.reason_cd ?? "-"}</TD>
+                  <TD className="text-xs">{reasonCdLabel(h.reason_cd)}</TD>
                   <TD className="font-mono text-[10px] text-muted-foreground">{h.created_by ?? "-"}</TD>
                 </TR>
               ))}
