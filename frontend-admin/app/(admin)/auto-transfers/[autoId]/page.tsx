@@ -15,6 +15,7 @@ import {
   autoExecStatusLabel,
   autoTransferStatusLabel,
   cycleTypeLabel,
+  regChannelLabel,
 } from "@/lib/labels";
 
 
@@ -121,7 +122,7 @@ export default function AutoTransferDetailPage() {
                 />
                 <Pair label="유효 시작" value={fmtDateTime(data.auto_transfer.valid_start_date)} />
                 <Pair label="유효 종료" value={fmtDateTime(data.auto_transfer.valid_end_date)} />
-                <Pair label="등록 채널" value={data.auto_transfer.reg_channel_cd ?? "-"} />
+                <Pair label="등록 채널" value={regChannelLabel(data.auto_transfer.reg_channel_cd)} />
                 <Pair label="최대 재시도" value={data.auto_transfer.max_retry_count ?? "-"} />
                 <Pair label="다음 달 이월" value={data.auto_transfer.carry_next_month_yn === "Y" ? "예" : "아니오"} />
                 <Pair label="출금 메모" value={data.auto_transfer.withdraw_memo ?? "-"} />

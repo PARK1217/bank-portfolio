@@ -345,6 +345,19 @@ export function limitRequestStatusLabel(code: string | null | undefined): string
   return LIMIT_REQUEST_STATUS_LABEL[code] ?? code;
 }
 
+// AUTO_TRANSFER.REG_CHANNEL_CD — 자동이체 등록 채널
+const REG_CHANNEL_LABEL: Record<string, string> = {
+  APP: "앱",
+  WEB: "웹",
+  CS: "고객센터",
+  COUNTER: "창구",
+  AUTO: "자동",
+};
+export function regChannelLabel(code: string | null | undefined): string {
+  if (!code) return "-";
+  return REG_CHANNEL_LABEL[code] ?? code;
+}
+
 // EMPLOYEE_MASTER.AUTH_LEVEL_CD
 const AUTH_LEVEL_LABEL: Record<string, string> = {
   ADMIN: "관리자",

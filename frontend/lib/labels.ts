@@ -345,6 +345,62 @@ export function limitRequestStatusLabel(code: string | null | undefined): string
   return LIMIT_REQUEST_STATUS_LABEL[code] ?? code;
 }
 
+// LOAN_APPLICATION.APPLY_STATUS_CD — 대출 신청 진행 상태
+const LOAN_APPLY_STATUS_LABEL: Record<string, string> = {
+  APPLIED: "접수",
+  SUBMIT: "심사 중",
+  UNDER_REVIEW: "심사 중",
+  APPROVED: "승인",
+  REJECTED: "반려",
+  EXEC: "실행",
+  CANCELED: "취소",
+};
+export function loanApplyStatusLabel(code: string | null | undefined): string {
+  if (!code) return "-";
+  return LOAN_APPLY_STATUS_LABEL[code] ?? code;
+}
+
+// AUTO_TRANSFER_EXEC.DELAY_REASON_CD — 자동이체 지연/실패 사유 (varchar(8) 약어)
+const DELAY_REASON_LABEL: Record<string, string> = {
+  NO_BAL: "잔액 부족",
+  NO_ACCT: "계좌 오류",
+  DUP: "중복 실행",
+  BOKCLS: "결제망 영업외",
+  ERR: "오류",
+  INTERNAL: "내부 오류",
+};
+export function delayReasonLabel(code: string | null | undefined): string {
+  if (!code) return "-";
+  return DELAY_REASON_LABEL[code] ?? code;
+}
+
+// NOTICE.CATEGORY_CD — 공지·이벤트 카테고리
+const NOTICE_CATEGORY_LABEL: Record<string, string> = {
+  SYSTEM: "시스템",
+  POLICY: "정책",
+  SERVICE: "서비스",
+  SECURITY: "보안",
+  EVENT: "이벤트",
+  PROMO: "프로모션",
+};
+export function noticeCategoryLabel(code: string | null | undefined): string {
+  if (!code) return "-";
+  return NOTICE_CATEGORY_LABEL[code] ?? code;
+}
+
+// AUTO_TRANSFER.REG_CHANNEL_CD — 자동이체 등록 채널
+const REG_CHANNEL_LABEL: Record<string, string> = {
+  APP: "앱",
+  WEB: "웹",
+  CS: "고객센터",
+  COUNTER: "창구",
+  AUTO: "자동",
+};
+export function regChannelLabel(code: string | null | undefined): string {
+  if (!code) return "-";
+  return REG_CHANNEL_LABEL[code] ?? code;
+}
+
 // EMPLOYEE_MASTER.AUTH_LEVEL_CD
 const AUTH_LEVEL_LABEL: Record<string, string> = {
   ADMIN: "관리자",
