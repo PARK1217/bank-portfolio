@@ -74,6 +74,8 @@ class AccountRow:
     daily_withdraw_limit: int | None
     daily_transfer_limit: int | None
     display_order: int | None
+    primary_account_yn: str | None = None
+    last_tx_datetime: str | None = None
 
 
 @dataclass
@@ -101,7 +103,8 @@ class TransactionRow:
 _ACCOUNT_COLS = (
     '"ACCOUNT_NO", "CUSTOMER_NO", "ACCOUNT_TYPE_CD", "BALANCE", '
     '"ACCOUNT_STATUS_CD", "ACCOUNT_ALIAS", "HIDDEN_YN", '
-    '"DAILY_WITHDRAW_LIMIT", "DAILY_TRANSFER_LIMIT", "DISPLAY_ORDER"'
+    '"DAILY_WITHDRAW_LIMIT", "DAILY_TRANSFER_LIMIT", "DISPLAY_ORDER", '
+    '"PRIMARY_ACCOUNT_YN", "LAST_TX_DATETIME"'
 )
 
 _TX_COLS = (
@@ -124,6 +127,8 @@ def _row_to_account(r) -> AccountRow:
         daily_withdraw_limit=r["DAILY_WITHDRAW_LIMIT"],
         daily_transfer_limit=r["DAILY_TRANSFER_LIMIT"],
         display_order=r["DISPLAY_ORDER"],
+        primary_account_yn=r["PRIMARY_ACCOUNT_YN"],
+        last_tx_datetime=r["LAST_TX_DATETIME"],
     )
 
 
@@ -255,6 +260,8 @@ def to_account_summary(row: AccountRow, account_token: str) -> AccountSummary:
         status_cd=row.account_status_cd or "UNKNOWN",
         hidden=(row.hidden_yn == "Y"),
         account_no=row.account_no,
+        primary_yn=row.primary_account_yn or "N",
+        last_tx_datetime=row.last_tx_datetime,
     )
 
 

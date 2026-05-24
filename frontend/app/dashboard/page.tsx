@@ -23,6 +23,8 @@ interface AccountSummary {
   status_cd: string;
   hidden: boolean;
   account_no: string;
+  primary_yn?: string;
+  last_tx_datetime?: string | null;
 }
 
 interface LoanSummaryItem {
@@ -133,7 +135,7 @@ function DashboardContent() {
         ) : null}
       </section>
 
-      {/* 계좌 카드 ---------------------------------------------------- */}
+      {/* 계좌 카드 — 유형별 그룹 + 주거래 우선 + 최근 거래순 ---------- */}
       <section>
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-sm font-semibold">계좌</h2>
@@ -147,39 +149,7 @@ function DashboardContent() {
             cta={{ href: "/products", label: "상품 카탈로그" }}
           />
         ) : (
-          <div className="grid gap-3 sm:grid-cols-2">
-            {data.accounts.map((acct) => (
-              <Link
-                key={acct.account_token}
-                href={`/accounts/${acct.account_token}`}
-                className="block"
-              >
-                <Card className="transition-colors hover:bg-accent">
-                  <CardHeader className="pb-2">
-                    <div className="flex items-center justify-between text-xs text-muted-foreground">
-                      <span>{accountTypeLabel(acct.account_type_cd)}</span>
-                      {acct.currency !== "KRW" ? (
-                        <span className="rounded bg-accent px-1.5 py-0.5">
-                          {acct.currency}
-                        </span>
-                      ) : null}
-                    </div>
-                    <CardTitle className="text-base">
-                      {acct.alias ?? acct.account_no}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-1 pt-0">
-                    <div className="font-mono text-xs text-muted-foreground">
-                      {acct.account_no}
-                    </div>
-                    <div className="num-tabular text-xl font-semibold">
-                      {formatKrw(acct.balance)}
-                    </div>
-                  </CardContent>
-                </Card>
-              </Link>
-            ))}
-          </div>
+          <AccountGroups accounts={data.accounts} />
         )}
       </section>
 
@@ -254,6 +224,97 @@ function DashboardContent() {
     </div>
   );
 }
+
+// 계좌 유형 표시 순서 — 일반적인 활용도 순. 빈 그룹은 자동 생략.
+const ACCOUNT_TYPE_ORDER: { code: string; label: string }[] = [
+  { code: "SAVING", label: "입출금" },
+  { code: "INSTALL", label: "적금" },
+  { code: "DEPOSIT", label: "정기예금" },
+  { code: "FOREIGN", label: "외화" },
+];
+
+function sortAccounts(accounts: AccountSummary[]): AccountSummary[] {
+  // 주거래(Y) 우선 → last_tx_datetime DESC → balance DESC.
+  return [...accounts].sort((a, b) => {
+    const ap = a.primary_yn === "Y" ? 1 : 0;
+    const bp = b.primary_yn === "Y" ? 1 : 0;
+    if (ap !== bp) return bp - ap;
+    const al = a.last_tx_datetime ?? "";
+    const bl = b.last_tx_datetime ?? "";
+    if (al !== bl) return bl.localeCompare(al);
+    return b.balance - a.balance;
+  });
+}
+
+function AccountGroups({ accounts }: { accounts: AccountSummary[] }) {
+  // 표시 가능한 유형으로만 묶고, 정의되지 않은 유형은 마지막에 '기타'로 묶음.
+  const grouped = new Map<string, AccountSummary[]>();
+  for (const a of accounts) {
+    const key = ACCOUNT_TYPE_ORDER.some((t) => t.code === a.account_type_cd)
+      ? a.account_type_cd
+      : "OTHER";
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key)!.push(a);
+  }
+
+  const groups = [
+    ...ACCOUNT_TYPE_ORDER.filter((t) => grouped.has(t.code)).map((t) => ({
+      code: t.code,
+      label: t.label,
+      items: sortAccounts(grouped.get(t.code)!),
+    })),
+    ...(grouped.has("OTHER")
+      ? [{ code: "OTHER", label: "기타", items: sortAccounts(grouped.get("OTHER")!) }]
+      : []),
+  ];
+
+  return (
+    <div className="space-y-5">
+      {groups.map((g) => (
+        <div key={g.code}>
+          <div className="mb-2 flex items-baseline justify-between">
+            <h3 className="text-xs font-medium text-muted-foreground">
+              {g.label} <span className="ml-1 text-[10px]">{g.items.length}</span>
+            </h3>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {g.items.map((acct) => (
+              <Link
+                key={acct.account_token}
+                href={`/accounts/${acct.account_token}`}
+                className="block"
+              >
+                <Card className="transition-colors hover:bg-accent">
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span>{accountTypeLabel(acct.account_type_cd)}</span>
+                      <div className="flex items-center gap-1.5">
+                        {acct.primary_yn === "Y" ? (
+                          <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] text-primary">
+                            주거래
+                          </span>
+                        ) : null}
+                        {acct.currency !== "KRW" ? (
+                          <span className="rounded bg-accent px-1.5 py-0.5">{acct.currency}</span>
+                        ) : null}
+                      </div>
+                    </div>
+                    <CardTitle className="text-base">{acct.alias ?? acct.account_no}</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-1 pt-0">
+                    <div className="font-mono text-xs text-muted-foreground">{acct.account_no}</div>
+                    <div className="num-tabular text-xl font-semibold">{formatKrw(acct.balance)}</div>
+                  </CardContent>
+                </Card>
+              </Link>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 
 function EmptyHint({
   title,

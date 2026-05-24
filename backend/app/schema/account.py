@@ -23,6 +23,11 @@ class AccountSummary(BaseModel):
     # 본인 계좌 컨텍스트 — 평문 노출 (가이드 §3.9: 본인 화면은 평문).
     # 거래 상대방 계좌는 MaskedAccount 스키마로 별도 표현.
     account_no: str = Field(..., examples=["110-001-123456"])
+    # 대시보드 그룹·정렬용 — 주거래 우선 + 최근 거래순.
+    primary_yn: str = Field("N", description="Y=주거래")
+    last_tx_datetime: str | None = Field(
+        None, description="YYYYMMDDHHMMSS — 마지막 거래 시각",
+    )
 
 
 class AccountListResponse(BaseModel):
