@@ -500,6 +500,46 @@ export function docCategoryLabel(code: string | null | undefined): string {
   return DOC_CATEGORY_LABEL[code] ?? code;
 }
 
+// TERMS_MASTER.TERMS_TYPE_CD
+const TERMS_TYPE_LABEL: Record<string, string> = {
+  GENERAL: "공통",
+  DEPOSIT: "예적금",
+  LOAN: "대출",
+  TRANSFER: "이체",
+  PRIVACY: "개인정보",
+  MARKET: "마케팅",
+  PRD_SPEC: "상품 특약",
+};
+export function termsTypeLabel(code: string | null | undefined): string {
+  if (!code) return "-";
+  return TERMS_TYPE_LABEL[code] ?? code;
+}
+export const TERMS_TYPE_OPTIONS: { value: string; label: string }[] = [
+  { value: "GENERAL", label: "공통" },
+  { value: "DEPOSIT", label: "예적금" },
+  { value: "LOAN", label: "대출" },
+  { value: "TRANSFER", label: "이체" },
+  { value: "PRIVACY", label: "개인정보" },
+  { value: "MARKET", label: "마케팅" },
+  { value: "PRD_SPEC", label: "상품 특약" },
+];
+
+// TERMS_MASTER.TERMS_STATUS_CD
+const TERMS_STATUS_LABEL: Record<string, string> = {
+  ACTIVE: "활성",
+  INACTIVE: "비활성",
+  ARCHIVED: "보관",
+};
+export function termsStatusLabel(code: string | null | undefined): string {
+  if (!code) return "-";
+  return TERMS_STATUS_LABEL[code] ?? code;
+}
+export const TERMS_STATUS_OPTIONS: { value: string; label: string }[] = [
+  { value: "ACTIVE", label: "활성" },
+  { value: "INACTIVE", label: "비활성" },
+  { value: "ARCHIVED", label: "보관" },
+];
+
 // NOTICE.CATEGORY_CD
 const NOTICE_CATEGORY_LABEL: Record<string, string> = {
   SERVICE: "서비스",

@@ -861,6 +861,57 @@ export interface AutoTransferExecHistoryResponse {
 }
 
 // ---------------------------------------------------------------------------
+// 약관 (admin_terms)
+// ---------------------------------------------------------------------------
+
+export interface AdminTermsItem {
+  terms_id: number;
+  type_cd?: string | null;
+  name: string;
+  version?: number | null;
+  agree_required_yn?: string | null;
+  re_agree_yn?: string | null;
+  effective_date?: string | null;
+  expire_date?: string | null;
+  status_cd?: string | null;
+  owner_dept?: string | null;
+  created_at?: string | null;
+}
+
+export interface AdminTermsHistoryRow {
+  change_seq: number;
+  prev_terms_id?: number | null;
+  change_type_cd?: string | null;
+  change_reason?: string | null;
+  order_no?: string | null;
+  effective_date?: string | null;
+  owner?: string | null;
+  created_at?: string | null;
+  created_by?: string | null;
+}
+
+export interface AdminTermsSibling {
+  terms_id: number;
+  version?: number | null;
+  effective_date?: string | null;
+  status_cd?: string | null;
+}
+
+export interface AdminTermsDetail {
+  terms: AdminTermsItem & { body?: string | null; updated_at?: string | null };
+  history: AdminTermsHistoryRow[];
+  agree_stats: { total: number; agreed: number; rate: number };
+  siblings: AdminTermsSibling[];
+}
+
+export interface AdminTermsListResponse {
+  items: AdminTermsItem[];
+  count: number;
+  total: number;
+}
+
+
+// ---------------------------------------------------------------------------
 // 공지 / 이벤트 (admin_notice)
 // ---------------------------------------------------------------------------
 
