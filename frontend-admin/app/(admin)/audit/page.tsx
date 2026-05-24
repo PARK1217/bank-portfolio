@@ -10,9 +10,15 @@ import { Spinner } from "@/components/ui/spinner";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { api, type AuditFacets, type AuditListResponse, type AuditLogItem } from "@/lib/api";
 import { fmtDateTime, fmtNumber } from "@/lib/utils";
+import { actionCdLabel, resultCdLabel } from "@/lib/labels";
 
 
-const RESULTS = ["", "OK", "DENIED", "ERROR"];
+const RESULTS: { value: string; label: string }[] = [
+  { value: "", label: "전체" },
+  { value: "OK", label: "성공" },
+  { value: "DENIED", label: "거부" },
+  { value: "ERROR", label: "오류" },
+];
 
 
 export default function AuditPage() {
@@ -154,8 +160,8 @@ export default function AuditPage() {
                 className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
               >
                 {RESULTS.map((r) => (
-                  <option key={r} value={r}>
-                    {r || "전체"}
+                  <option key={r.value} value={r.value}>
+                    {r.label}
                   </option>
                 ))}
               </select>
@@ -260,7 +266,8 @@ function AuditRow({
           <span className="font-mono text-xs">{row.employee_no}</span>
         </TD>
         <TD>
-          <span className="font-mono text-[11px]">{row.action_cd}</span>
+          <div className="text-xs font-medium">{actionCdLabel(row.action_cd)}</div>
+          <div className="font-mono text-[10px] text-muted-foreground">{row.action_cd}</div>
         </TD>
         <TD className="text-xs">
           {row.target_table ? (
@@ -324,10 +331,11 @@ function JsonBlock({ label, data }: { label: string; data: unknown }) {
 
 function ResultBadge({ result }: { result?: string | null }) {
   if (!result) return <Badge variant="muted">-</Badge>;
-  if (result === "OK") return <Badge variant="success">OK</Badge>;
-  if (result === "DENIED") return <Badge variant="warning">DENIED</Badge>;
-  if (result === "ERROR") return <Badge variant="destructive">ERROR</Badge>;
-  return <Badge variant="muted">{result}</Badge>;
+  const label = resultCdLabel(result);
+  if (result === "OK") return <Badge variant="success">{label}</Badge>;
+  if (result === "DENIED") return <Badge variant="warning">{label}</Badge>;
+  if (result === "ERROR") return <Badge variant="destructive">{label}</Badge>;
+  return <Badge variant="muted">{label}</Badge>;
 }
 
 

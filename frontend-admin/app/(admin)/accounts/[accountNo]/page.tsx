@@ -25,6 +25,7 @@ import {
   gradeLabel,
   limitRequestStatusLabel,
   txTypeLabel,
+  verifyMethodLabel,
 } from "@/lib/labels";
 
 
@@ -615,7 +616,7 @@ function AcctLimitHistoryCard({ items }: { items: AccountLimitHistoryRow[] }) {
                     {h.verify_method_cd === "ADMIN" ? (
                       <Badge variant="warning">어드민</Badge>
                     ) : (
-                      <span className="text-muted-foreground">{h.verify_method_cd}</span>
+                      <span className="text-muted-foreground">{verifyMethodLabel(h.verify_method_cd)}</span>
                     )}
                   </TD>
                 </TR>

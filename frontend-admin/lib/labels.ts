@@ -374,6 +374,76 @@ export const FDS_JUDGMENT_OPTIONS: { value: string; label: string }[] = [
   { value: "BLOCK", label: "차단" },
 ];
 
+// ADMIN_AUDIT_LOG.ACTION_CD — 자주 보이는 액션만 한글 매핑, 그 외는 raw 그대로.
+const ACTION_LABEL: Record<string, string> = {
+  AUTH_LOGIN: "로그인",
+  AUTH_LOGOUT: "로그아웃",
+  AUTH_ME: "본인 조회",
+  LOAN_DECISIONS_LIST: "AI 의사결정 목록",
+  LOAN_REVIEW_QUEUE: "대출 검토 큐",
+  LOAN_PREDICT: "ML 추론",
+  LOAN_HUMAN_REVIEW: "사람 검토",
+  LOAN_ATTACHMENTS: "첨부서류 조회",
+  OVERDUE_LIST: "연체 목록",
+  OVERDUE_DETAIL: "연체 상세",
+  HEALTH_EXTERNAL_LIST: "외부 헬스 목록",
+  HEALTH_EXTERNAL_DETAIL: "외부 헬스 상세",
+  GET_ADMIN_CUSTOMERS: "회원 목록",
+  GET_ADMIN_ACCOUNTS: "계좌 목록",
+  GET_AUDIT_LOGS: "감사 로그 조회",
+  GET_AUDIT_FACETS: "감사 패싯",
+  GET_LOANS_CONTRACTS: "대출 계약 목록",
+  GET_LOANS_REPAYMENTS: "상환 목록",
+  GET_REPAYMENTS_DASHBOARD: "상환 대시보드",
+  CUSTOMER_STATUS_UPDATE: "회원 상태 변경",
+  CUSTOMER_GRADE_UPDATE: "회원 등급 변경",
+  ACCOUNT_STATUS_UPDATE: "계좌 상태 변경",
+  ACCOUNT_LIMIT_UPDATE: "계좌 한도 변경",
+};
+export function actionCdLabel(code: string | null | undefined): string {
+  if (!code) return "-";
+  return ACTION_LABEL[code] ?? code;
+}
+
+// ADMIN_AUDIT_LOG.RESULT_CD
+const RESULT_LABEL: Record<string, string> = {
+  OK: "성공",
+  DENIED: "거부",
+  ERROR: "오류",
+};
+export function resultCdLabel(code: string | null | undefined): string {
+  if (!code) return "-";
+  return RESULT_LABEL[code] ?? code;
+}
+
+// DOC_TYPE_MASTER.DOC_CATEGORY_CD
+const DOC_CATEGORY_LABEL: Record<string, string> = {
+  ID: "신분증",
+  EMPL: "재직",
+  INCOME: "소득",
+  FAMILY: "가족",
+  ASSET: "자산",
+  COLLATERAL: "담보",
+  OTHER: "기타",
+};
+export function docCategoryLabel(code: string | null | undefined): string {
+  if (!code) return "-";
+  return DOC_CATEGORY_LABEL[code] ?? code;
+}
+
+// ACCOUNT_LIMIT_CHANGE_REQUEST.VERIFY_METHOD_CD
+const VERIFY_METHOD_LABEL: Record<string, string> = {
+  ADMIN: "어드민",
+  OTP: "OTP",
+  SIMPLE_PIN: "간편비밀번호",
+  PASSWORD: "비밀번호",
+  BIOMETRIC: "생체",
+};
+export function verifyMethodLabel(code: string | null | undefined): string {
+  if (!code) return "-";
+  return VERIFY_METHOD_LABEL[code] ?? code;
+}
+
 // FDS_DETECTION.INVESTIGATION_STATUS_CD
 const FDS_INVEST_LABEL: Record<string, string> = {
   PENDING: "조사 대기",
