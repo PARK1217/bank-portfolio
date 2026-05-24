@@ -47,39 +47,45 @@ function isGroup(e: MenuEntry): e is MenuGroup {
 const MENU: MenuEntry[] = [
   { href: "/dashboard", label: "대시보드", icon: LayoutDashboard },
   {
+    label: "고객·계좌",
+    icon: Users,
+    items: [
+      { href: "/customers", label: "회원 검색", icon: UserSearch },
+      { href: "/overdue", label: "연체 추적", icon: AlertOctagon },
+      { href: "/accounts", label: "계좌 검색", icon: Wallet },
+      { href: "/transactions", label: "거래내역 검색", icon: Receipt },
+      { href: "/auto-transfers", label: "자동이체 모니터링", icon: Repeat },
+    ],
+  },
+  {
     label: "대출",
     icon: Briefcase,
     items: [
       { href: "/loans/review-queue", label: "검토 큐", icon: ListTodo },
       { href: "/loans/decisions", label: "AI 의사결정", icon: Bot },
-      { href: "/loans/contracts", label: "실행 계약", icon: Briefcase },
+      { href: "/loans/contracts", label: "실행 계약", icon: Search },
       { href: "/loans/repayments", label: "상환 내역", icon: Receipt },
     ],
   },
   {
-    label: "회원 관리",
-    icon: Users,
+    label: "콘텐츠",
+    icon: Package,
     items: [
-      { href: "/customers", label: "회원 검색", icon: UserSearch },
-      { href: "/overdue", label: "연체 추적", icon: AlertOctagon },
+      { href: "/products", label: "상품 관리", icon: Package },
+      { href: "/notices", label: "공지·이벤트", icon: Megaphone },
+      { href: "/terms", label: "약관 관리", icon: FileText },
     ],
   },
   {
-    label: "계좌 관리",
-    icon: Wallet,
+    label: "리스크·운영",
+    icon: ShieldAlert,
     items: [
-      { href: "/accounts", label: "계좌 검색", icon: Search },
-      { href: "/transactions", label: "거래내역 검색", icon: Receipt },
-      { href: "/auto-transfers", label: "자동이체 모니터링", icon: Repeat },
+      { href: "/fds", label: "의심거래 (FDS)", icon: ShieldAlert },
+      { href: "/health", label: "외부망 헬스", icon: Activity },
+      { href: "/observability", label: "AI 관측 (Phoenix)", icon: Sparkles },
+      { href: "/audit", label: "감사 로그", icon: ScrollText },
     ],
   },
-  { href: "/products", label: "상품 관리", icon: Package },
-  { href: "/notices", label: "공지·이벤트", icon: Megaphone },
-  { href: "/terms", label: "약관 관리", icon: FileText },
-  { href: "/fds", label: "의심거래 (FDS)", icon: ShieldAlert },
-  { href: "/health", label: "외부망 헬스", icon: Activity },
-  { href: "/observability", label: "AI 관측 (Phoenix)", icon: Sparkles },
-  { href: "/audit", label: "감사 로그", icon: ScrollText },
 ];
 
 
