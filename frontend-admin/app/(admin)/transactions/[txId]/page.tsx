@@ -8,7 +8,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
 import { api, ApiError, type AdminTransactionDetail } from "@/lib/api";
-import { encodeId, fmtDateTime, fmtKrw, fmtTxType } from "@/lib/utils";
+import { encodeId, fmtDateTime, fmtKrw } from "@/lib/utils";
+import {
+  accountStatusLabel,
+  accountTypeLabel,
+  txChannelLabel,
+  txStatusLabel,
+  txTypeLabel,
+} from "@/lib/labels";
 
 
 export default function TransactionDetailPage() {
@@ -59,12 +66,12 @@ export default function TransactionDetailPage() {
                 #{data.transaction.transaction_id}
               </h1>
               <p className="mt-1 text-sm text-muted-foreground">
-                {fmtTxType(data.transaction.tx_type_cd)} · {fmtDateTime(data.transaction.tx_datetime)}
+                {txTypeLabel(data.transaction.tx_type_cd)} · {fmtDateTime(data.transaction.tx_datetime)}
               </p>
             </div>
             <div className="flex gap-2">
               <Badge variant={data.transaction.cancel_yn === "Y" ? "destructive" : "success"}>
-                {data.transaction.cancel_yn === "Y" ? "취소" : data.transaction.tx_status_cd ?? "-"}
+                {data.transaction.cancel_yn === "Y" ? "취소" : txStatusLabel(data.transaction.tx_status_cd)}
               </Badge>
               {data.transaction.own_bank_yn === "N" ? <Badge variant="warning">타행</Badge> : null}
             </div>
@@ -107,7 +114,7 @@ export default function TransactionDetailPage() {
                   ) : "-"}
                 </div>
                 <div className="text-[11px] text-muted-foreground">
-                  {data.owner.account_type_cd ?? "-"} · {data.owner.account_status_cd ?? "-"}
+                  {accountTypeLabel(data.owner.account_type_cd)} · {accountStatusLabel(data.owner.account_status_cd)}
                 </div>
               </CardContent>
             </Card>
@@ -120,9 +127,9 @@ export default function TransactionDetailPage() {
             </CardHeader>
             <CardContent>
               <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm md:grid-cols-4">
-                <Pair label="유형" value={fmtTxType(data.transaction.tx_type_cd)} />
-                <Pair label="채널" value={data.transaction.tx_channel_cd ?? "-"} />
-                <Pair label="상태" value={data.transaction.tx_status_cd ?? "-"} />
+                <Pair label="유형" value={txTypeLabel(data.transaction.tx_type_cd)} />
+                <Pair label="채널" value={txChannelLabel(data.transaction.tx_channel_cd)} />
+                <Pair label="상태" value={txStatusLabel(data.transaction.tx_status_cd)} />
                 <Pair label="실패 사유" value={data.transaction.failure_reason_cd ?? "-"} />
                 <Pair label="당행/타행" value={data.transaction.own_bank_yn === "Y" ? "당행" : data.transaction.own_bank_yn === "N" ? "타행" : "-"} />
                 <Pair label="취소 여부" value={data.transaction.cancel_yn ?? "-"} />
@@ -170,8 +177,8 @@ export default function TransactionDetailPage() {
                   }
                 />
                 <Pair label="이메일" value={data.owner.customer_email ?? "-"} />
-                <Pair label="계좌 유형" value={data.owner.account_type_cd ?? "-"} />
-                <Pair label="계좌 상태" value={data.owner.account_status_cd ?? "-"} />
+                <Pair label="계좌 유형" value={accountTypeLabel(data.owner.account_type_cd)} />
+                <Pair label="계좌 상태" value={accountStatusLabel(data.owner.account_status_cd)} />
               </dl>
             </CardContent>
           </Card>
