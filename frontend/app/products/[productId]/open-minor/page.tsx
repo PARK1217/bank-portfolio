@@ -82,6 +82,7 @@ function MinorForm({ productId }: { productId: number }) {
           guardian_customer_no: customerNo,
           delegation_power_codes: grantedPowers.map((p) => p.code),
           attachment_ids: Object.values(attached),
+          consents: getProductOpenSession()?.consents ?? [],
         },
         { idempotent: true },
       );
@@ -96,7 +97,7 @@ function MinorForm({ productId }: { productId: number }) {
   return (
     <Card>
       <CardHeader>
-        <div className="font-mono text-xs text-muted-foreground">SCR-OP-008 ⭐ 친권자 위임 8권한</div>
+        <div className="text-xs text-muted-foreground">⭐ 친권자 위임 8권한</div>
         <CardTitle className="mt-1">미성년 자녀 통장 개설</CardTitle>
         <CardDescription>
           자녀 명의로 개설되며, 친권자(<span className="font-mono">#{customerNo ?? "-"}</span>)가 위임 권한 8종을 모두 받습니다 (선택 해제 가능).

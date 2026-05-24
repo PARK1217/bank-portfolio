@@ -17,7 +17,7 @@
 from __future__ import annotations
 
 import secrets
-from datetime import date
+from datetime import date, datetime
 
 import structlog
 from fastapi import APIRouter, Depends
@@ -59,6 +59,7 @@ class OpenSavingRequest(BaseModel):
     alias: str | None = Field(None, max_length=50)
     initial_deposit_krw: int = Field(0, ge=0, le=10_000_000_000)
     withdraw_password: str = Field(..., min_length=4, max_length=4, pattern=r"^\d{4}$")
+    consents: list[TermsConsent] = Field(default_factory=list)
 
 
 class OpenDepositRequest(BaseModel):
@@ -67,6 +68,7 @@ class OpenDepositRequest(BaseModel):
     interest_payment_cd: str = Field(..., description="MATURITY / MONTHLY 등")
     withdraw_account_token: str = Field(..., description="만기 시 입금받을 자유입출금 계좌 토큰")
     password: str = Field(..., min_length=4, max_length=4, pattern=r"^\d{4}$")
+    consents: list[TermsConsent] = Field(default_factory=list)
 
 
 class OpenForeignRequest(BaseModel):
@@ -74,6 +76,7 @@ class OpenForeignRequest(BaseModel):
     foreign_amount: float | None = None
     krw_amount: int | None = None
     password: str = Field(..., min_length=4, max_length=4, pattern=r"^\d{4}$")
+    consents: list[TermsConsent] = Field(default_factory=list)
 
 
 class JointOwner(BaseModel):
@@ -87,6 +90,7 @@ class OpenJointRequest(BaseModel):
     initial_deposit_krw: int = Field(0, ge=0, le=10_000_000_000)
     co_owners: list[JointOwner] = Field(default_factory=list)
     attachment_ids: list[int] = Field(default_factory=list)
+    consents: list[TermsConsent] = Field(default_factory=list)
 
 
 class OpenMinorRequest(BaseModel):
@@ -94,6 +98,7 @@ class OpenMinorRequest(BaseModel):
     guardian_customer_no: int
     delegation_power_codes: list[str] = Field(default_factory=list)
     attachment_ids: list[int] = Field(default_factory=list)
+    consents: list[TermsConsent] = Field(default_factory=list)
 
 
 class OpenAccountResponse(BaseModel):
@@ -263,6 +268,54 @@ async def _open_common(
     return account_no
 
 
+async def _persist_consents(
+    conn,
+    *,
+    customer_no: int,
+    product_id: int,
+    consents: list,
+) -> None:
+    """상품 약관 매핑 기준 필수 약관 누락 검증 + CUSTOMER_TERMS_AGREE UPSERT.
+
+    한 트랜잭션 안에서 호출 — 가입 실패 시 약관 적재도 같이 롤백된다.
+    필수 약관이 하나라도 미동의면 422 거부.
+    UPSERT 정책: 같은 (customer_no, terms_id) 재가입 시 AGREE_DATETIME 갱신.
+    """
+    # 1) 상품 필수 약관 조회
+    required_rows = await conn.fetch(
+        'SELECT "TERMS_ID" FROM public."PRODUCT_TERMS_MAPPING" '
+        'WHERE "PRODUCT_ID" = $1 AND "AGREE_REQUIRED_YN" = \'Y\' '
+        '  AND "DELETE_YN" = \'N\'',
+        product_id,
+    )
+    required_ids = {int(r["TERMS_ID"]) for r in required_rows}
+    agreed_ids = {int(c.terms_id) for c in consents if c.agreed}
+    missing = required_ids - agreed_ids
+    if missing:
+        raise BusinessError(
+            E_VALIDATION,
+            f"필수 약관 미동의: terms_ids={sorted(missing)}",
+        )
+
+    # 2) UPSERT
+    now_str = datetime.now().strftime("%Y%m%d%H%M%S")
+    for c in consents:
+        if not c.agreed:
+            continue
+        await conn.execute(
+            'INSERT INTO public."CUSTOMER_TERMS_AGREE" '
+            '("CUSTOMER_NO","TERMS_ID","AGREE_YN","AGREE_DATETIME","AGREE_CHANNEL_CD",'
+            ' "DELETE_YN","CREATED_BY") '
+            "VALUES ($1, $2, 'Y', $3, 'WEB', 'N', 'WEB') "
+            'ON CONFLICT ("CUSTOMER_NO","TERMS_ID") DO UPDATE SET '
+            '  "AGREE_YN" = \'Y\', '
+            '  "AGREE_DATETIME" = EXCLUDED."AGREE_DATETIME", '
+            '  "UPDATED_AT" = NOW(), '
+            '  "UPDATED_BY" = \'WEB\'',
+            customer_no, int(c.terms_id), now_str,
+        )
+
+
 @router.post("/{product_id}/open-saving", response_model=OpenAccountResponse)
 async def open_saving(
     product_id: int,
@@ -274,6 +327,12 @@ async def open_saving(
     async with pool.acquire() as conn:
         product = await _fetch_and_validate_product(conn, product_id, "SAVING")
         async with conn.transaction():
+            await _persist_consents(
+                conn,
+                customer_no=user.customer_no,
+                product_id=product_id,
+                consents=req.consents,
+            )
             account_no = await _open_common(
                 conn,
                 product=product,
@@ -310,6 +369,12 @@ async def open_deposit(
     async with pool.acquire() as conn:
         product = await _fetch_and_validate_product(conn, product_id, "DEPOSIT")
         async with conn.transaction():
+            await _persist_consents(
+                conn,
+                customer_no=user.customer_no,
+                product_id=product_id,
+                consents=req.consents,
+            )
             account_no = await _open_common(
                 conn,
                 product=product,
@@ -350,6 +415,12 @@ async def open_foreign(
         # 외화 잔액은 별도 테이블/컬럼이 정의되지 않아 BALANCE(원화)에 0 으로 INSERT,
         # 환전·잔액 영구화는 후속 작업.
         async with conn.transaction():
+            await _persist_consents(
+                conn,
+                customer_no=user.customer_no,
+                product_id=product_id,
+                consents=req.consents,
+            )
             account_no = await _open_common(
                 conn,
                 product=product,
@@ -486,6 +557,12 @@ async def open_joint(
         # 공동명의는 SAVING 상품 베이스의 변형으로 화면이 호출 — 상품 타입은 SAVING 으로 가정.
         product = await _fetch_and_validate_product(conn, product_id, "SAVING")
         async with conn.transaction():
+            await _persist_consents(
+                conn,
+                customer_no=user.customer_no,
+                product_id=product_id,
+                consents=req.consents,
+            )
             account_no = await _open_common(
                 conn,
                 product=product,
@@ -622,6 +699,12 @@ async def open_minor(
         product = await _fetch_and_validate_product(conn, product_id, ("SAVING", "INSTALL"))
         is_install = product["PRODUCT_TYPE_CD"] == "INSTALL"
         async with conn.transaction():
+            await _persist_consents(
+                conn,
+                customer_no=user.customer_no,
+                product_id=product_id,
+                consents=req.consents,
+            )
             account_no = await _open_common(
                 conn,
                 product=product,

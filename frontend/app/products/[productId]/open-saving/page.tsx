@@ -51,6 +51,7 @@ function OpenSavingForm({ productId }: { productId: number }) {
           alias: alias || null,
           initial_deposit_krw: initialN,
           withdraw_password: password,
+          consents: getProductOpenSession()?.consents ?? [],
         },
         { idempotent: true },
       );
@@ -65,7 +66,7 @@ function OpenSavingForm({ productId }: { productId: number }) {
   return (
     <Card>
       <CardHeader>
-        <div className="font-mono text-xs text-muted-foreground">SCR-OP-003 · 가입 2/2 단계</div>
+        <div className="text-xs text-muted-foreground">가입 2/2 단계</div>
         <CardTitle className="mt-1">자유입출금 통장 개설</CardTitle>
         <CardDescription>입출금이 자유로운 통장입니다. 비밀번호는 출금 시 사용됩니다.</CardDescription>
       </CardHeader>

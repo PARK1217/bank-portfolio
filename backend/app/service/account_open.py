@@ -58,6 +58,7 @@ async def open_installment(
     period_months: int,
     transfer_day: int,
     withdraw_account_token: str,
+    consents: list,
     tokens: TokenService,
 ) -> tuple[str, str, datetime]:
     """적금 가입 — ACCOUNT(INSTALL) + AUTO_TRANSFER(MONTHLY) 한 트랜잭션.
@@ -103,6 +104,15 @@ async def open_installment(
             )
 
         async with conn.transaction():
+            # 약관 동의 영구화 — 가입 실패 시 함께 롤백되도록 같은 트랜잭션에서.
+            from ..api.product_open import _persist_consents
+            await _persist_consents(
+                conn,
+                customer_no=customer_no,
+                product_id=product_id,
+                consents=consents,
+            )
+
             # 적금 계좌 INSERT
             await conn.execute(
                 'INSERT INTO public."ACCOUNT" ('

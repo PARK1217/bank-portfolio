@@ -59,6 +59,16 @@ class ProductDetailResponse(BaseModel):
 
 
 # ----------------------------------------------------------------------
+# SCR-OP-010 약관/특약 동의 — 6종 OpenRequest 가 공유 (앞쪽 정의)
+# ----------------------------------------------------------------------
+
+class TermsConsentItem(BaseModel):
+    terms_id: int
+    version: int
+    agreed: bool
+
+
+# ----------------------------------------------------------------------
 # SCR-OP-003 자유입출금
 # ----------------------------------------------------------------------
 
@@ -66,6 +76,7 @@ class OpenSavingRequest(BaseModel):
     alias: str | None = Field(None, max_length=50)
     initial_deposit_krw: int = Field(0, ge=0)
     withdraw_password: str = Field(..., min_length=4, max_length=8)
+    consents: list[TermsConsentItem] = Field(default_factory=list)
 
 
 class OpenAccountResponse(BaseModel):
@@ -83,6 +94,7 @@ class OpenDepositRequest(BaseModel):
     interest_payment_cd: str = Field(..., description="MONTHLY/QUARTERLY/MATURITY")
     withdraw_account_token: str = Field(..., description="자금 출처 계좌")
     password: str
+    consents: list[TermsConsentItem] = Field(default_factory=list)
 
 
 # ----------------------------------------------------------------------
@@ -95,6 +107,7 @@ class OpenInstallmentRequest(BaseModel):
     transfer_day: int = Field(..., ge=1, le=31, description="매월 자동이체 실행일")
     withdraw_account_token: str
     bonus_condition_codes: list[str] = Field(default_factory=list)
+    consents: list[TermsConsentItem] = Field(default_factory=list)
 
 
 # ----------------------------------------------------------------------
@@ -115,6 +128,7 @@ class OpenJointRequest(BaseModel):
     initial_deposit_krw: int = Field(0, ge=0)
     co_owners: list[JointParticipant] = Field(..., min_length=1, max_length=10)
     attachment_ids: list[int] = Field(default_factory=list)
+    consents: list[TermsConsentItem] = Field(default_factory=list)
 
 
 # ----------------------------------------------------------------------
@@ -130,6 +144,7 @@ class MinorOpenRequest(BaseModel):
         min_length=1,
     )
     attachment_ids: list[int] = Field(..., min_length=1, description="가족관계증명서 등")
+    consents: list[TermsConsentItem] = Field(default_factory=list)
 
 
 # ----------------------------------------------------------------------
@@ -142,6 +157,7 @@ class OpenForeignRequest(BaseModel):
     krw_amount: int | None = None
     withdraw_account_token: str | None = None
     password: str
+    consents: list[TermsConsentItem] = Field(default_factory=list)
 
 
 # ----------------------------------------------------------------------
@@ -156,14 +172,8 @@ class ProductCompleteResponse(BaseModel):
 
 
 # ----------------------------------------------------------------------
-# SCR-OP-010 약관/특약 동의
+# SCR-OP-010 약관/특약 동의 — TermsConsentItem 은 위 자유입출금 섹션에서 정의
 # ----------------------------------------------------------------------
-
-class TermsConsentItem(BaseModel):
-    terms_id: int
-    version: int
-    agreed: bool
-
 
 class ProductTermsAgreeRequest(BaseModel):
     product_id: int

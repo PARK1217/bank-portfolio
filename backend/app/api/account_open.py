@@ -28,6 +28,7 @@ async def open_installment_route(
         period_months=req.period_months,
         transfer_day=req.transfer_day,
         withdraw_account_token=req.withdraw_account_token,
+        consents=req.consents,
         tokens=tokens,
     )
     return OpenAccountResponse(account_token=account_token)

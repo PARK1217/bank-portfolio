@@ -114,6 +114,7 @@ function OpenDepositForm({ productId }: { productId: number }) {
           interest_payment_cd: interestCycle,
           withdraw_account_token: withdrawToken,
           password,
+          consents: getProductOpenSession()?.consents ?? [],
         },
         { idempotent: true },
       );
@@ -133,7 +134,7 @@ function OpenDepositForm({ productId }: { productId: number }) {
   return (
     <Card>
       <CardHeader>
-        <div className="font-mono text-xs text-muted-foreground">SCR-OP-004 · 가입 2/2 단계</div>
+        <div className="text-xs text-muted-foreground">가입 2/2 단계</div>
         <CardTitle className="mt-1">{product.product.product_name} 가입</CardTitle>
         <CardDescription>
           금액과 기간을 지정하면 출금계좌에서 자동 이체되어 정기예금이 개설됩니다.

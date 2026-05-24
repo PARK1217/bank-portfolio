@@ -130,6 +130,7 @@ function OpenInstallmentForm({ productId }: { productId: number }) {
           withdraw_account_token: withdrawToken,
           bonus_condition_codes: Object.keys(bonusSel).filter((k) => bonusSel[k]),
           password,
+          consents: getProductOpenSession()?.consents ?? [],
         },
         { idempotent: true },
       );
@@ -150,7 +151,7 @@ function OpenInstallmentForm({ productId }: { productId: number }) {
     <div className="space-y-4">
       <Card>
         <CardHeader>
-          <div className="font-mono text-xs text-muted-foreground">SCR-OP-005 · 가입 2/2 단계</div>
+          <div className="text-xs text-muted-foreground">가입 2/2 단계</div>
           <CardTitle className="mt-1">{product.product.product_name} 가입 ⭐</CardTitle>
           <CardDescription>
             매월 자동이체로 납입됩니다. 가입 시 자동이체가 함께 등록됩니다 (1 트랜잭션 4 테이블).

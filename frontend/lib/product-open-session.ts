@@ -11,11 +11,19 @@
 
 const KEY = "bank.product.open";
 
+export interface TermsConsentEntry {
+  terms_id: number;
+  version: number;
+  agreed: boolean;
+}
+
 export interface ProductOpenSession {
   product_id: number;
   product_type_cd?: string;
   agreed_terms_at?: string;
   product_name?: string;
+  /** 약관 화면에서 동의 완료된 항목 — 상품 개설 API 호출 시 같이 전송. */
+  consents?: TermsConsentEntry[];
 }
 
 function read(): ProductOpenSession | null {

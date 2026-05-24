@@ -110,6 +110,8 @@ function TermsContent({ productId }: { productId: number }) {
         product_type_cd: data!.product.product_type_cd,
         product_name: data!.product.product_name,
         agreed_terms_at: new Date().toISOString(),
+        // 상품 개설 API 호출 시 같이 전송 — 가입 트랜잭션 안에서 CUSTOMER_TERMS_AGREE INSERT.
+        consents: termsConsents,
       });
       router.push(nextOpenUrl(productId, data!.product.product_type_cd));
     } catch (err) {
@@ -121,7 +123,7 @@ function TermsContent({ productId }: { productId: number }) {
   return (
     <Card>
       <CardHeader>
-        <div className="font-mono text-xs text-muted-foreground">SCR-OP-010 · 가입 1/2 단계</div>
+        <div className="text-xs text-muted-foreground">가입 1/2 단계</div>
         <CardTitle className="mt-1">{data.product.product_name} 약관 동의</CardTitle>
         <CardDescription>
           상품 약관과 계약특약을 모두 확인·동의해야 다음 단계로 진행됩니다. 항목을 눌러 본문을 끝까지 읽으시면 자동으로 동의 처리됩니다.

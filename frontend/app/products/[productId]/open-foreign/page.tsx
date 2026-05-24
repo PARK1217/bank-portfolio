@@ -65,6 +65,7 @@ function OpenForeignForm({ productId }: { productId: number }) {
           foreign_amount: mode === "foreign" ? foreignN : null,
           krw_amount: mode === "krw" ? krwN : null,
           password,
+          consents: getProductOpenSession()?.consents ?? [],
         },
         { idempotent: true },
       );
@@ -79,7 +80,6 @@ function OpenForeignForm({ productId }: { productId: number }) {
   return (
     <Card>
       <CardHeader>
-        <div className="font-mono text-xs text-muted-foreground">SCR-OP-007</div>
         <CardTitle className="mt-1">외화계좌 개설</CardTitle>
         <CardDescription>
           통화 선택 후 외화 금액 또는 원화 환전 금액 중 하나를 입력합니다. 환율은 실시간 고시 환율을 따릅니다 (현재 화면은 mock).

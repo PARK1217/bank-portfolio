@@ -99,6 +99,7 @@ function JointForm({ productId }: { productId: number }) {
             delegation_power_codes: Object.keys(o.powers).filter((k) => o.powers[k]),
           })),
           attachment_ids: Object.values(attached),
+          consents: getProductOpenSession()?.consents ?? [],
         },
         { idempotent: true },
       );
@@ -113,7 +114,7 @@ function JointForm({ productId }: { productId: number }) {
   return (
     <Card>
       <CardHeader>
-        <div className="font-mono text-xs text-muted-foreground">SCR-OP-006 ⭐ Party-Role</div>
+        <div className="text-xs text-muted-foreground">⭐ Party-Role</div>
         <CardTitle className="mt-1">공동명의 통장 개설</CardTitle>
         <CardDescription>
           본인(<span className="font-mono">#{customerNo ?? "-"}</span>, OWNER) + 공동명의자 N명 (JOINT_OWNER). 위임 권한도 명의자별로 설정합니다.
