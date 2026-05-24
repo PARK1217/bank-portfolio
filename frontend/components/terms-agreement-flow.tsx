@@ -91,12 +91,21 @@ export function TermsAgreementFlow({
 
   function toggleAll(checked: boolean) {
     if (checked) {
-      // "전체 동의" — 모든 항목 즉시 동의 (모달 없이) — 사용자 편의 단축
-      const next: Record<number, boolean> = {};
-      terms.forEach((t) => (next[t.terms_id] = true));
+      // "전체 동의" — 선택 약관은 즉시 체크, 미동의 필수 약관은 첫 항목 모달을 띄워
+      // 본문 확인 흐름 강제. 모달 스크롤 끝 → 자동 동의 → onAgreeOne 이 다음 미동의
+      // 필수 항목 모달을 자동으로 띄움(체인) → 모두 본 뒤에야 진짜 동의 완료.
+      const next: Record<number, boolean> = { ...agreed };
+      terms.forEach((t) => {
+        if (!t.required) next[t.terms_id] = true; // 선택 약관만 즉시
+      });
       setAgreed(next);
+      const firstUnagreedRequired = terms.find((t) => t.required && !next[t.terms_id]);
+      if (firstUnagreedRequired) {
+        setOpenId(firstUnagreedRequired.terms_id);
+      }
     } else {
       setAgreed({});
+      setOpenId(null);
     }
   }
 
