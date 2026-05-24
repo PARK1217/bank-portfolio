@@ -358,6 +358,74 @@ export function regChannelLabel(code: string | null | undefined): string {
   return REG_CHANNEL_LABEL[code] ?? code;
 }
 
+// PRODUCT.INTEREST_CYCLE_CD — 이자 지급 주기
+const INTEREST_CYCLE_LABEL: Record<string, string> = {
+  MATURITY: "만기일시",
+  MONTHLY: "매월",
+  QUARTERLY: "분기",
+  SEMI: "반기",
+  YEARLY: "연 1회",
+  DAILY: "매일",
+};
+export function interestCycleLabel(code: string | null | undefined): string {
+  if (!code) return "-";
+  return INTEREST_CYCLE_LABEL[code] ?? code;
+}
+
+// PRODUCT.TARGET_CUSTOMER_CD — 대상 고객
+const TARGET_CUSTOMER_LABEL: Record<string, string> = {
+  ALL: "전체",
+  INDIV: "개인",
+  CORP: "법인",
+  SENIOR: "시니어",
+  MINOR: "미성년",
+  FOREIGN: "외국인",
+  STUDENT: "학생",
+  VIP: "VIP",
+};
+export function targetCustomerLabel(code: string | null | undefined): string {
+  if (!code) return "-";
+  return TARGET_CUSTOMER_LABEL[code] ?? code;
+}
+
+// PRODUCT.MATURITY_POLICY_CD — 만기 처리 정책
+const MATURITY_POLICY_LABEL: Record<string, string> = {
+  AUTO_RENEW: "자동 연장",
+  AUTO_CLOSE: "자동 해지",
+  MANUAL: "직접 처리",
+  CONVERT: "전환 입금",
+};
+export function maturityPolicyLabel(code: string | null | undefined): string {
+  if (!code) return "-";
+  return MATURITY_POLICY_LABEL[code] ?? code;
+}
+
+// PRODUCT_BONUS.BONUS_TYPE_CD — 우대 조건 유형
+const BONUS_TYPE_LABEL: Record<string, string> = {
+  RATE: "금리 우대",
+  FEE: "수수료 할인",
+  GIFT: "사은품",
+  POINT: "포인트 적립",
+  CASHBACK: "캐시백",
+};
+export function bonusTypeLabel(code: string | null | undefined): string {
+  if (!code) return "-";
+  return BONUS_TYPE_LABEL[code] ?? code;
+}
+
+// TERMS_VERSION_HISTORY / TERMS.CHANGE_TYPE_CD — 약관 변경 유형
+const TERMS_CHANGE_TYPE_LABEL: Record<string, string> = {
+  CREATE: "신규 등록",
+  UPDATE: "개정",
+  REVISE: "개정",
+  DEPRECATE: "폐기",
+  RESTORE: "복원",
+};
+export function termsChangeTypeLabel(code: string | null | undefined): string {
+  if (!code) return "-";
+  return TERMS_CHANGE_TYPE_LABEL[code] ?? code;
+}
+
 // EMPLOYEE_MASTER.AUTH_LEVEL_CD
 const AUTH_LEVEL_LABEL: Record<string, string> = {
   ADMIN: "관리자",

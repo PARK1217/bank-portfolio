@@ -12,6 +12,12 @@ import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { api, ApiError } from "@/lib/api";
 import { fmtKrw, fmtNumber } from "@/lib/utils";
 import { StatusBadge } from "@/components/product-status-badge";
+import {
+  bonusTypeLabel,
+  interestCycleLabel,
+  maturityPolicyLabel,
+  targetCustomerLabel,
+} from "@/lib/labels";
 
 
 interface ProductDetail {
@@ -208,9 +214,9 @@ export default function ProductDetailPage() {
                   <DescPair label="출시일" value={fmtYyyymmdd(data.product.launch_date)} />
                   <DescPair label="판매 시작" value={fmtYyyymmdd(data.product.sale_start_date)} />
                   <DescPair label="판매 종료" value={fmtYyyymmdd(data.product.sale_end_date)} />
-                  <DescPair label="이자 주기" value={data.product.interest_cycle_cd ?? "-"} />
-                  <DescPair label="대상 고객" value={data.product.target_customer_cd ?? "-"} />
-                  <DescPair label="만기 정책" value={data.product.maturity_policy_cd ?? "-"} />
+                  <DescPair label="이자 주기" value={interestCycleLabel(data.product.interest_cycle_cd)} />
+                  <DescPair label="대상 고객" value={targetCustomerLabel(data.product.target_customer_cd)} />
+                  <DescPair label="만기 정책" value={maturityPolicyLabel(data.product.maturity_policy_cd)} />
                   <DescPair
                     label="가입 가능 연령"
                     value={
@@ -323,7 +329,7 @@ export default function ProductDetailPage() {
                     {data.bonuses.map((b) => (
                       <li key={b.bonus_seq} className="rounded-md border bg-muted/20 px-3 py-2">
                         <div className="flex items-center justify-between">
-                          <span className="text-xs text-muted-foreground">{b.bonus_type_cd}</span>
+                          <span className="text-xs text-muted-foreground">{bonusTypeLabel(b.bonus_type_cd)}</span>
                           <span className="num-tabular text-xs font-medium text-success">
                             +{b.bonus_rate != null ? `${(b.bonus_rate * 100).toFixed(2)}%` : "-"}
                           </span>

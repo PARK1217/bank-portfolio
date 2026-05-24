@@ -14,6 +14,7 @@ import { api, ApiError, type AdminTermsDetail } from "@/lib/api";
 import { fmtDateTime, fmtNumber } from "@/lib/utils";
 import {
   TERMS_STATUS_OPTIONS,
+  termsChangeTypeLabel,
   termsStatusLabel,
   termsTypeLabel,
 } from "@/lib/labels";
@@ -297,7 +298,7 @@ export default function TermsDetailPage() {
                     {data.history.map((h) => (
                       <li key={h.change_seq} className="rounded-md border p-2">
                         <div className="flex items-center justify-between">
-                          <span className="text-xs font-medium">#{h.change_seq} · {h.change_type_cd ?? "-"}</span>
+                          <span className="text-xs font-medium">#{h.change_seq} · {termsChangeTypeLabel(h.change_type_cd)}</span>
                           <span className="text-[10px] text-muted-foreground">
                             {h.effective_date ? fmtDateTime(h.effective_date) : "-"}
                           </span>
