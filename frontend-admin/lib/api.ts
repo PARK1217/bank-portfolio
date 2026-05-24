@@ -118,6 +118,8 @@ export const api = {
     request<T>(path, { ...opts, method: "POST", body }),
   patch: <T = unknown>(path: string, body?: unknown, opts?: Omit<FetchOptions, "method" | "body">) =>
     request<T>(path, { ...opts, method: "PATCH", body }),
+  delete: <T = unknown>(path: string, opts?: Omit<FetchOptions, "method" | "body">) =>
+    request<T>(path, { ...opts, method: "DELETE" }),
 };
 
 
@@ -857,6 +859,60 @@ export interface AutoTransferExecHistoryResponse {
   count: number;
   total: number;
 }
+
+// ---------------------------------------------------------------------------
+// 공지 / 이벤트 (admin_notice)
+// ---------------------------------------------------------------------------
+
+export interface AdminNoticeItem {
+  notice_id: number;
+  title: string;
+  category_cd?: string | null;
+  pinned_yn?: string | null;
+  status_cd?: string | null;
+  published_at?: string | null;
+  expires_at?: string | null;
+  view_count: number;
+  author?: string | null;
+  created_at?: string | null;
+}
+
+export interface AdminNoticeDetail extends AdminNoticeItem {
+  body: string;
+  updated_at?: string | null;
+}
+
+export interface AdminNoticeListResponse {
+  items: AdminNoticeItem[];
+  count: number;
+  total: number;
+}
+
+export interface AdminEventItem {
+  event_id: number;
+  title: string;
+  summary?: string | null;
+  status_cd?: string | null;
+  period_start?: string | null;
+  period_end?: string | null;
+  banner_url?: string | null;
+  view_count: number;
+  published_at?: string | null;
+  author?: string | null;
+  created_at?: string | null;
+}
+
+export interface AdminEventDetail extends AdminEventItem {
+  body: string;
+  updated_at?: string | null;
+}
+
+export interface AdminEventListResponse {
+  items: AdminEventItem[];
+  count: number;
+  total: number;
+}
+
 
 export interface AutoTransferDashboard {
   active_count: number;

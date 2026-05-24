@@ -19,6 +19,7 @@ from .api.admin_health import router as admin_health_router
 from .api.admin_loan import router as admin_loan_router
 from .api.admin_loan_contract import router as admin_loan_contract_router
 from .api.admin_loan_repay import router as admin_loan_repay_router
+from .api.admin_notice import event_router as admin_event_router, notice_router as admin_notice_router
 from .api.admin_overdue import router as admin_overdue_router
 from .api.admin_product import router as admin_product_router
 from .api.admin_transaction import router as admin_transaction_router
@@ -245,6 +246,8 @@ api.include_router(admin_transaction_router)
 api.include_router(admin_auto_transfer_router)
 api.include_router(admin_audit_router)
 api.include_router(admin_health_router)
+api.include_router(admin_notice_router)
+api.include_router(admin_event_router)
 api.include_router(admin_product_router)
 api.include_router(chatbot_router)
 api.include_router(notification_router)

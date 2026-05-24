@@ -500,6 +500,56 @@ export function docCategoryLabel(code: string | null | undefined): string {
   return DOC_CATEGORY_LABEL[code] ?? code;
 }
 
+// NOTICE.CATEGORY_CD
+const NOTICE_CATEGORY_LABEL: Record<string, string> = {
+  SERVICE: "서비스",
+  SECURITY: "보안",
+  SYSTEM: "시스템",
+  POLICY: "약관/정책",
+};
+export function noticeCategoryLabel(code: string | null | undefined): string {
+  if (!code) return "-";
+  return NOTICE_CATEGORY_LABEL[code] ?? code;
+}
+export const NOTICE_CATEGORY_OPTIONS: { value: string; label: string }[] = [
+  { value: "SERVICE", label: "서비스" },
+  { value: "SECURITY", label: "보안" },
+  { value: "SYSTEM", label: "시스템" },
+  { value: "POLICY", label: "약관/정책" },
+];
+
+// NOTICE.STATUS_CD
+const NOTICE_STATUS_LABEL: Record<string, string> = {
+  PUBLISH: "게시",
+  DRAFT: "임시저장",
+  ARCHIVE: "보관",
+};
+export function noticeStatusLabel(code: string | null | undefined): string {
+  if (!code) return "-";
+  return NOTICE_STATUS_LABEL[code] ?? code;
+}
+export const NOTICE_STATUS_OPTIONS: { value: string; label: string }[] = [
+  { value: "PUBLISH", label: "게시" },
+  { value: "DRAFT", label: "임시저장" },
+  { value: "ARCHIVE", label: "보관" },
+];
+
+// EVENT.STATUS_CD
+const EVENT_STATUS_LABEL: Record<string, string> = {
+  PUBLISH: "게시",
+  DRAFT: "임시저장",
+  ENDED: "종료",
+};
+export function eventStatusLabel(code: string | null | undefined): string {
+  if (!code) return "-";
+  return EVENT_STATUS_LABEL[code] ?? code;
+}
+export const EVENT_STATUS_OPTIONS: { value: string; label: string }[] = [
+  { value: "PUBLISH", label: "게시" },
+  { value: "DRAFT", label: "임시저장" },
+  { value: "ENDED", label: "종료" },
+];
+
 // AUTO_TRANSFER.AUTO_STATUS_CD
 const AUTO_TRANSFER_STATUS_LABEL: Record<string, string> = {
   ACTIVE: "활성",
