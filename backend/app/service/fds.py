@@ -89,10 +89,14 @@ async def list_alerts(customer_no: int, tokens: TokenService) -> list[dict[str, 
             'SELECT f."DETECT_SEQ", f."DETECT_DATETIME", f."TOTAL_SCORE", '
             '       f."TRANSACTION_ID", f."REMARK", f."INVESTIGATION_STATUS_CD", '
             '       t."TX_AMOUNT", t."COUNTERPART_ACCOUNT_NO", '
-            '       t."COUNTERPART_BANK_NAME", t."COUNTERPART_HOLDER_NAME" '
+            '       t."COUNTERPART_BANK_NAME", t."COUNTERPART_HOLDER_NAME", '
+            '       d."RULE_FIRED", d."ML_ANOMALY", d."LLM_EXPLAIN" '
             'FROM public."FDS_DETECTION" f '
             'LEFT JOIN public."TRANSACTION" t '
             '       ON t."TRANSACTION_ID" = f."TRANSACTION_ID" '
+            'LEFT JOIN public."AI_FDS_DECISION" d '
+            '       ON d."CUSTOMER_NO" = f."CUSTOMER_NO" '
+            '      AND d."FDS_DETECT_SEQ" = f."DETECT_SEQ" '
             'WHERE f."CUSTOMER_NO" = $1 AND f."DELETE_YN" = \'N\' '
             'ORDER BY f."DETECT_DATETIME" DESC NULLS LAST, '
             '         f."DETECT_SEQ" DESC',
@@ -108,6 +112,17 @@ async def list_alerts(customer_no: int, tokens: TokenService) -> list[dict[str, 
             else None
         )
         detected_at = _parse_dt14(r["DETECT_DATETIME"]) or datetime.now()
+        # 자동 분류기가 REMARK 에 LLM 자연어 답변을 저장한 경우, 그 자체를 explanation 으로 노출.
+        # 룰 코드 → 한국어 desc 매핑은 RULES_META 룩업.
+        rule_fired_str = (r["RULE_FIRED"] or "").strip()
+        fired_rules: list[str] = []
+        rule_reasons: list[str] = []
+        if rule_fired_str:
+            from .fds_rules import RULES_META as _RULES
+            fired_rules = [x.strip() for x in rule_fired_str.split(",") if x.strip()]
+            rule_reasons = [_RULES.get(c, (c, 0))[0] for c in fired_rules]
+        # 시드 데이터는 RULE_FIRED 가 비어있어 REMARK 슬래시 분리로 fallback.
+        reasons = rule_reasons or _split_reasons(r["REMARK"])
         items.append(
             {
                 "fds_id": int(r["DETECT_SEQ"]),
@@ -121,7 +136,10 @@ async def list_alerts(customer_no: int, tokens: TokenService) -> list[dict[str, 
                     r["COUNTERPART_HOLDER_NAME"],
                 ),
                 "score": int(r["TOTAL_SCORE"] or 0),
-                "reasons": _split_reasons(r["REMARK"]),
+                "reasons": reasons,
+                "fired_rules": fired_rules,
+                "ml_anomaly": float(r["ML_ANOMALY"]) if r["ML_ANOMALY"] is not None else None,
+                "llm_explain": r["LLM_EXPLAIN"] or None,
                 "status_cd": _STATUS_DB_TO_API.get(
                     r["INVESTIGATION_STATUS_CD"], "PENDING"
                 ),

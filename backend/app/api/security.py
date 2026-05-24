@@ -179,6 +179,10 @@ class FdsAlertItem(BaseModel):
     to_masked: str | None = None
     score: int = 0
     reasons: list[str] = Field(default_factory=list)
+    # 자동 분류기(룰+ML+LLM) 결과 — 시드 row 는 비어있을 수 있음.
+    fired_rules: list[str] = Field(default_factory=list)
+    ml_anomaly: float | None = None
+    llm_explain: str | None = None
     status_cd: str = Field(..., description="PENDING / CONFIRMED_OK / REPORTED")
 
 

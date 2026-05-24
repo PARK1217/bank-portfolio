@@ -287,6 +287,24 @@ async def _post_transfer_hooks(
         reference_type="TRANSFER",
     )
     await _favorite_touch_use(customer_no, to_account_no, to_bank_cd)
+    # FDS 분류기 파이프라인 (룰+ML+LLM) — 출금 TRANSACTION_ID 를 payload 에 담아 비동기 평가.
+    # Kafka 미가동 시 send_event 가 False — in-process fallback 으로 직접 호출 (시연 안정).
+    if result.settlement_status in ("SETTLED", "PENDING") and result.tx_id_withdraw:
+        payload = {
+            "transaction_id": result.tx_id_withdraw,
+            "customer_no": customer_no,
+            "settlement_status": result.settlement_status,
+        }
+        try:
+            from . import kafka as _kafka_svc
+            sent = await _kafka_svc.send_event(
+                _kafka_svc.TOPIC_FDS_TRANSACTION_DETECTED, payload
+            )
+            if not sent:
+                from . import fds_pipeline as _fds
+                await _fds.evaluate_transaction(transaction_id=result.tx_id_withdraw)
+        except Exception:
+            log.exception("fds_publish_failed", tx_id=result.tx_id_withdraw)
 
 
 # ---------------------------------------------------------------------------

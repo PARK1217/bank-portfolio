@@ -108,10 +108,14 @@ async def list_admin_fds(
             f'       COALESCE(fd."INVESTIGATION_STATUS_CD",\'PENDING\') AS investigation_status_cd, '
             f'       fd."EXTRA_AUTH_SUCCESS", fd."ACCESS_IP", fd."ACCESS_COUNTRY", '
             f'       fd."RESPONSE_TIME_MS", fd."REMARK", fd."TRANSACTION_ID", fd."ACCOUNT_NO", '
-            f'       p."PARTY_NAME" AS customer_name '
+            f'       p."PARTY_NAME" AS customer_name, '
+            f'       d."RULE_SCORE", d."RULE_FIRED", d."ML_SCORE", d."ML_ANOMALY", '
+            f'       d."LLM_EXPLAIN" '
             f'FROM public."FDS_DETECTION" fd '
             f'LEFT JOIN public."CUSTOMER" c ON c."CUSTOMER_NO" = fd."CUSTOMER_NO" '
             f'LEFT JOIN public."PARTY" p ON p."PARTY_ID" = c."PARTY_ID" '
+            f'LEFT JOIN public."AI_FDS_DECISION" d '
+            f'       ON d."CUSTOMER_NO" = fd."CUSTOMER_NO" AND d."FDS_DETECT_SEQ" = fd."DETECT_SEQ" '
             f"WHERE {where} "
             f'ORDER BY fd."DETECT_DATETIME" DESC NULLS LAST '
             f'LIMIT ${len(params_paging) - 1} OFFSET ${len(params_paging)}',
@@ -126,10 +130,14 @@ async def get_admin_fds_detail(customer_no: int, detect_seq: int) -> dict[str, A
     pool = get_pool()
     async with pool.acquire() as conn:
         fd = await conn.fetchrow(
-            'SELECT fd.*, p."PARTY_NAME" AS customer_name, c."EMAIL" '
+            'SELECT fd.*, p."PARTY_NAME" AS customer_name, c."EMAIL", '
+            '       d."RULE_SCORE", d."RULE_FIRED", d."ML_SCORE", d."ML_ANOMALY", '
+            '       d."LLM_EXPLAIN" '
             'FROM public."FDS_DETECTION" fd '
             'LEFT JOIN public."CUSTOMER" c ON c."CUSTOMER_NO" = fd."CUSTOMER_NO" '
             'LEFT JOIN public."PARTY" p ON p."PARTY_ID" = c."PARTY_ID" '
+            'LEFT JOIN public."AI_FDS_DECISION" d '
+            '       ON d."CUSTOMER_NO" = fd."CUSTOMER_NO" AND d."FDS_DETECT_SEQ" = fd."DETECT_SEQ" '
             'WHERE fd."CUSTOMER_NO" = $1 AND fd."DETECT_SEQ" = $2 AND fd."DELETE_YN" = \'N\'',
             customer_no,
             detect_seq,
@@ -218,6 +226,12 @@ async def update_investigation(
 
 
 def _row(r: Any) -> dict[str, Any]:
+    keys = r.keys()
+    # AI_FDS_DECISION JOIN 결과 (list 쿼리에만 포함, detail 풀쿼리는 별도 처리)
+    rule_fired_raw = r["RULE_FIRED"] if "RULE_FIRED" in keys else None
+    fired: list[str] = []
+    if rule_fired_raw:
+        fired = [x.strip() for x in str(rule_fired_raw).split(",") if x.strip()]
     return {
         "customer_no": int(r["CUSTOMER_NO"]),
         "detect_seq": int(r["DETECT_SEQ"]),
@@ -233,6 +247,12 @@ def _row(r: Any) -> dict[str, Any]:
         "remark": r["REMARK"],
         "transaction_id": int(r["TRANSACTION_ID"]) if r["TRANSACTION_ID"] is not None else None,
         "account_no": r["ACCOUNT_NO"],
+        # 자동 분류기(룰+ML+LLM) 결과 — 시드 row 는 비어있을 수 있음.
+        "rule_score": int(r["RULE_SCORE"]) if "RULE_SCORE" in keys and r["RULE_SCORE"] is not None else None,
+        "fired_rules": fired,
+        "ml_score": int(r["ML_SCORE"]) if "ML_SCORE" in keys and r["ML_SCORE"] is not None else None,
+        "ml_anomaly": float(r["ML_ANOMALY"]) if "ML_ANOMALY" in keys and r["ML_ANOMALY"] is not None else None,
+        "llm_explain": r["LLM_EXPLAIN"] if "LLM_EXPLAIN" in keys else None,
     }
 
 

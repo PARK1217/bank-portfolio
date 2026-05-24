@@ -85,6 +85,7 @@ async def lifespan(app: FastAPI):
         handle_verify_reply,
     )
     from .service.chatbot import handle_llm_call_trace
+    from .service.fds_pipeline import handle_fds_evaluation
     from .service.rag_eval_log import handle_rag_evaluation
     from .service.transfer import handle_settlement_requested
 
@@ -112,6 +113,11 @@ async def lifespan(app: FastAPI):
         handle_verify_reply,
         group_id="verify-reply-consumer",
     )
+    # FDS 분류기 — 거래 후 비동기 평가 (룰+ML+LLM).
+    await kafka_svc.start_consumer(
+        kafka_svc.TOPIC_FDS_TRANSACTION_DETECTED,
+        handle_fds_evaluation,
+    )
 
     # 자동이체 실행 워커 — AUTO_TRANSFER ACTIVE 스캔 + AUTO_TRANSFER_EXEC 적재.
     import asyncio as _asyncio
@@ -121,6 +127,13 @@ async def lifespan(app: FastAPI):
     auto_transfer_task = _asyncio.create_task(auto_transfer_worker.run())
     # 외부 통신망 헬스 스냅 워커 — EXTERNAL_API_HEALTH 5분 적재 (Phase 6 §9.2.3).
     external_health_task = _asyncio.create_task(admin_health.worker_loop())
+    # FDS IsolationForest 모델 부팅 학습 — 시드+검증 누적 거래로 fit + pkl 저장.
+    # 실패해도 graceful degrade (score 가 중립값 0.5 반환).
+    try:
+        from .service import fds_anomaly
+        await fds_anomaly.ensure_model()
+    except Exception:
+        log.exception("fds_anomaly_init_failed")
 
     yield
 

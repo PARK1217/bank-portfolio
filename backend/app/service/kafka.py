@@ -36,6 +36,8 @@ TOPIC_CHATBOT_RAG_EVALS = "chatbot.rag.evaluations"
 # 계좌 검증 — 타행 예금주 조회용 request-reply 패턴.
 TOPIC_ACCOUNT_VERIFY_REQ = "transfer.account.verify.requested"
 TOPIC_ACCOUNT_VERIFY_REPLY = "transfer.account.verify.replies"
+# FDS 분류기 — 거래 발생 시 비동기 평가 (룰 + ML + LLM)
+TOPIC_FDS_TRANSACTION_DETECTED = "fds.transaction.detected"
 
 _BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP", "kafka:9092")
 _GROUP_PREFIX = os.getenv("KAFKA_GROUP_PREFIX", "bank-portfolio")
