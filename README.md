@@ -3,7 +3,7 @@
 은행 서비스에서 흔히 보는 화면들을 한 번씩은 다 만들어 본, 풀스택 포트폴리오 프로젝트입니다.
 계좌 이체, 자동이체, 대출 신청, 적금 가입, 의심거래 신고, 챗봇 상담, 그리고 직원이 쓰는 관리자 화면까지 한 묶음으로 동작합니다.
 
-기술 스택: FastAPI · Next.js 14 · PostgreSQL 16 · Kafka · Phoenix · XGBoost
+기술 스택: FastAPI · Next.js 14 · PostgreSQL 16 · Kafka · Phoenix · XGBoost · scikit-learn · LLM(Groq/Mistral)
 
 ---
 
@@ -25,6 +25,9 @@
 세 단계 다 신뢰도가 낮으면 솔직하게 "잘 모르겠다"고 답해 엉뚱한 말을 만들어내지 않도록 막았습니다.
 대출 자동 승인은 XGBoost 로 0~1 점수를 매기는데, 0.85 이상은 자동 승인, 0.30 이하는 자동 거절,
 **그 사이 회색지대는 사람 직원이 검토하는 큐로 떨어집니다.** 사람과 AI 가 협업하는 흐름을 직접 시연할 수 있습니다.
+
+의심거래(FDS)도 단순 시드 카드가 아닙니다. 거래가 발생하면 Kafka 로 흘러가서 **룰 8개 + IsolationForest 이상 탐지 + LLM 자연어 설명**
+이 한 파이프라인으로 돌아가고, 점수가 임계치를 넘으면 알림 카드가 자동으로 뜨면서 "왜 의심됐는지" 한국어로 설명까지 같이 노출됩니다.
 
 **3. 동작이 보이게 만드는 것**
 
@@ -51,8 +54,9 @@ Phoenix(Arize) UI 에서 바로 볼 수 있게 자동 추적을 붙였습니다.
 4) 챗봇 화면에서 "드론 배달 통장 같은 거 있어요?" 라고 물어보기
    → 자료에 없는 질문이라 정중히 거절 + 6006 포트의 Phoenix UI 에 호출 흔적 남음
 
-5) 의심거래 화면 → 대기 중인 알림 카드에서 "본인 거래 확인" 클릭
-   → 카드가 "확인됨" 으로 바뀌고 알림 목록에 반영
+5) 의심거래 화면 → 자동 탐지된 알림 카드에서 LLM 한국어 설명 확인
+   → "본인 거래 확인" 클릭 시 카드가 "확인됨" 으로 바뀌고 알림 목록에 반영
+   → 카드에 발동된 룰 칩 4종 + ML 이상도 % 표시
 ─────────────────────────────────────────
 6) http://localhost:5001/login   (관리자 콘솔)
    사번 ADMIN001 / 비번 admin1234
@@ -176,6 +180,63 @@ cd frontend-admin && npm install && npm run dev    # http://localhost:5001
 
 ---
 
+## 의심거래는 어떻게 자동 분류되나요?
+
+대출 점수 모델과는 다른 결을 가진 **하이브리드 분류기** 입니다 — **룰(전문가 지식)** · **ML(IsolationForest 이상 탐지)** · **LLM(자연어 설명)** 셋이 한 파이프라인을 이룹니다.
+
+```
+[고객 이체 발생] → TRANSACTION INSERT
+       ↓ Kafka topic: fds.transaction.detected
+       ↓
+[Consumer: handle_fds_evaluation]
+   ① 룰 평가 (8개)        → rule_score + fired 리스트
+   ② IsolationForest    → ml_anomaly [0~1] → ml_score [0~40]
+   ③ total = round(rule × 0.6 + ml)
+   ④ total ≥ 60: LLM 자연어 설명 → FDS_DETECTION INSERT + 알림
+      total < 60: AI_FDS_DECISION 만 적재(감사 추적)
+```
+
+### 룰 8개 — 도메인 전문가 규칙
+
+| 룰 코드 | 트리거 조건 | 점수 |
+|---|---|---|
+| `R_NIGHT` | 거래 시각 00~05시 | 15 |
+| `R_AMOUNT_ZSCORE` | 본인 30일 평균 + 3σ 초과 | 25 |
+| `R_NEW_COUNTERPART` | 90일 거래 없던 신규 수취인 | 15 |
+| `R_BURST` | 10분 안 동일 계좌 출금 3건 이상 | 20 |
+| `R_FOREIGN_IP` | 해외 IP (ACCESS_COUNTRY ≠ KR) | 25 |
+| `R_DAILY_LIMIT_NEAR` | 일일 누적 ≥ DAILY_WITHDRAW_LIMIT × 0.9 | 10 |
+| `R_NEW_DEVICE` | `CUSTOMER_DEVICE` 미등록 디바이스 | 20 |
+| `R_LARGE_INTERBANK` | 타행 + 1천만원 이상 | 15 |
+
+### ML 모델 — IsolationForest (sklearn)
+
+라벨 없이 정상 거래 분포만으로 학습하는 unsupervised anomaly detection. 부팅 시점에 `service/fds_anomaly.py:ensure_model()` 이 시드+검증 누적 거래 1,000건으로 fit → pickle 캐시 → 추론은 1ms.
+
+**7개 피처**: log(amount) / 시각(0-23) / 요일(0-6) / 타행 여부 / 90일 수취인 거래 횟수 / 본인 z-score / 일일 누적 금액 log
+
+raw decision_function 결과를 `[0, 1]` 로 정규화 — 1에 가까울수록 이상.
+
+### LLM — 자연어 설명 생성
+
+룰·ML 점수를 그대로 보여주면 "왜?" 가 이해가 안 됩니다. `service/fds_llm_explain.py` 가 거래 컨텍스트(고객명·평소 평균·이번 금액·발동된 룰·ML 점수)를 Groq Llama 3.1 에 보내 **한국어 3~4문장** 으로 정리:
+
+> "안녕하세요, 박철수 고객님. 다온뱅크 의심거래 분석 결과를 알려드리겠습니다. 이번 거래는 심야 시간대에 발생하여 R_NIGHT 룰이 발동되었습니다. 또한, 10분 안에 같은 계좌에서 3건 이상의 출금이 발생하여 R_BURST 룰이 발동되었습니다. 해외 IP 접속과 미등록 디바이스 사용으로 R_FOREIGN_IP 와 R_NEW_DEVICE 룰이 함께 발동됐어요. 본인 거래가 아니라면 즉시 신고해주세요."
+
+LLM 호출이 실패해도 룰 desc 슬래시 결합으로 fallback — 서비스 끊김 없음.
+
+### 어디에 영구화?
+
+`AI_FDS_DECISION` 테이블에 룰·ML·LLM 점수 근거를 영구 저장. `FDS_DETECTION` 과 1:1 매핑 + `LLM_CALL_ID` 컬럼이 `AI_LLM_CALL_LOG` 와 링크되어 Phoenix trace 까지 추적 가능. 감사·재현·재학습 데이터 베이스로 그대로 사용 가능.
+
+### 어필 포인트
+
+> - **"룰의 정확성 + ML 의 일반화 + LLM 의 설명력"** — 한 모델 단점을 다른 둘이 보완
+> - **"심야 1시 신규 수취인 거액 이체 → 카드 자동 등장 + 한국어 설명"** — 발표 1분 시연
+> - **"FDS_DETECTION 시드 카드 3장 → 실시간 자동 누적"** — 운영 도메인 완성도
+
+---
+
 ## 챗봇은 어떻게 답변하나요?
 
 사용자 질문이 들어오면 한국어 임베딩 모델(**`jhgan/ko-sroberta-multitask`**)로 768차원 벡터로 변환한 뒤, pgvector 의 `<=>` 코사인 거리로 사전에 임베딩된 FAQ·약관 코퍼스와 비교해 **신뢰도에 따라 3단계로 분기**합니다. 답변 못 만들면 솔직하게 "확인되지 않습니다" 라고 거절 — **환각(hallucination) 방지가 최우선**입니다.
@@ -281,7 +342,7 @@ require_admin Depends 가드
 | 대출 | 9 | 한도 조회 → 신청 → 약정 → 실행 → 매달 상환 |
 | 상품 가입 | 11 | 카탈로그 / 약관 / 입출금·정기예금·적금·외화·공동명의·미성년 |
 | 챗봇 | 5 | 자주 묻는 질문 + 키워드 + 임베딩 단계 응답 / 출처 보기 / 좋아요·싫어요 |
-| 의심거래 | 2 | 대기 중인 알림 / 본인 확인·신고 |
+| 의심거래 | 2 | 자동 분류기(룰+ML+LLM) 알림 + 본인 확인·신고 |
 | 자산분석 | 4 | 설문 → 분석 → 결과 → 맞춤 상품 추천 |
 | 공지 / 이벤트 | 4 | 게시판 (비로그인 공개) |
 | **관리자 콘솔** | 9 | 대시보드 / 검토 큐 / AI 의사결정 이력 / 신청 상세 / 첨부서류 일치성 / 연체 추적 / 외부망 상태 / Phoenix 임베드 / 감사 로그 |
@@ -304,6 +365,7 @@ require_admin Depends 가드
 | AI / LLM | **Groq Llama 3.1** · Mistral · HuggingFace | 응답 생성 LLM (키 없으면 자동 전환) |
 | | **jhgan/ko-sroberta-multitask** | 한국어 문장 임베딩 모델 |
 | 머신러닝 | **XGBoost** | 대출 자동 승인 점수 모델 |
+| | **scikit-learn IsolationForest** | 의심거래 이상 탐지(unsupervised) |
 | | UCI German Credit + 합성 데이터 | 학습 데이터셋 |
 | 관측 | **Arize Phoenix** + **OpenTelemetry** | LLM 호출 자동 추적·시각화 |
 | | **structlog** | JSON 구조화 로그 |
@@ -337,7 +399,8 @@ bank-portfolio/
 │   ├── 11_admin_auth_migration.sql   # 관리자 직원 계정
 │   ├── 12_seed_999999_party.sql      # 회귀 계정 보강
 │   ├── 13_doc_seed.sql               # 대출 첨부서류
-│   └── 14_human_review_seed.sql      # 검토 큐 시연 시드
+│   ├── 14_human_review_seed.sql      # 검토 큐 시연 시드
+│   └── 17_fds_decision.sql           # 의심거래 자동 분류기 결과(룰·ML·LLM)
 └── docker-compose.yml      # 5개 서비스 + DB 초기 시드 자동 마운트
 ```
 
@@ -362,6 +425,6 @@ docker exec bank-portfolio-postgres \
 - 상품 5종 가입(보통예금·정기예금·외화·공동명의·미성년) — 브라우저 자동화로 끝까지
 - 이체 3갈래 — 같은 은행 안 / 타행 / 거액
 - 자동이체 워커 — 1회·매월·매주 일정 + 같은 회차 중복 실행 방지
-- 의심거래 — 본인 확인 / 신고 후 알림 발행
+- 의심거래 — 거래 발생 → 자동 평가(룰+ML+LLM) → 카드 자동 등장 → 본인 확인/신고 후 알림 발행
 - 관리자 인증·감사 — 세션 만료 / 잘못된 토큰 거부 / 모든 호출 자동 기록
 - 챗봇 — 단계별 응답 분기 + Phoenix 에 추적 정보 적재
