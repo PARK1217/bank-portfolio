@@ -135,9 +135,10 @@ async def post_feedback(
 
 @router.get("/sessions")
 async def get_sessions_list(
+    q: str | None = Query(default=None, max_length=100, description="대화 본문 부분일치"),
     user: CurrentCustomer = Depends(current_customer),
 ) -> dict:
-    items = await list_sessions(user.customer_no)
+    items = await list_sessions(user.customer_no, q=q)
     return {"sessions": items}
 
 

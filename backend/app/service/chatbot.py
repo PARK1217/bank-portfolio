@@ -480,16 +480,33 @@ async def chat_send(
 # FAQ 목록 / 약관 검색 / 출처 조회 / 피드백
 # ---------------------------------------------------------------------------
 
-async def list_sessions(customer_no: int) -> list[dict]:
+async def list_sessions(customer_no: int, *, q: str | None = None) -> list[dict]:
     """본인의 챗봇 세션 목록 — SCR-CB-004 history 화면용.
 
-    AI_CHATBOT_SESSION + 마지막 ASSISTANT 메시지 LATERAL 조인.
+    AI_CHATBOT_SESSION + 마지막 ASSISTANT/첫 USER 메시지 LATERAL 조인 +
+    메시지 개수 집계 + q 부분일치 필터.
     """
     pool = get_pool()
+    args: list = [customer_no]
+    where_extra = ""
+    if q:
+        needle = q.strip()
+        if needle:
+            args.append(f"%{needle}%")
+            i = len(args)
+            where_extra = (
+                f" AND EXISTS (SELECT 1 FROM public.\"AI_CHATBOT_MESSAGE\" mm "
+                f' WHERE mm."SESSION_ID" = s."SESSION_ID" '
+                f"   AND (mm.\"DELETE_YN\" IS NULL OR mm.\"DELETE_YN\" = 'N') "
+                f' AND mm."CONTENT" ILIKE ${i})'
+            )
     async with pool.acquire() as conn:
         rows = await conn.fetch(
             'SELECT s."SESSION_ID", s."STARTED_AT", s."ENDED_AT", '
-            '       s."STATUS_CD", m."CONTENT" AS last_content '
+            '       s."STATUS_CD", '
+            '       last_a."CONTENT" AS last_content, '
+            '       first_u."CONTENT" AS first_user_content, '
+            '       COALESCE(cnt."n", 0) AS message_count '
             'FROM public."AI_CHATBOT_SESSION" s '
             'LEFT JOIN LATERAL ('
             '  SELECT "CONTENT" FROM public."AI_CHATBOT_MESSAGE" '
@@ -497,21 +514,37 @@ async def list_sessions(customer_no: int) -> list[dict]:
             "    AND \"ROLE_CD\" = 'ASSISTANT' "
             "    AND (\"DELETE_YN\" IS NULL OR \"DELETE_YN\" = 'N') "
             '  ORDER BY "CREATED_AT" DESC, "MESSAGE_ID" DESC LIMIT 1'
-            ') m ON TRUE '
+            ') last_a ON TRUE '
+            'LEFT JOIN LATERAL ('
+            '  SELECT "CONTENT" FROM public."AI_CHATBOT_MESSAGE" '
+            '  WHERE "SESSION_ID" = s."SESSION_ID" '
+            "    AND \"ROLE_CD\" = 'USER' "
+            "    AND (\"DELETE_YN\" IS NULL OR \"DELETE_YN\" = 'N') "
+            '  ORDER BY "CREATED_AT" ASC, "MESSAGE_ID" ASC LIMIT 1'
+            ') first_u ON TRUE '
+            'LEFT JOIN LATERAL ('
+            '  SELECT count(*) AS n FROM public."AI_CHATBOT_MESSAGE" '
+            '  WHERE "SESSION_ID" = s."SESSION_ID" '
+            "    AND (\"DELETE_YN\" IS NULL OR \"DELETE_YN\" = 'N')"
+            ') cnt ON TRUE '
             'WHERE s."CUSTOMER_NO" = $1 '
             "  AND (s.\"DELETE_YN\" IS NULL OR s.\"DELETE_YN\" = 'N') "
+            f"{where_extra} "
             'ORDER BY s."STARTED_AT" DESC, s."SESSION_ID" DESC',
-            customer_no,
+            *args,
         )
     out = []
     for r in rows:
         last = r["last_content"]
+        first_u = r["first_user_content"]
         out.append({
             "session_id": int(r["SESSION_ID"]),
             "started_at": r["STARTED_AT"],
             "ended_at": r["ENDED_AT"],
             "status_cd": r["STATUS_CD"] or "ACTIVE",
-            "last_message_snippet": (last[:80] if last else None),
+            "last_message_snippet": (last[:120] if last else None),
+            "first_user_snippet": (first_u[:120] if first_u else None),
+            "message_count": int(r["message_count"] or 0),
         })
     return out
 
