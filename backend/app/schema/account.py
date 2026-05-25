@@ -45,6 +45,12 @@ class LoanSummaryItem(BaseModel):
     overdue_days: int = 0
 
 
+class MonthSummary(BaseModel):
+    year_month: str  # YYYYMM
+    income_krw: int = 0
+    expense_krw: int = 0
+
+
 class DashboardResponse(BaseModel):
     customer_no: int
     accounts: list[AccountSummary]
@@ -52,6 +58,7 @@ class DashboardResponse(BaseModel):
     loans: list[LoanSummaryItem]
     recent_transactions: list["TransactionItem"]
     unread_notifications: int = 0
+    month_summary: MonthSummary | None = None
 
 
 # ----------------------------------------------------------------------

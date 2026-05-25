@@ -54,6 +54,12 @@ interface TransactionItem {
   counterpart: MaskedAccountRef | null;
 }
 
+interface MonthSummary {
+  year_month: string;
+  income_krw: number;
+  expense_krw: number;
+}
+
 interface DashboardData {
   customer_no: number;
   accounts: AccountSummary[];
@@ -61,6 +67,7 @@ interface DashboardData {
   loans: LoanSummaryItem[];
   recent_transactions: TransactionItem[];
   unread_notifications: number;
+  month_summary: MonthSummary | null;
 }
 
 
@@ -78,6 +85,13 @@ const dtFmt = new Intl.DateTimeFormat("ko-KR", {
 
 function formatKrw(n: number): string {
   return `${krw.format(n)}원`;
+}
+
+function formatYearMonth(ym: string): string {
+  // "202605" → "5월"
+  if (ym.length !== 6) return ym;
+  const m = parseInt(ym.slice(4), 10);
+  return Number.isFinite(m) && m >= 1 && m <= 12 ? `${m}월` : ym;
 }
 
 
@@ -118,13 +132,25 @@ function DashboardContent() {
 
   return (
     <div className="space-y-8">
-      {/* 총자산 + 미읽음 알림 ----------------------------------------- */}
+      {/* 총자산 + 이번 달 KPI + 미읽음 알림 ----------------------------- */}
       <section className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <div className="text-xs text-muted-foreground">총 자산</div>
           <div className="num-tabular text-3xl font-semibold tracking-tight">
             {formatKrw(data.total_balance_krw)}
           </div>
+          {data.month_summary ? (
+            <div className="mt-2 text-xs text-muted-foreground">
+              {formatYearMonth(data.month_summary.year_month)}
+              <span className="num-tabular ml-1.5 text-success">
+                +{formatKrw(data.month_summary.income_krw)}
+              </span>
+              <span className="mx-1.5">/</span>
+              <span className="num-tabular text-destructive">
+                -{formatKrw(data.month_summary.expense_krw)}
+              </span>
+            </div>
+          ) : null}
         </div>
         {data.unread_notifications > 0 ? (
           <Link

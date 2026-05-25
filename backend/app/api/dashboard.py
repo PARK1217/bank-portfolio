@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 
 from fastapi import APIRouter, Depends
 
 from ..db import get_pool
 from ..logging_setup import mask_account_no
-from ..schema.account import DashboardResponse, LoanSummaryItem
+from ..schema.account import DashboardResponse, LoanSummaryItem, MonthSummary
 from ..service.account import (
     fetch_accounts_for,
     fetch_transactions,
@@ -100,11 +100,41 @@ async def get_dashboard(
 
     loans = await _fetch_loan_summaries(user.customer_no, tokens)
 
+    # 이번 달 KRW 입출금 합계 (외화 거래는 단위 다르므로 KRW 합산 제외) +
+    # 미읽음 알림 카운트 — 한 conn 에서 2 쿼리.
+    year_month = date.today().strftime("%Y%m")
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        month_row = await conn.fetchrow(
+            'SELECT '
+            '  COALESCE(SUM(CASE WHEN t."TX_AMOUNT" > 0 THEN t."TX_AMOUNT" ELSE 0 END), 0) AS income, '
+            '  COALESCE(SUM(CASE WHEN t."TX_AMOUNT" < 0 THEN -t."TX_AMOUNT" ELSE 0 END), 0) AS expense '
+            'FROM public."TRANSACTION" t '
+            'JOIN public."ACCOUNT" a ON a."ACCOUNT_NO" = t."ACCOUNT_NO" '
+            'WHERE a."CUSTOMER_NO" = $1 '
+            '  AND t."DELETE_YN" = \'N\' '
+            '  AND a."ACCOUNT_TYPE_CD" != \'FOREIGN\' '
+            '  AND t."TX_DATETIME" LIKE $2 '
+            '  AND (t."TX_STATUS_CD" IS NULL OR t."TX_STATUS_CD" NOT IN (\'FAILED\',\'CANCELED\'))',
+            user.customer_no,
+            f"{year_month}%",
+        )
+        unread = await conn.fetchval(
+            'SELECT count(*) FROM public."NOTIFICATION" '
+            'WHERE "CUSTOMER_NO" = $1 AND "DELETE_YN" = \'N\' AND "IS_READ" = FALSE',
+            user.customer_no,
+        )
+
     return DashboardResponse(
         customer_no=user.customer_no,
         accounts=summaries,
         total_balance_krw=total,
         loans=loans,
         recent_transactions=recent_items,
-        unread_notifications=0,  # 알림 도메인 구현 후
+        unread_notifications=int(unread or 0),
+        month_summary=MonthSummary(
+            year_month=year_month,
+            income_krw=int(month_row["income"] or 0),
+            expense_krw=int(month_row["expense"] or 0),
+        ),
     )
