@@ -205,10 +205,14 @@ function LimitTypeForm({
 function AccountLimitCard({
   account,
   status,
+  expanded,
+  onToggle,
   onChange,
 }: {
   account: AccountSummary;
   status: LimitChangeAccountStatus | undefined;
+  expanded: boolean;
+  onToggle: () => void;
   onChange: () => void;
 }) {
   const pendingByType = useMemo(() => {
@@ -217,53 +221,83 @@ function AccountLimitCard({
     return map;
   }, [status]);
 
+  const pendingCount = status?.pending.length ?? 0;
+  const transferKrw = status?.current_daily_transfer_krw;
+  const withdrawKrw = status?.current_daily_withdraw_krw;
+
   return (
     <Card>
       <CardHeader className="pb-2">
-        <CardTitle className="text-base">{account.alias ?? accountTypeLabel(account.account_type_cd)}</CardTitle>
-        <div className="font-mono text-xs text-muted-foreground">{account.account_no}</div>
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-expanded={expanded}
+          className="-mx-2 -my-1 flex w-[calc(100%+1rem)] items-start gap-3 rounded px-2 py-1 text-left hover:bg-accent"
+        >
+          <div className="min-w-0 flex-1">
+            <CardTitle className="text-base">
+              {account.alias ?? accountTypeLabel(account.account_type_cd)}
+            </CardTitle>
+            <div className="font-mono text-xs text-muted-foreground">{account.account_no}</div>
+            <div className="mt-1 text-[11px] text-muted-foreground">
+              이체 <span className="num-tabular text-foreground">{fmt(transferKrw ?? null)}</span>
+              <span className="mx-1.5">·</span>
+              출금 <span className="num-tabular text-foreground">{fmt(withdrawKrw ?? null)}</span>
+              {pendingCount > 0 ? (
+                <span className="ml-1.5 rounded bg-primary/15 px-1.5 py-0.5 font-medium text-primary">
+                  점검 중 {pendingCount}
+                </span>
+              ) : null}
+            </div>
+          </div>
+          <span aria-hidden className="mt-1 text-xs text-muted-foreground">
+            {expanded ? "▴" : "▾"}
+          </span>
+        </button>
       </CardHeader>
-      <CardContent className="space-y-4 pt-0">
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          <LimitTypeForm
-            accountNo={account.account_no}
-            typeCd="DAILY_TRANSFER"
-            currentKrw={status?.current_daily_transfer_krw ?? null}
-            pending={pendingByType.get("DAILY_TRANSFER")}
-            onChange={onChange}
-          />
-          <LimitTypeForm
-            accountNo={account.account_no}
-            typeCd="DAILY_WITHDRAW"
-            currentKrw={status?.current_daily_withdraw_krw ?? null}
-            pending={pendingByType.get("DAILY_WITHDRAW")}
-            onChange={onChange}
-          />
-        </div>
-        {status && status.history.length > 0 ? (
-          <details className="text-xs">
-            <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
-              변경 이력 ({status.history.length})
-            </summary>
-            <ul className="mt-2 space-y-1">
-              {status.history.slice(0, 5).map((h) => (
-                <li key={h.request_id} className="rounded bg-muted/30 px-2 py-1">
-                  <span className="text-foreground">{TYPE_LABEL[h.limit_type_cd]}</span>{" "}
-                  {fmt(h.old_limit_krw)} → {fmt(h.new_limit_krw)}{" "}
-                  <span className="text-muted-foreground">
-                    · {limitRequestStatusLabel(h.status_cd)}{" "}
-                    {h.applied_datetime
-                      ? `(${dtFmt.format(new Date(h.applied_datetime))})`
-                      : h.canceled_datetime
-                        ? `(${dtFmt.format(new Date(h.canceled_datetime))})`
-                        : ""}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </details>
-        ) : null}
-      </CardContent>
+      {expanded ? (
+        <CardContent className="space-y-4 pt-0">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <LimitTypeForm
+              accountNo={account.account_no}
+              typeCd="DAILY_TRANSFER"
+              currentKrw={transferKrw ?? null}
+              pending={pendingByType.get("DAILY_TRANSFER")}
+              onChange={onChange}
+            />
+            <LimitTypeForm
+              accountNo={account.account_no}
+              typeCd="DAILY_WITHDRAW"
+              currentKrw={withdrawKrw ?? null}
+              pending={pendingByType.get("DAILY_WITHDRAW")}
+              onChange={onChange}
+            />
+          </div>
+          {status && status.history.length > 0 ? (
+            <details className="text-xs">
+              <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
+                변경 이력 ({status.history.length})
+              </summary>
+              <ul className="mt-2 space-y-1">
+                {status.history.slice(0, 5).map((h) => (
+                  <li key={h.request_id} className="rounded bg-muted/30 px-2 py-1">
+                    <span className="text-foreground">{TYPE_LABEL[h.limit_type_cd]}</span>{" "}
+                    {fmt(h.old_limit_krw)} → {fmt(h.new_limit_krw)}{" "}
+                    <span className="text-muted-foreground">
+                      · {limitRequestStatusLabel(h.status_cd)}{" "}
+                      {h.applied_datetime
+                        ? `(${dtFmt.format(new Date(h.applied_datetime))})`
+                        : h.canceled_datetime
+                          ? `(${dtFmt.format(new Date(h.canceled_datetime))})`
+                          : ""}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          ) : null}
+        </CardContent>
+      ) : null}
     </Card>
   );
 }
@@ -277,6 +311,9 @@ function LimitsList() {
     error: batchError,
     refetch: refetchBatch,
   } = useFetch<LimitChangeBatchData>("/api/accounts/limit-change-status");
+
+  const [query, setQuery] = useState("");
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (error) showApiError(error, "계좌 목록을 불러오지 못했습니다.");
@@ -296,6 +333,43 @@ function LimitsList() {
     return map;
   }, [batch]);
 
+  // PENDING 있는 계좌는 처음부터 펼쳐서 사용자가 바로 인지하도록.
+  useEffect(() => {
+    if (!batch) return;
+    setExpanded((cur) => {
+      const next = new Set(cur);
+      for (const it of batch.items) {
+        if (it.pending.length > 0) next.add(it.account_no);
+      }
+      return next;
+    });
+  }, [batch]);
+
+  const filtered = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    if (!needle) return krwAccounts;
+    return krwAccounts.filter(
+      (a) =>
+        (a.alias ?? "").toLowerCase().includes(needle) ||
+        a.account_no.toLowerCase().includes(needle),
+    );
+  }, [krwAccounts, query]);
+
+  function toggle(no: string) {
+    setExpanded((cur) => {
+      const next = new Set(cur);
+      if (next.has(no)) next.delete(no);
+      else next.add(no);
+      return next;
+    });
+  }
+  function expandAll() {
+    setExpanded(new Set(filtered.map((a) => a.account_no)));
+  }
+  function collapseAll() {
+    setExpanded(new Set());
+  }
+
   if (loading && !data) return <Spinner label="계좌 불러오는 중…" />;
   if (!krwAccounts.length) {
     return (
@@ -306,18 +380,73 @@ function LimitsList() {
   }
   if (batchLoading && !batch) return <Spinner label="한도 정보 불러오는 중…" />;
 
+  const allExpanded = filtered.length > 0 && filtered.every((a) => expanded.has(a.account_no));
+
   return (
-    <ul className="space-y-3">
-      {krwAccounts.map((a) => (
-        <li key={a.account_token}>
-          <AccountLimitCard
-            account={a}
-            status={statusByAccount.get(a.account_no)}
-            onChange={refetchBatch}
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative flex-1 min-w-[180px]">
+          <Input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="별명·계좌번호 검색"
+            aria-label="계좌 검색"
+            className="pr-8"
           />
-        </li>
-      ))}
-    </ul>
+          {query ? (
+            <button
+              type="button"
+              onClick={() => setQuery("")}
+              aria-label="검색어 지우기"
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground hover:text-foreground"
+            >
+              ✕
+            </button>
+          ) : null}
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={allExpanded ? collapseAll : expandAll}
+          disabled={filtered.length === 0}
+        >
+          {allExpanded ? "모두 접기" : "모두 펼치기"}
+        </Button>
+      </div>
+      <div className="text-xs text-muted-foreground">
+        {query.trim() ? (
+          <>
+            <span className="num-tabular font-medium text-foreground">{filtered.length}</span>
+            <span> / 전체 {krwAccounts.length}건</span>
+          </>
+        ) : (
+          <>
+            전체 <span className="num-tabular font-medium text-foreground">{krwAccounts.length}</span>건
+          </>
+        )}
+      </div>
+      {filtered.length === 0 ? (
+        <p className="rounded-md border border-dashed bg-muted/30 p-6 text-center text-sm text-muted-foreground">
+          &quot;{query.trim()}&quot; 에 해당하는 계좌가 없습니다.
+        </p>
+      ) : (
+        <ul className="space-y-2">
+          {filtered.map((a) => (
+            <li key={a.account_token}>
+              <AccountLimitCard
+                account={a}
+                status={statusByAccount.get(a.account_no)}
+                expanded={expanded.has(a.account_no)}
+                onToggle={() => toggle(a.account_no)}
+                onChange={refetchBatch}
+              />
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 
