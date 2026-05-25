@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { useFetch } from "@/lib/use-fetch";
 import { cn } from "@/lib/utils";
@@ -53,6 +54,22 @@ const CATEGORY_LABEL: Record<string, string> = {
   POLICY: "정책",
 };
 
+const NOTICE_CATEGORIES: { code: string; label: string }[] = [
+  { code: "ALL", label: "전체" },
+  { code: "SYSTEM", label: "시스템" },
+  { code: "SECURITY", label: "보안" },
+  { code: "SERVICE", label: "서비스" },
+  { code: "POLICY", label: "정책" },
+];
+
+type EventFilter = "ALL" | "ongoing" | "ended";
+
+const EVENT_FILTERS: { code: EventFilter; label: string }[] = [
+  { code: "ALL", label: "전체" },
+  { code: "ongoing", label: "진행중" },
+  { code: "ended", label: "종료" },
+];
+
 function fmt(d: string): string {
   try {
     return new Date(d).toLocaleDateString("ko-KR", {
@@ -88,12 +105,33 @@ type Tab = "notices" | "events";
 
 export default function NoticesPage() {
   const [tab, setTab] = useState<Tab>("notices");
+  const [query, setQuery] = useState("");
+  const [noticeCategory, setNoticeCategory] = useState("ALL");
+  const [eventFilter, setEventFilter] = useState<EventFilter>("ALL");
 
-  // 두 종류 모두 동시에 가져옴 (탭 전환 시 재호출 X)
-  const noticeRes = useFetch<BoardListResponse<NoticeItem>>("/api/notices");
-  const eventRes = useFetch<BoardListResponse<EventItem>>("/api/events");
+  const noticeQs = new URLSearchParams();
+  if (noticeCategory !== "ALL") noticeQs.set("category_cd", noticeCategory);
+  if (query.trim()) noticeQs.set("q", query.trim());
+  const eventQs = new URLSearchParams();
+  if (query.trim()) eventQs.set("q", query.trim());
+
+  const noticeRes = useFetch<BoardListResponse<NoticeItem>>(
+    `/api/notices?${noticeQs.toString()}`,
+  );
+  const eventRes = useFetch<BoardListResponse<EventItem>>(
+    `/api/events?${eventQs.toString()}`,
+  );
 
   const loading = (noticeRes.loading && !noticeRes.data) || (eventRes.loading && !eventRes.data);
+
+  const filteredEvents = useMemo(() => {
+    const items = eventRes.data?.items ?? [];
+    if (eventFilter === "ALL") return items;
+    return items.filter((ev) => {
+      const ongoing = isOngoing(ev.period_start, ev.period_end);
+      return eventFilter === "ongoing" ? ongoing : !ongoing;
+    });
+  }, [eventRes.data, eventFilter]);
 
   return (
     <main className="container max-w-3xl py-8 animate-fade-in">
@@ -120,14 +158,89 @@ export default function NoticesPage() {
         </TabBtn>
       </div>
 
+      {/* ----- 검색 + 필터 칩 ----- */}
+      <div className="mb-4 space-y-3">
+        <div className="relative">
+          <Input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={tab === "notices" ? "공지 제목·본문 검색" : "이벤트 제목·요약 검색"}
+            aria-label="검색"
+            className="pr-8"
+          />
+          {query ? (
+            <button
+              type="button"
+              onClick={() => setQuery("")}
+              aria-label="검색어 지우기"
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground hover:text-foreground"
+            >
+              ✕
+            </button>
+          ) : null}
+        </div>
+        {tab === "notices" ? (
+          <div className="flex flex-wrap gap-1.5">
+            {NOTICE_CATEGORIES.map((c) => (
+              <FilterChip
+                key={c.code}
+                active={noticeCategory === c.code}
+                onClick={() => setNoticeCategory(c.code)}
+              >
+                {c.label}
+              </FilterChip>
+            ))}
+          </div>
+        ) : (
+          <div className="flex flex-wrap gap-1.5">
+            {EVENT_FILTERS.map((f) => (
+              <FilterChip
+                key={f.code}
+                active={eventFilter === f.code}
+                onClick={() => setEventFilter(f.code)}
+              >
+                {f.label}
+              </FilterChip>
+            ))}
+          </div>
+        )}
+      </div>
+
       {loading ? (
         <Spinner label={tab === "notices" ? "공지사항 불러오는 중…" : "이벤트 불러오는 중…"} />
       ) : tab === "notices" ? (
-        <NoticeList items={noticeRes.data?.items ?? []} />
+        <NoticeList items={noticeRes.data?.items ?? []} query={query} />
       ) : (
-        <EventList items={eventRes.data?.items ?? []} />
+        <EventList items={filteredEvents} query={query} />
       )}
     </main>
+  );
+}
+
+
+function FilterChip({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "rounded-full border px-2.5 py-1 text-xs transition-colors",
+        active
+          ? "border-primary bg-primary text-primary-foreground"
+          : "border-input bg-background hover:bg-accent",
+      )}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -160,11 +273,11 @@ function TabBtn({
 }
 
 
-function NoticeList({ items }: { items: NoticeItem[] }) {
+function NoticeList({ items, query }: { items: NoticeItem[]; query: string }) {
   if (items.length === 0) {
     return (
       <p className="rounded-md border border-dashed bg-muted/30 p-6 text-center text-sm text-muted-foreground">
-        등록된 공지사항이 없습니다.
+        {query.trim() ? `"${query.trim()}" 에 해당하는 공지가 없습니다.` : "등록된 공지사항이 없습니다."}
       </p>
     );
   }
@@ -198,11 +311,11 @@ function NoticeList({ items }: { items: NoticeItem[] }) {
 }
 
 
-function EventList({ items }: { items: EventItem[] }) {
+function EventList({ items, query }: { items: EventItem[]; query: string }) {
   if (items.length === 0) {
     return (
       <p className="rounded-md border border-dashed bg-muted/30 p-6 text-center text-sm text-muted-foreground">
-        등록된 이벤트가 없습니다.
+        {query.trim() ? `"${query.trim()}" 에 해당하는 이벤트가 없습니다.` : "등록된 이벤트가 없습니다."}
       </p>
     );
   }

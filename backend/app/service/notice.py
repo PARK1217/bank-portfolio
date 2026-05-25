@@ -20,7 +20,11 @@ _NOTICE_DETAIL_COLS = (
 
 
 async def list_notices(
-    *, category_cd: str | None = None, limit: int = 20, offset: int = 0
+    *,
+    category_cd: str | None = None,
+    q: str | None = None,
+    limit: int = 20,
+    offset: int = 0,
 ) -> tuple[list[dict], int]:
     pool = get_pool()
     where = ['"DELETE_YN" = \'N\'', '"STATUS_CD" = \'PUBLISH\'']
@@ -28,6 +32,12 @@ async def list_notices(
     if category_cd:
         args.append(category_cd)
         where.append(f'"CATEGORY_CD" = ${len(args)}')
+    if q:
+        needle = q.strip()
+        if needle:
+            args.append(f"%{needle}%")
+            i = len(args)
+            where.append(f'("TITLE" ILIKE ${i} OR "BODY" ILIKE ${i})')
     where_sql = " AND ".join(where)
     async with pool.acquire() as conn:
         total = await conn.fetchval(
@@ -108,7 +118,11 @@ _EVENT_DETAIL_COLS = (
 
 
 async def list_events(
-    *, status_cd: str | None = None, limit: int = 20, offset: int = 0
+    *,
+    status_cd: str | None = None,
+    q: str | None = None,
+    limit: int = 20,
+    offset: int = 0,
 ) -> tuple[list[dict], int]:
     pool = get_pool()
     where = ['"DELETE_YN" = \'N\'']
@@ -116,6 +130,14 @@ async def list_events(
     if status_cd:
         args.append(status_cd)
         where.append(f'"STATUS_CD" = ${len(args)}')
+    if q:
+        needle = q.strip()
+        if needle:
+            args.append(f"%{needle}%")
+            i = len(args)
+            where.append(
+                f'("TITLE" ILIKE ${i} OR COALESCE("SUMMARY", \'\') ILIKE ${i} OR "BODY" ILIKE ${i})'
+            )
     where_sql = " AND ".join(where)
     async with pool.acquire() as conn:
         total = await conn.fetchval(

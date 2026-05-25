@@ -35,11 +35,12 @@ def _yn(v) -> bool:
 @router.get("/notices", response_model=NoticeListResponse)
 async def list_notice(
     category_cd: str | None = Query(None),
+    q: str | None = Query(default=None, max_length=100, description="제목·본문 부분일치"),
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=100),
 ) -> NoticeListResponse:
     rows, total = await list_notices(
-        category_cd=category_cd, limit=size, offset=(page - 1) * size
+        category_cd=category_cd, q=q, limit=size, offset=(page - 1) * size
     )
     items = [
         NoticeListItem(
@@ -89,11 +90,12 @@ async def hit_notice_view(notice_id: int) -> dict:
 @router.get("/events", response_model=EventListResponse)
 async def list_event(
     status_cd: str | None = Query(None),
+    q: str | None = Query(default=None, max_length=100, description="제목·요약·본문 부분일치"),
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=100),
 ) -> EventListResponse:
     rows, total = await list_events(
-        status_cd=status_cd, limit=size, offset=(page - 1) * size
+        status_cd=status_cd, q=q, limit=size, offset=(page - 1) * size
     )
     items = [
         EventListItem(
