@@ -213,9 +213,36 @@ async def create_account(
 # AU-008 간편 PIN 설정
 # ---------------------------------------------------------------------------
 
+def _is_weak_pin(pin: str) -> bool:
+    """약한 PIN 거부 — 같은 숫자 6회 / 1씩 증가·감소 연속 / 2자리 반복(121212).
+
+    SCR-AU-008 정책 — 클라이언트 가드와 동일 룰을 백엔드에서도 강제.
+    """
+    if len(set(pin)) == 1:
+        return True  # 111111 / 000000
+    try:
+        deltas = [int(pin[i + 1]) - int(pin[i]) for i in range(len(pin) - 1)]
+    except ValueError:
+        # 숫자 외 문자는 schema 단계에서 이미 거부되지만 안전망
+        return False
+    if all(d == 1 for d in deltas):
+        return True  # 123456 / 234567
+    if all(d == -1 for d in deltas):
+        return True  # 654321
+    # 121212 / 989898 같은 2자리 반복
+    if len(pin) >= 4 and pin[0] != pin[1] and pin[::2] == pin[0] * (len(pin) // 2) and pin[1::2] == pin[1] * (len(pin) // 2):
+        return True
+    return False
+
+
 async def set_simple_pin(customer_no: int, pin: str, pin_confirm: str) -> None:
     if pin != pin_confirm:
         raise BusinessError(E_VALIDATION, "PIN 확인이 일치하지 않습니다.")
+    if _is_weak_pin(pin):
+        raise BusinessError(
+            E_VALIDATION,
+            "쉽게 추측되는 PIN 은 사용할 수 없어요. 연속·반복 숫자를 피해 주세요.",
+        )
     pin_hash = hash_password(pin)
     pool = get_pool()
     async with pool.acquire() as conn:
