@@ -51,7 +51,7 @@ async def fetch_loan_products() -> list[dict]:
     pool = get_pool()
     sql = (
         'SELECT p."PRODUCT_ID", p."PRODUCT_NAME", p."MIN_AMOUNT", p."MAX_AMOUNT", '
-        '  p."TARGET_CUSTOMER_CD", '
+        '  p."TARGET_CUSTOMER_CD", p."MIN_AGE", p."MAX_AGE", '
         '  (SELECT MAX("MAX_MONTHS") FROM public."PRODUCT_PERIOD" '
         '     WHERE "PRODUCT_ID" = p."PRODUCT_ID" AND "DELETE_YN" = \'N\') AS max_months, '
         '  (SELECT "APPLY_RATE" FROM public."PRODUCT_RATE_POLICY" '
@@ -64,6 +64,25 @@ async def fetch_loan_products() -> list[dict]:
     async with pool.acquire() as conn:
         rows = await conn.fetch(sql)
     return [dict(r) for r in rows]
+
+
+def infer_loan_subtype(product_name: str, target_customer_cd: str | None) -> str:
+    """상품명 + 대상 코드 기반 sub-type 추론 — 자격 분기에 사용.
+
+    DB 컬럼 부재로 상품명 키워드 기반. 시드는 8종 고정이므로 안전.
+    """
+    name = product_name or ""
+    if "주택담보" in name:
+        return "MORTGAGE"
+    if "전세" in name:
+        return "JEONSE"
+    if target_customer_cd == "CORP" or "사업자" in name or "운영자금" in name:
+        return "BIZ"
+    if target_customer_cd == "FOREIGN" or "외국인" in name:
+        return "FOREIGN_LOAN"
+    if "사잇돌" in name or "새희망홀씨" in name:
+        return "SUBPRIME"
+    return "GENERAL"
 
 
 # ---------------------------------------------------------------------------

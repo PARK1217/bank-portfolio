@@ -25,6 +25,10 @@ class LoanProductItem(BaseModel):
     max_amount: int
     max_period_months: int
     target_customer_cd: str | None = None
+    min_age: int | None = None
+    max_age: int | None = None
+    # 자격 분기용 — 상품명 기반 추론. MORTGAGE/JEONSE/BIZ/FOREIGN_LOAN/SUBPRIME/GENERAL
+    loan_subtype: str = "GENERAL"
 
 
 class LoanProductListResponse(BaseModel):

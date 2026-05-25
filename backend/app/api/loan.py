@@ -48,6 +48,7 @@ from ..service.loan import (
     fetch_loan_products,
     fetch_precheck_profile,
     fetch_repay_schedule,
+    infer_loan_subtype,
     precheck_dsr,
     resolve_app,
     resolve_loan,
@@ -93,6 +94,11 @@ async def list_loan_products() -> LoanProductListResponse:
             max_amount=int(r["MAX_AMOUNT"] or 0),
             max_period_months=int(r["max_months"] or 0),
             target_customer_cd=r["TARGET_CUSTOMER_CD"],
+            min_age=int(r["MIN_AGE"]) if r["MIN_AGE"] is not None else None,
+            max_age=int(r["MAX_AGE"]) if r["MAX_AGE"] is not None else None,
+            loan_subtype=infer_loan_subtype(
+                r["PRODUCT_NAME"] or "", r["TARGET_CUSTOMER_CD"]
+            ),
         )
         for r in rows
     ]
