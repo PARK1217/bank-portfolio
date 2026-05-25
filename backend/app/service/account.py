@@ -266,10 +266,15 @@ async def fetch_transaction(tx_id: int, customer_no: int) -> TransactionRow:
 # ---------------------------------------------------------------------------
 
 def to_account_summary(row: AccountRow, account_token: str) -> AccountSummary:
+    # ACCOUNT 테이블에 CURRENCY 컬럼이 없어 ACCOUNT_TYPE_CD 기준 추론.
+    # FOREIGN 시드는 현재 USD 1종 — 다른 통화 추가되면 ACCOUNT 또는
+    # PRODUCT join 으로 확장 필요.
+    currency = "USD" if (row.account_type_cd or "") == "FOREIGN" else "KRW"
     return AccountSummary(
         account_token=account_token,
         alias=row.account_alias,
         account_type_cd=row.account_type_cd or "UNKNOWN",
+        currency=currency,
         balance=row.balance,
         status_cd=row.account_status_cd or "UNKNOWN",
         hidden=(row.hidden_yn == "Y"),

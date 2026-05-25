@@ -86,7 +86,8 @@ async def get_dashboard(
         tokens, user.customer_no, [a.account_no for a in accounts]
     )
     summaries = [to_account_summary(a, t) for a, t in zip(accounts, account_tokens)]
-    total = sum(a.balance for a in accounts)
+    # 외화 계좌(FOREIGN)는 단위가 다르므로 total_balance_krw 합산에서 제외.
+    total = sum(a.balance for a in accounts if (a.account_type_cd or "") != "FOREIGN")
 
     # 최근 거래 — 첫 계좌 5건. 전 계좌 통합 정렬은 후속 작업.
     recent_items = []

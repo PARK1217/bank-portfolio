@@ -87,6 +87,12 @@ function formatKrw(n: number): string {
   return `${krw.format(n)}원`;
 }
 
+function formatBalance(n: number, currency: string): string {
+  if (currency === "KRW") return formatKrw(n);
+  // 외화는 소수 둘째자리 + 통화 코드. minor units 단위가 아닌 BALANCE 정수형 가정.
+  return `${currency} ${n.toLocaleString("ko-KR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
 function formatYearMonth(ym: string): string {
   // "202605" → "5월"
   if (ym.length !== 6) return ym;
@@ -336,7 +342,12 @@ function AccountGroups({ accounts }: { accounts: AccountSummary[] }) {
                   </CardHeader>
                   <CardContent className="space-y-1 pt-0">
                     <div className="font-mono text-xs text-muted-foreground">{acct.account_no}</div>
-                    <div className="num-tabular text-xl font-semibold">{formatKrw(acct.balance)}</div>
+                    <div className="num-tabular text-xl font-semibold">
+                      {formatBalance(acct.balance, acct.currency)}
+                    </div>
+                    {acct.currency !== "KRW" ? (
+                      <div className="text-[10px] text-muted-foreground">총 자산 합산 제외</div>
+                    ) : null}
                   </CardContent>
                 </Card>
               </Link>
