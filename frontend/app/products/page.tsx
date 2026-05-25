@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { useFetch } from "@/lib/use-fetch";
 import { showApiError } from "@/lib/toast";
@@ -31,6 +32,7 @@ const TYPE_FILTERS: { code: string; label: string }[] = [
   { code: "SAVING", label: "입출금" },
   { code: "DEPOSIT", label: "정기예금" },
   { code: "INSTALL", label: "적금" },     // DB PRODUCT_TYPE_CD varchar(8) 한도
+  { code: "FOREIGN", label: "외화" },
   { code: "LOAN", label: "대출" },
 ];
 
@@ -38,14 +40,26 @@ const TYPE_LABEL: Record<string, string> = {
   SAVING: "입출금",
   DEPOSIT: "정기예금",
   INSTALL: "적금",
+  FOREIGN: "외화",
   LOAN: "대출",
 };
+
+type SortKey = "default" | "rate_desc" | "rate_asc" | "name";
+
+const SORT_OPTIONS: { value: SortKey; label: string }[] = [
+  { value: "default", label: "기본순" },
+  { value: "rate_desc", label: "금리 높은 순" },
+  { value: "rate_asc", label: "금리 낮은 순" },
+  { value: "name", label: "이름순" },
+];
 
 const krw = new Intl.NumberFormat("ko-KR");
 
 
 function ProductsContent() {
   const [filter, setFilter] = useState("ALL");
+  const [query, setQuery] = useState("");
+  const [sortKey, setSortKey] = useState<SortKey>("default");
   const { data, error, loading, refetch } = useFetch<ProductCatalogResponse>("/api/products");
 
   useEffect(() => {
@@ -54,9 +68,30 @@ function ProductsContent() {
 
   const items = useMemo(() => {
     const all = data?.items ?? [];
-    if (filter === "ALL") return all;
-    return all.filter((p) => p.product_type_cd === filter);
-  }, [data, filter]);
+    const needle = query.trim().toLowerCase();
+    const filtered = all.filter((p) => {
+      if (filter !== "ALL" && p.product_type_cd !== filter) return false;
+      if (needle && !p.product_name.toLowerCase().includes(needle)) return false;
+      return true;
+    });
+    const sorted = [...filtered];
+    switch (sortKey) {
+      case "rate_desc":
+        sorted.sort((a, b) => b.base_rate - a.base_rate || a.product_id - b.product_id);
+        break;
+      case "rate_asc":
+        sorted.sort((a, b) => a.base_rate - b.base_rate || a.product_id - b.product_id);
+        break;
+      case "name":
+        sorted.sort((a, b) => a.product_name.localeCompare(b.product_name, "ko"));
+        break;
+      default:
+        sorted.sort((a, b) => a.product_id - b.product_id);
+    }
+    return sorted;
+  }, [data, filter, query, sortKey]);
+
+  const totalCount = data?.items.length ?? 0;
 
   if (loading && !data) return <Spinner label="상품 불러오는 중…" />;
   if (!data) {
@@ -73,6 +108,8 @@ function ProductsContent() {
       </div>
     );
   }
+
+  const filtered = filter !== "ALL" || query.trim() !== "";
 
   return (
     <div className="space-y-5">
@@ -94,9 +131,59 @@ function ProductsContent() {
         ))}
       </div>
 
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative flex-1 min-w-[200px]">
+          <Input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="상품명 검색"
+            aria-label="상품명 검색"
+            className="pr-8"
+          />
+          {query ? (
+            <button
+              type="button"
+              onClick={() => setQuery("")}
+              aria-label="검색어 지우기"
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground hover:text-foreground"
+            >
+              ✕
+            </button>
+          ) : null}
+        </div>
+        <select
+          value={sortKey}
+          onChange={(e) => setSortKey(e.target.value as SortKey)}
+          aria-label="정렬"
+          className="h-9 rounded-md border border-input bg-background px-2 text-xs"
+        >
+          {SORT_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="text-xs text-muted-foreground">
+        {filtered ? (
+          <>
+            <span className="num-tabular font-medium text-foreground">{items.length}</span>
+            <span> / 전체 {totalCount}건</span>
+          </>
+        ) : (
+          <>
+            전체 <span className="num-tabular font-medium text-foreground">{totalCount}</span>건
+          </>
+        )}
+      </div>
+
       {items.length === 0 ? (
         <p className="rounded-md border border-dashed bg-muted/30 p-6 text-center text-sm text-muted-foreground">
-          해당 카테고리에 판매 중인 상품이 없습니다.
+          {query.trim()
+            ? `"${query.trim()}" 에 해당하는 상품이 없습니다.`
+            : "해당 카테고리에 판매 중인 상품이 없습니다."}
         </p>
       ) : (
         <ul className="grid gap-3 sm:grid-cols-2">
