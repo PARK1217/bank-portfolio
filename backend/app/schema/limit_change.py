@@ -42,6 +42,14 @@ class LimitChangeStatusResponse(BaseModel):
     history: list[LimitChangeItem]
 
 
+class LimitChangeAccountStatus(LimitChangeStatusResponse):
+    account_no: str
+
+
+class LimitChangeStatusBatchResponse(BaseModel):
+    items: list[LimitChangeAccountStatus]
+
+
 class LimitChangeResponse(BaseModel):
     request_id: int
     apply_datetime: datetime

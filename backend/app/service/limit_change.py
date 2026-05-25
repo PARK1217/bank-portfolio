@@ -182,6 +182,74 @@ async def apply_for_change(
 # 상태 조회
 # ---------------------------------------------------------------------------
 
+async def status_for_accounts(
+    *, customer_no: int, account_nos: list[str] | None = None
+) -> list[dict]:
+    """본인 계좌 일괄 한도 조회 — account_nos 생략 시 본인 KRW/외화 전부.
+
+    단건 status_for_account 의 N+1 호출 회피용 batch API. 계좌별 이력은 최근 20건.
+    """
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        if account_nos:
+            acct_rows = await conn.fetch(
+                'SELECT "ACCOUNT_NO", "DAILY_WITHDRAW_LIMIT", "DAILY_TRANSFER_LIMIT" '
+                'FROM public."ACCOUNT" '
+                'WHERE "CUSTOMER_NO" = $1 AND "DELETE_YN" = \'N\' '
+                'AND "ACCOUNT_NO" = ANY($2::text[]) '
+                'ORDER BY "ACCOUNT_NO"',
+                customer_no,
+                account_nos,
+            )
+        else:
+            acct_rows = await conn.fetch(
+                'SELECT "ACCOUNT_NO", "DAILY_WITHDRAW_LIMIT", "DAILY_TRANSFER_LIMIT" '
+                'FROM public."ACCOUNT" '
+                'WHERE "CUSTOMER_NO" = $1 AND "DELETE_YN" = \'N\' '
+                'ORDER BY "ACCOUNT_NO"',
+                customer_no,
+            )
+        nos = [r["ACCOUNT_NO"] for r in acct_rows]
+        if not nos:
+            return []
+        req_rows = await conn.fetch(
+            'SELECT "REQUEST_ID", "ACCOUNT_NO", "LIMIT_TYPE_CD", "OLD_LIMIT_KRW", '
+            '"NEW_LIMIT_KRW", "REQUEST_DATETIME", "APPLY_DATETIME", "APPLIED_DATETIME", '
+            '"CANCELED_DATETIME", "STATUS_CD", "VERIFY_METHOD_CD" '
+            'FROM public."ACCOUNT_LIMIT_CHANGE_REQUEST" '
+            'WHERE "CUSTOMER_NO" = $1 AND "ACCOUNT_NO" = ANY($2::text[]) '
+            'AND "DELETE_YN" = \'N\' '
+            'ORDER BY "REQUEST_DATETIME" DESC',
+            customer_no,
+            nos,
+        )
+
+    by_acct: dict[str, list[dict]] = {no: [] for no in nos}
+    for r in req_rows:
+        by_acct[r["ACCOUNT_NO"]].append(_row_to_item(r))
+
+    out: list[dict] = []
+    for acct in acct_rows:
+        no = acct["ACCOUNT_NO"]
+        items = by_acct[no][:20]
+        pending = [it for it in items if it["status_cd"] == "PENDING"]
+        history = [it for it in items if it["status_cd"] != "PENDING"]
+        out.append(
+            {
+                "account_no": no,
+                "current_daily_withdraw_krw": (
+                    int(acct["DAILY_WITHDRAW_LIMIT"]) if acct["DAILY_WITHDRAW_LIMIT"] is not None else None
+                ),
+                "current_daily_transfer_krw": (
+                    int(acct["DAILY_TRANSFER_LIMIT"]) if acct["DAILY_TRANSFER_LIMIT"] is not None else None
+                ),
+                "pending": pending,
+                "history": history,
+            }
+        )
+    return out
+
+
 async def status_for_account(*, customer_no: int, account_no: str) -> dict:
     pool = get_pool()
     async with pool.acquire() as conn:

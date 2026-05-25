@@ -216,11 +216,12 @@ api.include_router(security_router)
 api.include_router(device_router)
 api.include_router(password_router)
 api.include_router(signup_router)
-api.include_router(account_router)
 # limit_change_router 는 account_router(prefix="/accounts") 와 prefix 공유 —
-# `/accounts/{no}/limit-change*` 가 account_router 의 동적 path 와 충돌하지 않도록
-# account_router 다음에 별도 mount.
+# batch `/accounts/limit-change-status` (static, depth 2) 가 account_router 의
+# `/{account_token}` (동적, depth 2) 에 흡수되지 않도록 먼저 mount.
+# FastAPI 는 등록 순서대로 매칭하므로 static 우선이 핵심.
 api.include_router(limit_change_router)
+api.include_router(account_router)
 api.include_router(transactions_router)
 api.include_router(dashboard_router)
 # product_open_router 가 `/products/{id}/terms`, `/products/{id}/open-*`, `/products/complete/{token}`

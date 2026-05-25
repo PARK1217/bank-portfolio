@@ -57,6 +57,14 @@ interface LimitChangeStatus {
   history: LimitChangeItem[];
 }
 
+interface LimitChangeAccountStatus extends LimitChangeStatus {
+  account_no: string;
+}
+
+interface LimitChangeBatchData {
+  items: LimitChangeAccountStatus[];
+}
+
 const krw = new Intl.NumberFormat("ko-KR");
 const fmt = (n: number | null) => (n == null ? "한도 없음" : `${krw.format(n)}원`);
 const dtFmt = new Intl.DateTimeFormat("ko-KR", {
@@ -194,16 +202,20 @@ function LimitTypeForm({
 }
 
 
-function AccountLimitCard({ account }: { account: AccountSummary }) {
-  const { data, refetch, loading } = useFetch<LimitChangeStatus>(
-    `/api/accounts/${account.account_no}/limit-change-status`,
-  );
-
+function AccountLimitCard({
+  account,
+  status,
+  onChange,
+}: {
+  account: AccountSummary;
+  status: LimitChangeAccountStatus | undefined;
+  onChange: () => void;
+}) {
   const pendingByType = useMemo(() => {
     const map = new Map<LimitTypeCd, LimitChangeItem>();
-    (data?.pending ?? []).forEach((p) => map.set(p.limit_type_cd, p));
+    (status?.pending ?? []).forEach((p) => map.set(p.limit_type_cd, p));
     return map;
-  }, [data]);
+  }, [status]);
 
   return (
     <Card>
@@ -212,51 +224,45 @@ function AccountLimitCard({ account }: { account: AccountSummary }) {
         <div className="font-mono text-xs text-muted-foreground">{account.account_no}</div>
       </CardHeader>
       <CardContent className="space-y-4 pt-0">
-        {loading && !data ? (
-          <Spinner label="한도 정보 불러오는 중…" />
-        ) : (
-          <>
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-              <LimitTypeForm
-                accountNo={account.account_no}
-                typeCd="DAILY_TRANSFER"
-                currentKrw={data?.current_daily_transfer_krw ?? null}
-                pending={pendingByType.get("DAILY_TRANSFER")}
-                onChange={refetch}
-              />
-              <LimitTypeForm
-                accountNo={account.account_no}
-                typeCd="DAILY_WITHDRAW"
-                currentKrw={data?.current_daily_withdraw_krw ?? null}
-                pending={pendingByType.get("DAILY_WITHDRAW")}
-                onChange={refetch}
-              />
-            </div>
-            {data && data.history.length > 0 ? (
-              <details className="text-xs">
-                <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
-                  변경 이력 ({data.history.length})
-                </summary>
-                <ul className="mt-2 space-y-1">
-                  {data.history.slice(0, 5).map((h) => (
-                    <li key={h.request_id} className="rounded bg-muted/30 px-2 py-1">
-                      <span className="text-foreground">{TYPE_LABEL[h.limit_type_cd]}</span>{" "}
-                      {fmt(h.old_limit_krw)} → {fmt(h.new_limit_krw)}{" "}
-                      <span className="text-muted-foreground">
-                        · {limitRequestStatusLabel(h.status_cd)}{" "}
-                        {h.applied_datetime
-                          ? `(${dtFmt.format(new Date(h.applied_datetime))})`
-                          : h.canceled_datetime
-                            ? `(${dtFmt.format(new Date(h.canceled_datetime))})`
-                            : ""}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </details>
-            ) : null}
-          </>
-        )}
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          <LimitTypeForm
+            accountNo={account.account_no}
+            typeCd="DAILY_TRANSFER"
+            currentKrw={status?.current_daily_transfer_krw ?? null}
+            pending={pendingByType.get("DAILY_TRANSFER")}
+            onChange={onChange}
+          />
+          <LimitTypeForm
+            accountNo={account.account_no}
+            typeCd="DAILY_WITHDRAW"
+            currentKrw={status?.current_daily_withdraw_krw ?? null}
+            pending={pendingByType.get("DAILY_WITHDRAW")}
+            onChange={onChange}
+          />
+        </div>
+        {status && status.history.length > 0 ? (
+          <details className="text-xs">
+            <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
+              변경 이력 ({status.history.length})
+            </summary>
+            <ul className="mt-2 space-y-1">
+              {status.history.slice(0, 5).map((h) => (
+                <li key={h.request_id} className="rounded bg-muted/30 px-2 py-1">
+                  <span className="text-foreground">{TYPE_LABEL[h.limit_type_cd]}</span>{" "}
+                  {fmt(h.old_limit_krw)} → {fmt(h.new_limit_krw)}{" "}
+                  <span className="text-muted-foreground">
+                    · {limitRequestStatusLabel(h.status_cd)}{" "}
+                    {h.applied_datetime
+                      ? `(${dtFmt.format(new Date(h.applied_datetime))})`
+                      : h.canceled_datetime
+                        ? `(${dtFmt.format(new Date(h.canceled_datetime))})`
+                        : ""}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </details>
+        ) : null}
       </CardContent>
     </Card>
   );
@@ -265,15 +271,30 @@ function AccountLimitCard({ account }: { account: AccountSummary }) {
 
 function LimitsList() {
   const { data, loading, error } = useFetch<AccountListData>("/api/accounts");
+  const {
+    data: batch,
+    loading: batchLoading,
+    error: batchError,
+    refetch: refetchBatch,
+  } = useFetch<LimitChangeBatchData>("/api/accounts/limit-change-status");
 
   useEffect(() => {
     if (error) showApiError(error, "계좌 목록을 불러오지 못했습니다.");
   }, [error]);
+  useEffect(() => {
+    if (batchError) showApiError(batchError, "한도 정보를 불러오지 못했습니다.");
+  }, [batchError]);
 
   const krwAccounts = useMemo(
     () => (data?.accounts ?? []).filter((a) => !a.hidden && a.currency === "KRW"),
     [data],
   );
+
+  const statusByAccount = useMemo(() => {
+    const map = new Map<string, LimitChangeAccountStatus>();
+    (batch?.items ?? []).forEach((it) => map.set(it.account_no, it));
+    return map;
+  }, [batch]);
 
   if (loading && !data) return <Spinner label="계좌 불러오는 중…" />;
   if (!krwAccounts.length) {
@@ -283,12 +304,17 @@ function LimitsList() {
       </p>
     );
   }
+  if (batchLoading && !batch) return <Spinner label="한도 정보 불러오는 중…" />;
 
   return (
     <ul className="space-y-3">
       {krwAccounts.map((a) => (
         <li key={a.account_token}>
-          <AccountLimitCard account={a} />
+          <AccountLimitCard
+            account={a}
+            status={statusByAccount.get(a.account_no)}
+            onChange={refetchBatch}
+          />
         </li>
       ))}
     </ul>
