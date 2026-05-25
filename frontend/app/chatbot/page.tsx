@@ -329,27 +329,13 @@ function ChatScreen() {
           </button>
         </div>
       ) : (
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            void send();
-          }}
-          className="flex items-end gap-2 border-t pt-3"
-        >
-          <textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={onKeyDown}
-            placeholder="궁금한 점을 입력하세요 (Enter 전송, Shift+Enter 줄바꿈)"
-            rows={2}
-            maxLength={2000}
-            disabled={sending}
-            className="flex-1 resize-none rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          />
-          <Button type="submit" disabled={sending || !input.trim()}>
-            전송
-          </Button>
-        </form>
+        <ChatInputForm
+          input={input}
+          setInput={setInput}
+          onKeyDown={onKeyDown}
+          send={send}
+          sending={sending}
+        />
       )}
     </div>
   );
@@ -366,6 +352,131 @@ const CATEGORY_LABEL: Record<string, string> = {
   TRANSFER: "이체",
   OTHER: "기타",
 };
+
+function ChatInputForm({
+  input,
+  setInput,
+  onKeyDown,
+  send,
+  sending,
+}: {
+  input: string;
+  setInput: React.Dispatch<React.SetStateAction<string>>;
+  onKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
+  send: () => Promise<void>;
+  sending: boolean;
+}) {
+  const taRef = useRef<HTMLTextAreaElement | null>(null);
+  const [listening, setListening] = useState(false);
+
+  // textarea 자동 높이 — scrollHeight 따라 grow, 최대 200px.
+  useEffect(() => {
+    const ta = taRef.current;
+    if (!ta) return;
+    ta.style.height = "auto";
+    ta.style.height = Math.min(ta.scrollHeight, 200) + "px";
+  }, [input]);
+
+  function toggleVoice() {
+    if (listening) {
+      setListening(false);
+      return;
+    }
+    const W = typeof window !== "undefined" ? (window as unknown as Record<string, unknown>) : null;
+    const SR =
+      (W?.["SpeechRecognition"] as { new (): SpeechRecognitionLike } | undefined) ??
+      (W?.["webkitSpeechRecognition"] as { new (): SpeechRecognitionLike } | undefined);
+    if (SR) {
+      try {
+        const rec = new SR();
+        rec.lang = "ko-KR";
+        rec.continuous = false;
+        rec.interimResults = false;
+        rec.onresult = (e: SpeechRecognitionEventLike) => {
+          const text = e.results?.[0]?.[0]?.transcript ?? "";
+          if (text) setInput((cur) => (cur ? cur + " " : "") + text);
+          setListening(false);
+        };
+        rec.onerror = () => setListening(false);
+        rec.onend = () => setListening(false);
+        setListening(true);
+        rec.start();
+        return;
+      } catch {
+        setListening(false);
+      }
+    }
+    // 폴백 — Web Speech API 미지원 환경 (시연용 mock)
+    setListening(true);
+    setTimeout(() => {
+      setInput((cur) => (cur ? cur + " " : "") + "(예시) 정기예금 금리 알려주세요");
+      setListening(false);
+    }, 1200);
+  }
+
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        void send();
+      }}
+      className="flex items-end gap-2 border-t pt-3"
+    >
+      <div className="flex-1">
+        <textarea
+          ref={taRef}
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={onKeyDown}
+          placeholder="궁금한 점을 입력하세요 (Enter 전송, Shift+Enter 줄바꿈)"
+          rows={2}
+          maxLength={2000}
+          disabled={sending}
+          className="block w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        />
+        <div className="mt-0.5 flex items-center justify-between text-[10px] text-muted-foreground">
+          <span>
+            {listening ? "🎙️ 음성 인식 중…" : "Enter 전송 · Shift+Enter 줄바꿈"}
+          </span>
+          <span className={cn("num-tabular", input.length > 1800 ? "text-warning" : "")}>
+            {input.length} / 2000
+          </span>
+        </div>
+      </div>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={toggleVoice}
+        disabled={sending}
+        aria-label={listening ? "음성 인식 중지" : "음성 입력"}
+        title={listening ? "음성 인식 중지" : "음성 입력"}
+      >
+        {listening ? "■" : "🎙️"}
+      </Button>
+      <Button type="submit" disabled={sending || !input.trim()}>
+        전송
+      </Button>
+    </form>
+  );
+}
+
+
+// Web Speech API 타입 (브라우저 지원 환경에서만 사용; 폴백 분기 있음).
+interface SpeechRecognitionEventLike {
+  results: { [index: number]: { [index: number]: { transcript: string } } };
+}
+
+interface SpeechRecognitionLike {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  onresult: (event: SpeechRecognitionEventLike) => void;
+  onerror: () => void;
+  onend: () => void;
+  start: () => void;
+}
+
 
 const FALLBACK_SAMPLES = [
   "정기예금 만기 자동 재예치는 어떻게 설정하나요?",
