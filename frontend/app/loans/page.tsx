@@ -27,7 +27,7 @@ const krw = new Intl.NumberFormat("ko-KR");
 
 
 function LoansContent() {
-  const { data, error, loading, refetch } = useFetch<LoanProductListResponse>("/api/loans");
+  const { data, error, loading, refetch } = useFetch<LoanProductListResponse>("/api/loans/products");
 
   useEffect(() => {
     if (error) showApiError(error, "대출 상품을 불러오지 못했습니다.");
