@@ -8,6 +8,7 @@ import { Protected } from "@/components/protected";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { PinInput } from "@/components/ui/pin-input";
 import { Spinner } from "@/components/ui/spinner";
 import { api } from "@/lib/api";
 import { showApiError } from "@/lib/toast";
@@ -165,38 +166,24 @@ function ResetContent() {
         <form onSubmit={onSubmit} className="space-y-4">
           {showCurrentPin ? (
             <Field label="현재 계좌 비밀번호 (6자리)" required>
-              <Input
-                type="password"
-                inputMode="numeric"
-                pattern="\d{6}"
-                maxLength={6}
+              <PinInput
                 value={currentPin}
-                onChange={(e) => setCurrentPin(e.target.value.replace(/\D/g, ""))}
+                onChange={setCurrentPin}
                 disabled={submitting}
                 required
               />
             </Field>
           ) : null}
           <Field label="새 계좌 비밀번호 (6자리)" required>
-            <Input
-              type="password"
-              inputMode="numeric"
-              pattern="\d{6}"
-              maxLength={6}
-              value={newPin}
-              onChange={(e) => setNewPin(e.target.value.replace(/\D/g, ""))}
-              disabled={submitting}
-              required
-            />
+            <PinInput value={newPin} onChange={setNewPin} disabled={submitting} required />
+            {newPin.length === 6 && newPinConfirm.length === 6 && newPin !== newPinConfirm ? (
+              <p className="mt-1 text-[11px] text-destructive">새 PIN 확인이 일치하지 않습니다.</p>
+            ) : null}
           </Field>
           <Field label="새 계좌 비밀번호 확인" required>
-            <Input
-              type="password"
-              inputMode="numeric"
-              pattern="\d{6}"
-              maxLength={6}
+            <PinInput
               value={newPinConfirm}
-              onChange={(e) => setNewPinConfirm(e.target.value.replace(/\D/g, ""))}
+              onChange={setNewPinConfirm}
               disabled={submitting}
               required
             />
