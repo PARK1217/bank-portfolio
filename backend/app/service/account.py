@@ -193,10 +193,14 @@ async def fetch_transactions(
     from_date: date | None = None,
     to_date: date | None = None,
     tx_type_cd: str | None = None,
+    q: str | None = None,
     limit: int = 20,
     offset: int = 0,
 ) -> tuple[list[TransactionRow], bool]:
-    """본인 검증을 거친 후 거래 페이지 조회. 반환: (rows, has_next)."""
+    """본인 검증을 거친 후 거래 페이지 조회. 반환: (rows, has_next).
+
+    q: 메모/상대 예금주명/상대 계좌번호 부분일치 ILIKE.
+    """
     await fetch_account(account_no, customer_no)  # 본인 검증
 
     where = ['"ACCOUNT_NO" = $1']
@@ -210,6 +214,16 @@ async def fetch_transactions(
     if tx_type_cd:
         args.append(tx_type_cd)
         where.append(f'"TX_TYPE_CD" = ${len(args)}')
+    if q:
+        needle = q.strip()
+        if needle:
+            args.append(f"%{needle}%")
+            i = len(args)
+            where.append(
+                f'(COALESCE("TX_MEMO", \'\') ILIKE ${i} '
+                f'OR COALESCE("COUNTERPART_HOLDER_NAME", \'\') ILIKE ${i} '
+                f'OR COALESCE("COUNTERPART_ACCOUNT_NO", \'\') ILIKE ${i})'
+            )
 
     where_sql = " AND ".join(where)
     args.extend([limit + 1, offset])

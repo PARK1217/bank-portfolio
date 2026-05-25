@@ -88,6 +88,11 @@ async def list_transactions(
     from_date: date | None = Query(None),
     to_date: date | None = Query(None),
     tx_type_cd: str | None = Query(None),
+    q: str | None = Query(
+        default=None,
+        max_length=100,
+        description="메모/상대 예금주명/상대 계좌번호 부분일치",
+    ),
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=200),
     user: CurrentCustomer = Depends(current_customer),
@@ -100,6 +105,7 @@ async def list_transactions(
         from_date=from_date,
         to_date=to_date,
         tx_type_cd=tx_type_cd,
+        q=q,
         limit=size,
         offset=(page - 1) * size,
     )

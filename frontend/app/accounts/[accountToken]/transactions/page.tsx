@@ -6,9 +6,28 @@ import { useParams } from "next/navigation";
 import { Protected } from "@/components/protected";
 import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useFetch } from "@/lib/use-fetch";
 import { showApiError } from "@/lib/toast";
+import { cn } from "@/lib/utils";
 import { txTypeLabel } from "@/lib/labels";
+
+
+function toIsoDate(d: Date): string {
+  // YYYY-MM-DD in local TZ
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+const RANGE_CHIPS: { key: string; label: string; days: number | null }[] = [
+  { key: "today", label: "오늘", days: 0 },
+  { key: "7d", label: "1주", days: 7 },
+  { key: "30d", label: "1개월", days: 30 },
+  { key: "90d", label: "3개월", days: 90 },
+  { key: "all", label: "전체", days: null },
+];
 
 
 interface MaskedAccount {
@@ -49,11 +68,29 @@ function TxListContent({ token }: { token: string }) {
   const [fromDate, setFromDate] = useState<string>("");
   const [toDate, setToDate] = useState<string>("");
   const [typeCd, setTypeCd] = useState<string>("");
+  const [query, setQuery] = useState<string>("");
+  const [activeChip, setActiveChip] = useState<string>("all");
+
+  function applyRange(key: string, days: number | null) {
+    setActiveChip(key);
+    setPage(1);
+    if (days === null) {
+      setFromDate("");
+      setToDate("");
+      return;
+    }
+    const today = new Date();
+    const from = new Date(today);
+    from.setDate(from.getDate() - days);
+    setFromDate(toIsoDate(from));
+    setToDate(toIsoDate(today));
+  }
 
   const qs = new URLSearchParams({ page: String(page), size: "20" });
   if (fromDate) qs.set("from_date", fromDate);
   if (toDate) qs.set("to_date", toDate);
   if (typeCd) qs.set("tx_type_cd", typeCd);
+  if (query.trim()) qs.set("q", query.trim());
 
   const { data, error, loading } = useFetch<TransactionListResponse>(
     `/api/accounts/${token}/transactions?${qs.toString()}`,
@@ -65,45 +102,92 @@ function TxListContent({ token }: { token: string }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-end gap-2 rounded-md border bg-card p-3 text-xs">
-        <Field label="시작일">
-          <input
-            type="date"
-            value={fromDate}
+      <div className="space-y-3 rounded-md border bg-card p-3 text-xs">
+        <div className="flex flex-wrap gap-1.5">
+          {RANGE_CHIPS.map((c) => (
+            <button
+              key={c.key}
+              type="button"
+              onClick={() => applyRange(c.key, c.days)}
+              className={cn(
+                "rounded-full border px-2.5 py-1 transition-colors",
+                activeChip === c.key
+                  ? "border-primary bg-primary text-primary-foreground"
+                  : "border-input bg-background hover:bg-accent",
+              )}
+            >
+              {c.label}
+            </button>
+          ))}
+        </div>
+        <div className="relative">
+          <Input
+            type="search"
+            value={query}
             onChange={(e) => {
-              setFromDate(e.target.value);
+              setQuery(e.target.value);
               setPage(1);
             }}
-            className="h-8 rounded-md border bg-background px-2"
+            placeholder="메모·예금주명·계좌번호 검색"
+            aria-label="거래 내역 검색"
+            className="h-8 pr-8 text-xs"
           />
-        </Field>
-        <Field label="종료일">
-          <input
-            type="date"
-            value={toDate}
-            onChange={(e) => {
-              setToDate(e.target.value);
-              setPage(1);
-            }}
-            className="h-8 rounded-md border bg-background px-2"
-          />
-        </Field>
-        <Field label="유형">
-          <select
-            value={typeCd}
-            onChange={(e) => {
-              setTypeCd(e.target.value);
-              setPage(1);
-            }}
-            className="h-8 rounded-md border bg-background px-2"
-          >
-            <option value="">전체</option>
-            <option value="DEPOSIT">입금</option>
-            <option value="WITHDRAW">출금</option>
-            <option value="INTEREST">이자</option>
-            <option value="FEE">수수료</option>
-          </select>
-        </Field>
+          {query ? (
+            <button
+              type="button"
+              onClick={() => {
+                setQuery("");
+                setPage(1);
+              }}
+              aria-label="검색어 지우기"
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            >
+              ✕
+            </button>
+          ) : null}
+        </div>
+        <div className="flex flex-wrap items-end gap-2">
+          <Field label="시작일">
+            <input
+              type="date"
+              value={fromDate}
+              onChange={(e) => {
+                setFromDate(e.target.value);
+                setActiveChip("");
+                setPage(1);
+              }}
+              className="h-8 rounded-md border bg-background px-2"
+            />
+          </Field>
+          <Field label="종료일">
+            <input
+              type="date"
+              value={toDate}
+              onChange={(e) => {
+                setToDate(e.target.value);
+                setActiveChip("");
+                setPage(1);
+              }}
+              className="h-8 rounded-md border bg-background px-2"
+            />
+          </Field>
+          <Field label="유형">
+            <select
+              value={typeCd}
+              onChange={(e) => {
+                setTypeCd(e.target.value);
+                setPage(1);
+              }}
+              className="h-8 rounded-md border bg-background px-2"
+            >
+              <option value="">전체</option>
+              <option value="DEPOSIT">입금</option>
+              <option value="WITHDRAW">출금</option>
+              <option value="INTEREST">이자</option>
+              <option value="FEE">수수료</option>
+            </select>
+          </Field>
+        </div>
       </div>
 
       {loading && !data ? (
