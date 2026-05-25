@@ -54,6 +54,21 @@ async def create_favorite(
         )
 
 
+async def update_favorite(customer_no: int, fav_id: int, *, alias: str) -> None:
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        result = await conn.execute(
+            'UPDATE public."FREQUENT_ACCOUNT" SET "ALIAS" = $1, "UPDATED_AT" = NOW() '
+            'WHERE "FREQUENT_ACCOUNT_ID" = $2 AND "CUSTOMER_NO" = $3 '
+            '  AND "DELETE_YN" = \'N\'',
+            alias,
+            fav_id,
+            customer_no,
+        )
+    if result.endswith(" 0"):
+        raise NotFoundError(E_NOT_FOUND, "자주 쓰는 계좌를 찾을 수 없습니다.")
+
+
 async def delete_favorite(customer_no: int, fav_id: int) -> None:
     pool = get_pool()
     async with pool.acquire() as conn:

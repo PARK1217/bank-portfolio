@@ -56,6 +56,38 @@ function FavoritesContent() {
   const [holder, setHolder] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editAlias, setEditAlias] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  function startEdit(fav: FavoriteItem) {
+    setEditingId(fav.id);
+    setEditAlias(fav.alias);
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setEditAlias("");
+  }
+
+  async function saveEdit(fav: FavoriteItem) {
+    const next = editAlias.trim();
+    if (!next || next === fav.alias) {
+      cancelEdit();
+      return;
+    }
+    setSavingEdit(true);
+    try {
+      await api.patch(`/api/transfer/favorites/${fav.id}`, { alias: next });
+      cancelEdit();
+      void refetch();
+    } catch (err) {
+      showApiError(err, "별칭 변경에 실패했습니다.");
+    } finally {
+      setSavingEdit(false);
+    }
+  }
+
   useEffect(() => {
     if (error) showApiError(error, "자주 쓰는 계좌를 불러오지 못했습니다.");
   }, [error]);
@@ -167,25 +199,63 @@ function FavoritesContent() {
           </p>
         ) : (
           <ul className="divide-y rounded-md border bg-card">
-            {data.map((f) => (
-              <li key={f.id} className="flex items-center gap-3 p-3 text-sm">
-                <div className="min-w-0 flex-1">
-                  <div className="font-medium">{f.alias}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {bankName(f.bank_cd)} {f.masked_account_no} · {f.account_holder_name}
+            {data.map((f) => {
+              const editing = editingId === f.id;
+              return (
+                <li key={f.id} className="flex items-center gap-3 p-3 text-sm">
+                  <div className="min-w-0 flex-1">
+                    {editing ? (
+                      <Input
+                        value={editAlias}
+                        onChange={(e) => setEditAlias(e.target.value)}
+                        maxLength={50}
+                        autoFocus
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") void saveEdit(f);
+                          else if (e.key === "Escape") cancelEdit();
+                        }}
+                        aria-label="별칭 수정"
+                        className="h-8"
+                      />
+                    ) : (
+                      <div className="font-medium">{f.alias}</div>
+                    )}
+                    <div className="text-xs text-muted-foreground">
+                      {bankName(f.bank_cd)} {f.masked_account_no} · {f.account_holder_name}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      사용 {f.use_count}회
+                    </div>
                   </div>
-                  <div className="text-xs text-muted-foreground">
-                    사용 {f.use_count}회
-                  </div>
-                </div>
-                <Button size="sm" onClick={() => onTransfer(f)}>
-                  이체
-                </Button>
-                <Button size="sm" variant="ghost" onClick={() => onDelete(f.id)}>
-                  삭제
-                </Button>
-              </li>
-            ))}
+                  {editing ? (
+                    <>
+                      <Button
+                        size="sm"
+                        onClick={() => void saveEdit(f)}
+                        disabled={savingEdit || !editAlias.trim()}
+                      >
+                        {savingEdit ? "저장 중…" : "저장"}
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={cancelEdit} disabled={savingEdit}>
+                        취소
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <Button size="sm" onClick={() => onTransfer(f)}>
+                        이체
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => startEdit(f)}>
+                        수정
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => onDelete(f.id)}>
+                        삭제
+                      </Button>
+                    </>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         )}
       </section>

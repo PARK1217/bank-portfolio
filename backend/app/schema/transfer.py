@@ -101,6 +101,10 @@ class FavoriteAccountCreate(BaseModel):
     display_order: int | None = None
 
 
+class FavoriteAccountUpdate(BaseModel):
+    alias: str = Field(..., min_length=1, max_length=50)
+
+
 # ----------------------------------------------------------------------
 # SCR-TR-005 자동이체 등록 (Signature — AUTO_TRANSFER 확장 후)
 # ----------------------------------------------------------------------

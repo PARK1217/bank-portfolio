@@ -6,12 +6,17 @@ import structlog
 from fastapi import APIRouter, Depends
 
 from ..logging_setup import mask_account_no
-from ..schema.transfer import FavoriteAccountCreate, FavoriteAccountItem
+from ..schema.transfer import (
+    FavoriteAccountCreate,
+    FavoriteAccountItem,
+    FavoriteAccountUpdate,
+)
 from ..service.auth import CurrentCustomer, current_customer
 from ..service.favorite_account import (
     create_favorite,
     delete_favorite,
     list_favorites,
+    update_favorite,
 )
 
 router = APIRouter(prefix="/transfer/favorites", tags=["favorite-account"])
@@ -64,6 +69,17 @@ async def add_favorite(
         use_count=0,
         last_used_at=None,
     )
+
+
+@router.patch("/{fav_id}")
+async def patch_favorite(
+    fav_id: int,
+    req: FavoriteAccountUpdate,
+    user: CurrentCustomer = Depends(current_customer),
+) -> dict:
+    await update_favorite(user.customer_no, fav_id, alias=req.alias)
+    log.info("favorite_updated", id=fav_id)
+    return {"updated": True}
 
 
 @router.delete("/{fav_id}")
