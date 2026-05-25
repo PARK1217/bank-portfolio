@@ -58,6 +58,21 @@ const dtFmt = new Intl.DateTimeFormat("ko-KR", {
 });
 const fmt = (n: number) => `${krw.format(n)}원`;
 
+function formatBalance(n: number, currency: string): string {
+  if (!currency || currency === "KRW") return fmt(n);
+  return `${currency} ${n.toLocaleString("ko-KR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+const STATUS_META: Record<string, { label: string; tone: string }> = {
+  NORMAL: { label: "정상", tone: "bg-success/15 text-success" },
+  ACTIVE: { label: "정상", tone: "bg-success/15 text-success" },
+  SUSPENDED: { label: "거래 정지", tone: "bg-warning/15 text-warning" },
+  DORMANT: { label: "휴면", tone: "bg-warning/15 text-warning" },
+  RESTRICTED: { label: "출금 제한", tone: "bg-warning/15 text-warning" },
+  CLOSED: { label: "해지", tone: "bg-muted text-muted-foreground" },
+  LOST: { label: "분실 신고", tone: "bg-destructive/15 text-destructive" },
+};
+
 function AccountDetailContent({ token }: { token: string }) {
   const { data, error, loading } = useFetch<AccountDetail>(`/api/accounts/${token}`);
 
@@ -80,19 +95,44 @@ function AccountDetailContent({ token }: { token: string }) {
 
   const { account, deposit_contract, daily_limit_krw, once_limit_krw, recent_transactions } = data;
 
+  const status = STATUS_META[account.status_cd] ?? null;
+  const isForeign = account.currency && account.currency !== "KRW";
+  const closed = account.status_cd === "CLOSED";
+
   return (
     <div className="space-y-6">
       <section>
-        <div className="text-xs text-muted-foreground">{accountTypeLabel(account.account_type_cd)}</div>
+        <Link href="/accounts" className="text-xs text-muted-foreground hover:text-foreground">
+          ← 계좌 목록
+        </Link>
+        <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+          <span>{accountTypeLabel(account.account_type_cd)}</span>
+          {isForeign ? (
+            <span className="rounded bg-accent px-1.5 py-0.5">{account.currency}</span>
+          ) : null}
+          {status ? (
+            <span className={cn("rounded-md px-1.5 py-0.5 font-medium", status.tone)}>
+              {status.label}
+            </span>
+          ) : null}
+        </div>
         <h1 className="text-xl font-semibold">{account.alias ?? account.account_no}</h1>
         <div className="mt-1 font-mono text-xs text-muted-foreground">{account.account_no}</div>
-        <div className="num-tabular mt-3 text-3xl font-semibold">{fmt(account.balance)}</div>
+        <div className="num-tabular mt-3 text-3xl font-semibold">
+          {formatBalance(account.balance, account.currency)}
+        </div>
+        {isForeign ? (
+          <p className="mt-0.5 text-[10px] text-muted-foreground">
+            외화 잔액은 총 자산 합산에서 제외됩니다.
+          </p>
+        ) : null}
       </section>
 
       <section className="flex flex-wrap gap-2">
         <Link
           href={`/transfer?from=${token}&from_no=${encodeURIComponent(account.account_no)}`}
-          className={cn(buttonVariants(), "flex-1 min-w-[120px]")}
+          className={cn(buttonVariants(), "flex-1 min-w-[120px]", closed ? "pointer-events-none opacity-40" : "")}
+          aria-disabled={closed}
         >
           이체
         </Link>
@@ -109,6 +149,19 @@ function AccountDetailContent({ token }: { token: string }) {
           통장 보기
         </Link>
       </section>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">계좌 관리</CardTitle>
+        </CardHeader>
+        <CardContent className="grid grid-cols-2 gap-1.5 pt-0 sm:grid-cols-3">
+          <ManageLink href={`/accounts/${token}/edit`} label="별명 변경" />
+          <ManageLink href={`/accounts/${token}/limit`} label="이체 한도" />
+          <ManageLink href={`/accounts/${token}/hide`} label={account.hidden ? "숨김 해제" : "숨기기"} />
+          <ManageLink href={`/accounts/${token}/lost`} label="분실 신고" tone="warn" />
+          <ManageLink href={`/accounts/${token}/close`} label="계좌 해지" tone="destructive" disabled={closed} />
+        </CardContent>
+      </Card>
 
       {deposit_contract ? (
         <Card>
@@ -184,6 +237,42 @@ function Row({ k, v }: { k: string; v: string }) {
       <span className="text-muted-foreground">{k}</span>
       <span className="num-tabular">{v}</span>
     </div>
+  );
+}
+
+function ManageLink({
+  href,
+  label,
+  tone,
+  disabled,
+}: {
+  href: string;
+  label: string;
+  tone?: "warn" | "destructive";
+  disabled?: boolean;
+}) {
+  const base =
+    "rounded-md border border-input bg-background px-2 py-1.5 text-center text-xs transition-colors hover:bg-accent";
+  const toneCls =
+    tone === "destructive"
+      ? "text-destructive hover:bg-destructive/10"
+      : tone === "warn"
+        ? "text-warning hover:bg-warning/10"
+        : "";
+  if (disabled) {
+    return (
+      <span
+        aria-disabled
+        className={cn(base, toneCls, "pointer-events-none opacity-40")}
+      >
+        {label}
+      </span>
+    );
+  }
+  return (
+    <Link href={href} className={cn(base, toneCls)}>
+      {label}
+    </Link>
   );
 }
 
