@@ -20,19 +20,30 @@ log = structlog.get_logger("notification")
 @router.get("", response_model=NotificationListResponse)
 async def list_for_me(
     unread_only: bool = Query(False),
+    types: str | None = Query(
+        default=None,
+        description="콤마 구분 TYPE_CD 필터 (예: TRANSFER,FDS). 생략 시 전체.",
+    ),
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=100),
     user: CurrentCustomer = Depends(current_customer),
 ) -> NotificationListResponse:
-    items, has_next, unread = await list_notifications(
+    type_filter: list[str] | None = None
+    if types:
+        parsed = [t.strip().upper() for t in types.split(",") if t.strip()]
+        type_filter = parsed or None
+
+    items, has_next, unread, unread_by_type = await list_notifications(
         user.customer_no,
         unread_only=unread_only,
+        types=type_filter,
         limit=size,
         offset=(page - 1) * size,
     )
     return NotificationListResponse(
         items=[NotificationItem(**i) for i in items],
         unread_count=unread,
+        unread_by_type=unread_by_type,
         page=page,
         size=size,
         has_next=has_next,

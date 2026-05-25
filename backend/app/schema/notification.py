@@ -28,6 +28,10 @@ class NotificationListParams(BaseModel):
 class NotificationListResponse(BaseModel):
     items: list[NotificationItem]
     unread_count: int
+    unread_by_type: dict[str, int] = Field(
+        default_factory=dict,
+        description="TYPE_CD 별 미읽음 건수. 필터와 무관하게 본인 전체 기준.",
+    )
     page: int
     size: int
     has_next: bool

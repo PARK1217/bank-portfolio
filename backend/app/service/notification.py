@@ -33,36 +33,50 @@ async def list_notifications(
     customer_no: int,
     *,
     unread_only: bool = False,
+    types: list[str] | None = None,
     limit: int = 20,
     offset: int = 0,
-) -> tuple[list[dict], bool, int]:
-    """반환: (items, has_next, unread_count)."""
+) -> tuple[list[dict], bool, int, dict[str, int]]:
+    """반환: (items, has_next, unread_count, unread_by_type).
+
+    types 가 주어지면 해당 TYPE_CD 만 필터. unread_count/unread_by_type 는
+    필터와 무관하게 본인 전체 기준 — 화면이 탭별 미읽음 배지를 그리도록.
+    """
     pool = get_pool()
     where = ['"CUSTOMER_NO" = $1', '"DELETE_YN" = \'N\'']
+    params: list = [customer_no]
     if unread_only:
         where.append('"IS_READ" = FALSE')
+    if types:
+        params.append(types)
+        where.append(f'"TYPE_CD" = ANY(${len(params)}::text[])')
     where_sql = " AND ".join(where)
+
+    limit_idx = len(params) + 1
+    offset_idx = len(params) + 2
+    params.extend([limit + 1, offset])
 
     async with pool.acquire() as conn:
         rows = await conn.fetch(
             f'SELECT {_COLS} FROM public."NOTIFICATION" '
             f"WHERE {where_sql} "
             f'ORDER BY "CREATED_AT" DESC, "NOTIFICATION_ID" DESC '
-            f"LIMIT $2 OFFSET $3",
-            customer_no,
-            limit + 1,
-            offset,
+            f"LIMIT ${limit_idx} OFFSET ${offset_idx}",
+            *params,
         )
-        unread = await conn.fetchval(
-            'SELECT count(*) FROM public."NOTIFICATION" '
+        breakdown = await conn.fetch(
+            'SELECT "TYPE_CD", count(*) AS n FROM public."NOTIFICATION" '
             'WHERE "CUSTOMER_NO" = $1 AND "DELETE_YN" = \'N\' '
-            '  AND "IS_READ" = FALSE',
+            '  AND "IS_READ" = FALSE '
+            'GROUP BY "TYPE_CD"',
             customer_no,
         )
 
+    unread_by_type: dict[str, int] = {r["TYPE_CD"] or "OTHER": int(r["n"]) for r in breakdown}
+    unread = sum(unread_by_type.values())
     has_next = len(rows) > limit
     items = [_row_to_item(r) for r in rows[:limit]]
-    return items, has_next, int(unread or 0)
+    return items, has_next, unread, unread_by_type
 
 
 async def mark_read(customer_no: int, ids: list[int] | None) -> int:
