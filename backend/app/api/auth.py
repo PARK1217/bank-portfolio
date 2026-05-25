@@ -251,6 +251,20 @@ async def otp_verify(
 @router.get("/me")
 async def me(user: CurrentCustomer = Depends(current_customer)) -> dict:
     entry = _otp_secrets.get(user.customer_no)
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        last_access_raw = await conn.fetchval(
+            'SELECT "LAST_ACCESS_DT" FROM public."CUSTOMER" WHERE "CUSTOMER_NO" = $1',
+            user.customer_no,
+        )
+    last_access_iso: str | None = None
+    if last_access_raw and len(last_access_raw) == 14 and last_access_raw.isdigit():
+        try:
+            last_access_iso = datetime.strptime(
+                last_access_raw, "%Y%m%d%H%M%S"
+            ).isoformat()
+        except ValueError:
+            last_access_iso = None
     return {
         "customer_no": user.customer_no,
         "email": user.email,
@@ -258,6 +272,7 @@ async def me(user: CurrentCustomer = Depends(current_customer)) -> dict:
         "grade_cd": user.grade_cd,
         "status_cd": user.status_cd,
         "otp_active": bool(entry and entry.get("active")),
+        "last_access_at": last_access_iso,
     }
 
 

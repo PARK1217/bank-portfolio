@@ -3,9 +3,36 @@
 import Link from "next/link";
 import { Protected } from "@/components/protected";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useFetch } from "@/lib/use-fetch";
+import { cn } from "@/lib/utils";
 
 
 /** SCR-SC-001 보안 설정 메인 — 보안 관련 화면 허브. */
+
+interface MeResponse {
+  customer_no: number;
+  name: string | null;
+  otp_active: boolean;
+  last_access_at: string | null;
+}
+
+interface DeviceItem {
+  device_token: string;
+  is_trusted: boolean;
+}
+
+interface DeviceListResponse {
+  items: DeviceItem[];
+}
+
+interface FdsAlertItem {
+  fds_id: number;
+  status_cd: "PENDING" | "CONFIRMED_OK" | "REPORTED";
+}
+
+interface FdsAlertListResponse {
+  items: FdsAlertItem[];
+}
 
 interface MenuItem {
   href: string;
@@ -27,16 +54,108 @@ const MENUS: MenuItem[] = [
 ];
 
 
+const dtFmt = new Intl.DateTimeFormat("ko-KR", {
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
+
+function SecurityOverview() {
+  const me = useFetch<MeResponse>("/api/auth/me");
+  const devices = useFetch<DeviceListResponse>("/api/security/devices");
+  const alerts = useFetch<FdsAlertListResponse>("/api/security/fds-alerts");
+
+  const otpActive = me.data?.otp_active ?? false;
+  const lastAccessAt = me.data?.last_access_at ?? null;
+  const deviceCount = devices.data?.items.length ?? 0;
+  const pendingAlerts = (alerts.data?.items ?? []).filter((a) => a.status_cd === "PENDING").length;
+
+  const lastAccessLabel = lastAccessAt
+    ? dtFmt.format(new Date(lastAccessAt))
+    : me.loading
+      ? "조회 중…"
+      : "기록 없음";
+
+  return (
+    <section
+      aria-label="보안 요약"
+      className="grid grid-cols-2 gap-2 rounded-md border bg-card p-3 sm:grid-cols-4"
+    >
+      <Stat
+        label="마지막 접속"
+        value={lastAccessLabel}
+        muted={!lastAccessAt}
+      />
+      <Stat
+        label="OTP 등록"
+        value={otpActive ? "활성" : "미등록"}
+        tone={me.loading ? "muted" : otpActive ? "ok" : "warn"}
+      />
+      <Stat
+        label="등록 기기"
+        value={devices.loading && !devices.data ? "…" : `${deviceCount}대`}
+        tone={deviceCount > 0 ? "ok" : "muted"}
+      />
+      <Stat
+        label="의심 거래"
+        value={alerts.loading && !alerts.data ? "…" : `${pendingAlerts}건`}
+        tone={pendingAlerts > 0 ? "warn" : "muted"}
+      />
+    </section>
+  );
+}
+
+
+function Stat({
+  label,
+  value,
+  tone = "default",
+  muted = false,
+}: {
+  label: string;
+  value: string;
+  tone?: "default" | "ok" | "warn" | "muted";
+  muted?: boolean;
+}) {
+  const toneClass =
+    tone === "ok"
+      ? "text-primary"
+      : tone === "warn"
+        ? "text-warning"
+        : tone === "muted"
+          ? "text-muted-foreground"
+          : "text-foreground";
+  return (
+    <div className="min-w-0">
+      <div className="text-[11px] text-muted-foreground">{label}</div>
+      <div
+        className={cn(
+          "mt-0.5 truncate text-sm font-medium",
+          muted ? "text-muted-foreground" : toneClass,
+        )}
+        title={value}
+      >
+        {value}
+      </div>
+    </div>
+  );
+}
+
+
 export default function Page() {
   return (
     <Protected>
-      <main className="container max-w-2xl py-8 animate-fade-in">
-        <div className="mb-4">
+      <main className="container max-w-2xl py-8 animate-fade-in space-y-4">
+        <div>
           <h1 className="text-xl font-semibold">보안 설정</h1>
           <p className="text-xs text-muted-foreground">
             본인 인증·기기·이체 한도·이상거래 등 보안 관련 항목을 한 곳에서 관리합니다.
           </p>
         </div>
+        <SecurityOverview />
         <ul className="grid gap-2 sm:grid-cols-2">
           {MENUS.map((m) => (
             <li key={m.href}>
