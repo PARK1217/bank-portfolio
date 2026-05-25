@@ -16,7 +16,7 @@ from __future__ import annotations
 from datetime import date, datetime
 
 import structlog
-from fastapi import APIRouter, Depends, Header
+from fastapi import APIRouter, Depends, File, Form, Header, UploadFile
 
 from ..errors import E_VALIDATION
 from ..exceptions import BusinessError
@@ -40,6 +40,10 @@ from ..schema.loan import (
 )
 from ..service.account import issue_tx_token, resolve_account_token
 from ..service.auth import CurrentCustomer, current_customer, get_token_service
+from ..service.loan_attach import (
+    get_required_docs as fetch_user_required_docs,
+    upload_attachment as upload_user_attachment,
+)
 from ..service.loan import (
     apply_loan,
     execute_loan,
@@ -186,6 +190,41 @@ async def get_application_status(
         review_steps=[],  # LOAN_REVIEW JOIN은 후속
         missing_documents=[],
         current_step_cd=info["APPLY_STATUS_CD"],
+    )
+
+
+# ---------------------------------------------------------------------------
+# LN-004 본인 신청 첨부 서류 — 요구 목록 조회 + multipart 업로드
+# ---------------------------------------------------------------------------
+
+@router.get("/applications/{app_token}/required-docs")
+async def get_user_required_docs(
+    app_token: str,
+    user: CurrentCustomer = Depends(current_customer),
+    tokens: TokenService = Depends(get_token_service),
+) -> dict:
+    app_id = await resolve_app(tokens, app_token, user.customer_no)
+    return await fetch_user_required_docs(app_id, user.customer_no)
+
+
+@router.post("/applications/{app_token}/attachments")
+async def upload_user_loan_attachment(
+    app_token: str,
+    doc_type_id: int = Form(..., ge=1),
+    file: UploadFile = File(...),
+    user: CurrentCustomer = Depends(current_customer),
+    tokens: TokenService = Depends(get_token_service),
+) -> dict:
+    app_id = await resolve_app(tokens, app_token, user.customer_no)
+    # UploadFile.read() 가 메모리 적재. 10MB 한도라 OK.
+    payload = await file.read()
+    return await upload_user_attachment(
+        app_id,
+        user.customer_no,
+        doc_type_id=doc_type_id,
+        file_bytes=payload,
+        content_type=file.content_type or "",
+        original_name=file.filename or "",
     )
 
 

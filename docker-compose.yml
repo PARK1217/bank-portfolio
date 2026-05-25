@@ -66,7 +66,7 @@ services:
         condition: service_healthy
     volumes:
       - ./backend/app:/app/app  # 핫리로드용
-      - ./data:/app/data:ro     # RAG 코퍼스 (FAQ·약관) read-only 마운트
+      - ./data:/app/data        # RAG 코퍼스(read-only 의도) + 첨부 업로드 쓰기(/app/data/files/loan/...)
 
   frontend:
     build:
