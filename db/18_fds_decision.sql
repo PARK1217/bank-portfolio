@@ -1,5 +1,5 @@
 -- ===================================================================
--- 17_fds_decision.sql — AI_FDS_DECISION
+-- 18_fds_decision.sql — AI_FDS_DECISION
 -- ===================================================================
 -- FDS_DETECTION (탐지 결과 row) 와 1:1 매핑. 룰/ML/LLM 점수 근거를 영구화.
 --
@@ -9,7 +9,7 @@
 --
 -- TOTAL_SCORE = FDS_DETECTION.TOTAL_SCORE = 0.6*RULE_SCORE + 0.4*ML_SCORE (정규화)
 -- 적용:
---   docker exec -i bank-portfolio-postgres psql -U bank -d bank < db/17_fds_decision.sql
+--   docker exec -i bank-portfolio-postgres psql -U bank -d bank < db/18_fds_decision.sql
 -- ===================================================================
 
 BEGIN;

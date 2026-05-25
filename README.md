@@ -400,7 +400,7 @@ bank-portfolio/
 │   ├── 12_seed_999999_party.sql      # 회귀 계정 보강
 │   ├── 13_doc_seed.sql               # 대출 첨부서류
 │   ├── 14_human_review_seed.sql      # 검토 큐 시연 시드
-│   └── 17_fds_decision.sql           # 의심거래 자동 분류기 결과(룰·ML·LLM)
+│   └── 18_fds_decision.sql           # 의심거래 자동 분류기 결과(룰·ML·LLM)
 └── docker-compose.yml      # 5개 서비스 + DB 초기 시드 자동 마운트
 ```
 
