@@ -460,3 +460,80 @@ docker exec bank-portfolio-postgres \
 - 의심거래 — 거래 발생 → 자동 평가(룰+ML+LLM) → 카드 자동 등장 → 본인 확인/신고 후 알림 발행
 - 관리자 인증·감사 — 세션 만료 / 잘못된 토큰 거부 / 모든 호출 자동 기록
 - 챗봇 — 단계별 응답 분기 + Phoenix 에 추적 정보 적재
+
+---
+
+## 시연 직전 체크리스트 (5분)
+
+발표 자리에서 데이터가 어긋나거나 컨테이너가 꺼져 있어 빈 화면을 보이는
+사고를 피하려면, 시작 직전 아래 순서로 점검합니다.
+
+```bash
+# 1. 컨테이너 상태 — 5개 다 running 인가?
+docker compose ps
+# postgres / backend / frontend / kafka / phoenix 모두 'Up' 이어야 함
+
+# 2. 백엔드 health
+curl http://localhost:8001/health
+# {"status":"ok"} 가 돌아오면 OK
+
+# 3. 박철수 시드 정합 — 누적 검증 데이터로 시연 row 수가 어긋났다면 reset
+docker compose exec postgres psql -U bank -d bank -c \
+  "SELECT count(*) FROM public.\"ACCOUNT\" WHERE \"CUSTOMER_NO\"=100001;"
+# 시드 기준 3 (주거래·정기예금·정기적금). 14+ 라면 검증 누적 — reset 권장:
+#   docker compose down -v && docker compose up -d
+
+# 4. OTP 등록 상태 — 박철수는 시드에서 OTP 미등록 (시연 흐름 의도)
+docker compose exec postgres psql -U bank -d bank -c \
+  "SELECT \"CUSTOMER_NO\",\"SIMPLE_PIN\" IS NOT NULL AS pin_set FROM public.\"CUSTOMER\" WHERE \"CUSTOMER_NO\"=100001;"
+
+# 5. FDS 의심거래 시드 — PENDING 2건이 노출돼야 §의심거래 시연 가능
+docker compose exec postgres psql -U bank -d bank -c \
+  "SELECT count(*) FROM public.\"FDS_DETECTION\" WHERE \"CUSTOMER_NO\"=100001 AND \"DECISION_CD\"='PENDING';"
+
+# 6. Phoenix 트레이스 적재 확인 — 챗봇 시연 직후 새 trace 가 보여야 함
+curl -s http://localhost:6006/api/v1/traces?project=banking-rag | python -c "import sys,json; print(len(json.load(sys.stdin)))"
+```
+
+시연 직전에 한 번 더 클릭으로 확인:
+
+- [ ] http://localhost:3001/login — 박철수 로그인 → 대시보드 정상 (총자산·미읽음 알림·이번 달 ±)
+- [ ] http://localhost:3001/security/fds-alerts — FDS PENDING 2건 노출
+- [ ] http://localhost:5001/login — ADMIN001 로그인 → /loans/review-queue 김미선·김영희 2건 노출
+- [ ] http://localhost:6006/projects — banking-rag 프로젝트 보임
+
+---
+
+## 자주 마주치는 문제와 해법
+
+### 컨테이너 / 포트
+
+| 증상 | 원인 | 해결 |
+|---|---|---|
+| `port is already allocated` | 3001/5001/8001/5434/6006 중 누가 점유 | `netstat -ano \| findstr :8001` 으로 PID 찾아 종료 또는 docker-compose.yml 의 포트 재매핑 |
+| backend 가 5초 만에 죽음 | 시드 마이그레이션 SQL 실패(`db/*.sql`) | `docker compose logs postgres \| grep ERROR` — 누락 컬럼·잘못된 시드 행 확인 후 SQL 픽스 → `down -v` 후 재기동 |
+| backend 컨테이너 OOM | sentence-transformers 모델 로딩 시 2GB+ 사용 | Docker Desktop 의 메모리 한도를 6GB 이상으로 |
+| frontend hot reload 안 됨 | `.next` 캐시 또는 layout 의 server component 변경 | `docker compose restart frontend` |
+
+### 데이터 / 시드
+
+| 증상 | 원인 | 해결 |
+|---|---|---|
+| "대출 상품을 불러오지 못했습니다" 토스트 | (구버전) 잘못된 API path | `git pull` — 이미 픽스됨 (`/api/loans/products`) |
+| /dashboard 총자산이 시드 합과 다름 | 검증 누적 거래 / 검증용 임시 계좌 14장+ | `docker compose down -v && up -d` (DB 전체 reset) |
+| 챗봇이 항상 "관련 정보를 찾지 못했습니다" | sentence-transformers 모델 미로드 또는 RAG 코퍼스 못 찾음 | `docker compose logs backend \| grep model` — fit 완료 메시지 확인 |
+| /security/transfer-limit 진입 시 끝없는 스크롤 | 박철수 검증 누적 18계좌 (시드는 3장) | 시드 reset 또는 카드 기본 접힘 UI (이미 적용) |
+| 상품 가입 후 product_name 이 "통장" 으로 폴백 | backend reload 직후 in-memory dict 휘발 | 자연 — 새로 가입하면 채워짐. 영구화는 `ACCOUNT.PRODUCT_ID` 컬럼 추가 시 해소 |
+
+### 시연 동선 의도
+
+| 단계 | 화면 | 어필 포인트 |
+|---|---|---|
+| 1 | /login → /dashboard | 총자산·이번 달 ±·미읽음 알림·대출 일정 한눈 |
+| 2 | /products → 상품 상세 → 약관 동의 → /open-saving | 약관 모달 강제 노출 + 가입 트랜잭션 1회 |
+| 3 | /transfer → 받는 분 verify → 100원 송금 | INTRA atomic / KFTC Saga 보상 |
+| 4 | /security/fds-alerts | 룰+ML+LLM 분류, 한국어 설명, 본인 확인·신고 |
+| 5 | /chatbot → "드론 배달 통장 같은 거 있어요?" | 환각 방지 3단계 안전망 + Phoenix 추적 |
+| 6 | http://localhost:5001/login → /loans/review-queue | 회색지대 자동 큐 + 사람+AI 협업 |
+| 7 | http://localhost:5001/loans/{appId}/attachments | 첨부 검토(승인/반려) + 파일 미리보기 |
+| 8 | http://localhost:6006/projects/banking-rag | 챗봇 호출 토큰·지연 추적 |
