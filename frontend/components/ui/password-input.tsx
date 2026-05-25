@@ -47,7 +47,7 @@ export const PasswordInput = forwardRef<HTMLInputElement, Omit<InputProps, "type
           <button
             type="button"
             onClick={() => setShow((v) => !v)}
-            className="absolute right-2 top-1/2 -translate-y-1/2 rounded px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-accent"
+            className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded border border-input bg-background px-2 py-0.5 text-[11px] font-medium text-foreground/70 hover:bg-accent hover:text-foreground"
             aria-label={show ? "비밀번호 숨기기" : "비밀번호 표시"}
             tabIndex={-1}
           >

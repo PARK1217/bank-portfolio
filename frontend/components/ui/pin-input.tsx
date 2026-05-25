@@ -106,7 +106,7 @@ export function PinInput({
         <button
           type="button"
           onClick={() => setShow((v) => !v)}
-          className="rounded border px-2 py-1 text-[10px] text-muted-foreground hover:bg-accent"
+          className="rounded border border-input bg-background px-2 py-1 text-[11px] font-medium text-foreground/70 hover:bg-accent hover:text-foreground"
           aria-label={show ? "PIN 숨기기" : "PIN 표시"}
           tabIndex={-1}
         >

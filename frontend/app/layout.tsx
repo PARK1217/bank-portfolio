@@ -23,13 +23,14 @@ export default function RootLayout({
               <Link href="/" className="text-sm font-semibold tracking-tight">
                 다온뱅크
               </Link>
-              <nav className="flex items-center gap-4 text-xs text-muted-foreground">
-                <Link href="/dashboard" className="hover:text-foreground">대시보드</Link>
-                <Link href="/accounts" className="hover:text-foreground">계좌</Link>
-                <Link href="/transfer" className="hover:text-foreground">이체</Link>
-                <Link href="/loans" className="hover:text-foreground">대출</Link>
-                <Link href="/chatbot" className="hover:text-foreground">챗봇</Link>
-                <Link href="/notices" className="hover:text-foreground">공지·이벤트</Link>
+              <nav className="flex items-center gap-3 text-xs text-muted-foreground sm:gap-4">
+                {/* 메인 메뉴 — 모바일에서는 NavUser 드롭다운으로 접근 */}
+                <Link href="/dashboard" className="hidden hover:text-foreground md:inline">대시보드</Link>
+                <Link href="/accounts" className="hidden hover:text-foreground md:inline">계좌</Link>
+                <Link href="/transfer" className="hidden hover:text-foreground md:inline">이체</Link>
+                <Link href="/loans" className="hidden hover:text-foreground md:inline">대출</Link>
+                <Link href="/chatbot" className="hidden hover:text-foreground md:inline">챗봇</Link>
+                <Link href="/notices" className="hidden hover:text-foreground md:inline">공지·이벤트</Link>
                 <NavUser />
               </nav>
             </div>

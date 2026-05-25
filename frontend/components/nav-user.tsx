@@ -115,6 +115,25 @@ export function NavUser() {
             role="menu"
             className="absolute right-0 top-full z-50 mt-1 w-48 overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md"
           >
+            {/* 모바일에서는 메인 nav 가 숨겨지므로 여기서 같은 메뉴 노출 */}
+            <div className="md:hidden">
+              <MenuLink href="/dashboard" onClick={() => setOpen(false)}>
+                대시보드
+              </MenuLink>
+              <MenuLink href="/accounts" onClick={() => setOpen(false)}>
+                계좌
+              </MenuLink>
+              <MenuLink href="/transfer" onClick={() => setOpen(false)}>
+                이체
+              </MenuLink>
+              <MenuLink href="/loans" onClick={() => setOpen(false)}>
+                대출
+              </MenuLink>
+              <MenuLink href="/chatbot" onClick={() => setOpen(false)}>
+                챗봇
+              </MenuLink>
+              <div className="my-1 border-t" />
+            </div>
             <MenuLink href="/transfer/auto" onClick={() => setOpen(false)}>
               자동이체
             </MenuLink>
