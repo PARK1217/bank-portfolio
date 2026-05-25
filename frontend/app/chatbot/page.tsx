@@ -213,15 +213,36 @@ function ChatScreen() {
   }
 
   async function sendFeedback(messageId: number, rating: 1 | 5) {
-    if (feedbackGiven[messageId]) return;
+    const prev = feedbackGiven[messageId];
+    if (prev === rating) return;
+    let comment: string | null = null;
+    if (rating === 1) {
+      const input = window.prompt(
+        "어떤 부분이 부족했나요? (선택 — Enter 만 눌러도 평가는 저장돼요)",
+        "",
+      );
+      if (input === null) return; // 취소면 평가 자체 보류
+      comment = input.trim() || null;
+    }
     setFeedbackGiven((cur) => ({ ...cur, [messageId]: rating }));
     try {
-      await api.post("/api/chatbot/feedback", { message_id: messageId, rating });
-      toast.success(rating === 5 ? "도움이 됐다니 다행입니다 👍" : "피드백 감사합니다 — 개선에 반영합니다");
+      await api.post("/api/chatbot/feedback", {
+        message_id: messageId,
+        rating,
+        comment,
+      });
+      toast.success(
+        rating === 5
+          ? "도움이 됐다니 다행입니다 👍"
+          : "피드백 감사합니다 — 개선에 반영합니다",
+      );
     } catch (err) {
       setFeedbackGiven((cur) => {
-        const { [messageId]: _, ...rest } = cur;
-        return rest;
+        if (prev === undefined) {
+          const { [messageId]: _, ...rest } = cur;
+          return rest;
+        }
+        return { ...cur, [messageId]: prev };
       });
       showApiError(err, "피드백 전송에 실패했습니다.");
     }
@@ -555,29 +576,29 @@ function AssistantMeta({
         ) : null}
         {conf ? <span className={conf.color}>{conf.label}</span> : null}
 
-        {/* 피드백 */}
+        {/* 피드백 — 같은 메시지에 토글 변경 가능, 👎는 코멘트 prompt */}
         <span className="ml-auto inline-flex items-center gap-1 text-muted-foreground">
           <button
             type="button"
-            disabled={!!feedback}
             onClick={() => onFeedback(msg.message_id, 5)}
             className={cn(
-              "rounded p-1 hover:bg-accent disabled:opacity-50",
+              "rounded p-1 hover:bg-accent",
               feedback === 5 ? "text-success" : "",
             )}
             aria-label="도움됨"
+            aria-pressed={feedback === 5}
           >
             👍
           </button>
           <button
             type="button"
-            disabled={!!feedback}
             onClick={() => onFeedback(msg.message_id, 1)}
             className={cn(
-              "rounded p-1 hover:bg-accent disabled:opacity-50",
+              "rounded p-1 hover:bg-accent",
               feedback === 1 ? "text-destructive" : "",
             )}
             aria-label="도움 안 됨"
+            aria-pressed={feedback === 1}
           >
             👎
           </button>
