@@ -56,6 +56,18 @@ interface AccountListData {
 const krw = new Intl.NumberFormat("ko-KR");
 const fmt = (n: number) => `${krw.format(n)}원`;
 
+// 금액 빠른 추가 칩 — 누를 때마다 현재 금액에 더함.
+const AMOUNT_CHIPS: { value: number; label: string }[] = [
+  { value: 10_000, label: "+1만" },
+  { value: 100_000, label: "+10만" },
+  { value: 1_000_000, label: "+100만" },
+  { value: 5_000_000, label: "+500만" },
+  { value: 10_000_000, label: "+1천만" },
+];
+
+// 자주 쓰는 메모 — 클릭 시 input 에 채움.
+const MEMO_CHIPS = ["월세", "카드값", "용돈", "생활비", "공과금", "경조사"];
+
 
 function TransferForm() {
   const router = useRouter();
@@ -291,6 +303,27 @@ function TransferForm() {
               onChange={(e) => setAmount(e.target.value)}
               required
             />
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {AMOUNT_CHIPS.map((c) => (
+                <button
+                  key={c.value}
+                  type="button"
+                  onClick={() => setAmount(String(amountNum + c.value))}
+                  className="rounded-full border border-input bg-background px-2 py-0.5 text-xs hover:bg-accent"
+                >
+                  {c.label}
+                </button>
+              ))}
+              {amountNum > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => setAmount("")}
+                  className="rounded-full border border-input bg-background px-2 py-0.5 text-xs text-muted-foreground hover:bg-accent"
+                >
+                  지우기
+                </button>
+              ) : null}
+            </div>
             {fromAccount ? (
               <p
                 className={`mt-1 text-xs ${
@@ -309,6 +342,18 @@ function TransferForm() {
               value={withdrawMemo}
               onChange={(e) => setWithdrawMemo(e.target.value)}
             />
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {MEMO_CHIPS.map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setWithdrawMemo(m)}
+                  className="rounded-full border border-input bg-background px-2 py-0.5 text-xs hover:bg-accent"
+                >
+                  {m}
+                </button>
+              ))}
+            </div>
           </Field>
 
           <Field label="받는 분 통장 메모 (선택)">
@@ -318,6 +363,18 @@ function TransferForm() {
               value={depositMemo}
               onChange={(e) => setDepositMemo(e.target.value)}
             />
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {MEMO_CHIPS.map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setDepositMemo(m)}
+                  className="rounded-full border border-input bg-background px-2 py-0.5 text-xs hover:bg-accent"
+                >
+                  {m}
+                </button>
+              ))}
+            </div>
           </Field>
 
           <Button
