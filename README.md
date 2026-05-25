@@ -174,6 +174,15 @@ cd frontend-admin && npm install && npm run dev    # http://localhost:5001
 
 **UCI German Credit (1,000행)** 의 신용 등급·저축·고용 정보를 한국 은행 피처로 매핑해 베이스로 쓰고, **합성 데이터 9,000행** 을 추가해 한국 시장 분포(연봉·예금 잔액 KRW 단위)에 맞춥니다. XGBoost 와 Logistic Regression 두 모델을 학습시켜 AUC 가 더 높은 XGBoost(`loan_xgb_v1.joblib`)를 운영에 사용. 모든 추론 결과는 `AI_LOAN_DECISION` 테이블에 영구 저장되어 감사·재현 가능합니다.
 
+### 모델·임계값 운영 노트
+
+- **학습 스크립트**: `backend/app/scripts/train_loan_model.py` — UCI German Credit + 합성 9,000행 → 8:2 stratified split.
+- **XGBoost 파라미터**: `n_estimators=200, max_depth=5, learning_rate=0.1, eval_metric="logloss", random_state=42`.
+- **Logistic Regression** 는 `class_weight="balanced"` + `StandardScaler` 파이프라인으로 비교용 학습 후 폐기.
+- **임계값 결정 근거**: 0.85/0.30 은 시드+페르소나 9명 sanity set 에서 자동 승인 우량 비율 ≈ 35%, 자동 거절 ≈ 20%, 회색지대 ≈ 45% 가 되도록 조정. 회색지대를 일부러 넓게 잡아 사람 검토 데모 비중 확보.
+- **추론 폴백**: `_load_model` 이 joblib 로드 실패하면 BusinessError(`E_INTERNAL_ERROR`) 로 즉시 알람 — 임의 점수로 자동 승인되는 사고 방지.
+- **재추론 가드**: 같은 application 에 미검토 HUMAN_REVIEW row 가 있으면 재추론하지 않고 기존 row 를 그대로 반환(`meta.reused=True`) — 관리자 큐에서 점수가 흔들리지 않도록.
+
 ### 사람이 검토하는 회색지대 — Phase 6 §9.2.6 핵심 어필
 
 자동 승인·거절은 빠르지만 모호한 신청을 무리하게 분류하지 않습니다. 점수가 0.30~0.85 구간이면 **관리자 콘솔의 "검토 큐" 로 자동 이관**되고, 직원이 ML 입력 피처 + 첨부서류 일치성을 함께 보면서 최종 승인·반려를 결정합니다. **"AI 가 자신 있을 때만 자동, 나머지는 사람"** 이라는 사람+AI 협업 모델을 그대로 구현했습니다.
@@ -189,12 +198,23 @@ cd frontend-admin && npm install && npm run dev    # http://localhost:5001
        ↓ Kafka topic: fds.transaction.detected
        ↓
 [Consumer: handle_fds_evaluation]
-   ① 룰 평가 (8개)        → rule_score + fired 리스트
-   ② IsolationForest    → ml_anomaly [0~1] → ml_score [0~40]
-   ③ total = round(rule × 0.6 + ml)
+   ① 룰 평가 (8개)        → rule_score [0~145] + fired 리스트
+   ② IsolationForest    → ml_anomaly [0~1] → ml_score = round(ml_anomaly × 40)
+   ③ total_score = round(rule_score × 0.6 + ml_score)
    ④ total ≥ 60: LLM 자연어 설명 → FDS_DETECTION INSERT + 알림
       total < 60: AI_FDS_DECISION 만 적재(감사 추적)
 ```
+
+### 판정 임계값 — `service/fds_pipeline.py:THRESHOLD`
+
+총점은 0 ~ 약 127 범위. 60 이상이 알람·관리자 큐 진입 대상이고, 60 이상에서 다시 3 단계로 갈립니다.
+
+| 총점 | judgment | 화면 표시 |
+|---|---|---|
+| **< 60** | (감사용 row 만 적재) | 카드 미노출 |
+| **60 ~ 74** | `REVIEW` | "검토 필요" |
+| **75 ~ 89** | `WARN` | "경고" |
+| **≥ 90** | `ALARM` | "즉시 차단 권고" |
 
 ### 룰 8개 — 도메인 전문가 규칙
 
@@ -211,11 +231,23 @@ cd frontend-admin && npm install && npm run dev    # http://localhost:5001
 
 ### ML 모델 — IsolationForest (sklearn)
 
-라벨 없이 정상 거래 분포만으로 학습하는 unsupervised anomaly detection. 부팅 시점에 `service/fds_anomaly.py:ensure_model()` 이 시드+검증 누적 거래 1,000건으로 fit → pickle 캐시 → 추론은 1ms.
+라벨 없이 정상 거래 분포만으로 학습하는 unsupervised anomaly detection. 부팅 시점에 `service/fds_anomaly.py:ensure_model()` 이 시드+검증 누적 거래 1,000건으로 fit → `/app/data/fds_isoforest.pkl` 캐시 → 추론은 1ms.
 
-**7개 피처**: log(amount) / 시각(0-23) / 요일(0-6) / 타행 여부 / 90일 수취인 거래 횟수 / 본인 z-score / 일일 누적 금액 log
+**파라미터**: `IsolationForest(contamination=0.10, n_estimators=100, random_state=42)` — 정상 90% 가정, 트리 100개. 학습 row 가 30건 미만이면 학습 스킵하고 추론 시 중립값 0.5 반환(폴백).
 
-raw decision_function 결과를 `[0, 1]` 로 정규화 — 1에 가까울수록 이상.
+**7개 피처** (`_FEATURE_ORDER`):
+
+| 피처 | 의미 |
+|---|---|
+| `log_amount` | log(거래 금액) — 큰 금액 비선형 정규화 |
+| `hour_of_day` | 시각 (0~23) |
+| `day_of_week` | 요일 (0~6) |
+| `is_interbank` | 타행 여부 (0/1) |
+| `counterpart_freq` | 본인이 지난 90일간 이 상대 계좌로 보낸 횟수 |
+| `amount_zscore_personal` | 본인 30일 평균 대비 z-score |
+| `daily_cum_amount_log` | log(오늘 누적 출금액) |
+
+raw `decision_function` 결과(약 -0.5 ~ +0.5) 를 `[0, 1]` 로 정규화 — 1에 가까울수록 이상. 그 후 `× 40` 으로 ml_score 환산 (룰 60% + ML 40% 가중치 의도).
 
 ### LLM — 자연어 설명 생성
 
