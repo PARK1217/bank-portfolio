@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
@@ -34,6 +34,18 @@ export default function NoticeDetailPage() {
     void apiFetch(`/api/notices/${params.id}/hit`, { method: "POST" }).catch(() => {});
   }, [params.id]);
 
+  const [copied, setCopied] = useState(false);
+  async function copyLink() {
+    if (typeof window === "undefined") return;
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // ignore
+    }
+  }
+
   if (loading && !data) return <Spinner label="불러오는 중…" />;
   if (!data) {
     return (
@@ -56,7 +68,7 @@ export default function NoticeDetailPage() {
       <Card>
         <CardContent className="space-y-4 py-6">
           <div className="space-y-2">
-            <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+            <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
               {data.pinned && (
                 <span className="rounded bg-primary px-1.5 py-0.5 font-medium text-primary-foreground">
                   고정
@@ -69,6 +81,14 @@ export default function NoticeDetailPage() {
               )}
               <span className="ml-auto">{new Date(data.published_at).toLocaleString("ko-KR")}</span>
               <span>· 조회 {data.view_count}</span>
+              <button
+                type="button"
+                onClick={copyLink}
+                className="rounded border bg-background px-1.5 py-0.5 hover:bg-accent"
+                aria-label="링크 복사"
+              >
+                {copied ? "복사됨 ✓" : "🔗 공유"}
+              </button>
             </div>
             <h1 className="text-lg font-semibold leading-snug">{data.title}</h1>
             {data.author && (
