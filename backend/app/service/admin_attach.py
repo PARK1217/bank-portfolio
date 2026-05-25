@@ -26,8 +26,8 @@ from typing import Any
 import structlog
 
 from ..db import get_pool
-from ..errors import E_NOT_FOUND
-from ..exceptions import NotFoundError
+from ..errors import E_NOT_FOUND, E_VALIDATION
+from ..exceptions import BusinessError, NotFoundError
 
 log = structlog.get_logger("admin_attach")
 
@@ -180,3 +180,142 @@ async def get_attachments(application_id: int) -> dict[str, Any]:
         "summary": summary,
         "items": items,
     }
+
+# ---------------------------------------------------------------------------
+# 첨부 본인 application 매칭 조회 — 신청('LA-{id}')·발급 후('L-{id}') 양쪽 허용
+# ---------------------------------------------------------------------------
+
+async def _fetch_attach_for_app(conn, application_id: int, attach_id: int) -> dict | None:
+    return await conn.fetchrow(
+        'SELECT "ATTACH_ID", "CONTRACT_NO", "FILE_PATH", "VERIFY_STATUS_CD" '
+        'FROM public."ATTACHED_DOC" '
+        'WHERE "ATTACH_ID" = $1 AND "DELETE_YN" = \'N\' '
+        '  AND ("CONTRACT_NO" = $2 OR "CONTRACT_NO" = $3)',
+        attach_id,
+        _contract_key(application_id),
+        f"L-{application_id}",
+    )
+
+
+def _require_admin_level(auth_level_cd: str) -> None:
+    """AUTH_LEVEL_CD='ADMIN' 만 검토 가능. 'AUDIT' 등은 422."""
+    if (auth_level_cd or "").upper() != "ADMIN":
+        raise BusinessError(
+            E_VALIDATION,
+            "감사 권한(AUDIT)은 첨부 검토를 수행할 수 없어요.",
+        )
+
+
+# ---------------------------------------------------------------------------
+# 승인 (VERIFIED)
+# ---------------------------------------------------------------------------
+
+async def verify_attachment(
+    application_id: int,
+    attach_id: int,
+    *,
+    employee_no: str,
+    auth_level_cd: str,
+) -> dict[str, Any]:
+    _require_admin_level(auth_level_cd)
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        row = await _fetch_attach_for_app(conn, application_id, attach_id)
+        if row is None:
+            raise NotFoundError(E_NOT_FOUND, "첨부 서류를 찾을 수 없어요.")
+        await conn.execute(
+            'UPDATE public."ATTACHED_DOC" '
+            'SET "VERIFY_STATUS_CD" = \'VERIFIED\', '
+            '    "VERIFIER_EMP_NO" = $1, '
+            '    "REJECT_REASON" = NULL, '
+            '    "UPDATED_BY" = $1, '
+            '    "UPDATED_AT" = NOW() '
+            'WHERE "ATTACH_ID" = $2',
+            employee_no,
+            attach_id,
+        )
+    log.info(
+        "attachment_verified",
+        application_id=application_id,
+        attach_id=attach_id,
+        employee_no=employee_no,
+    )
+    return {
+        "success": True,
+        "attach_id": attach_id,
+        "status_cd": "VERIFIED",
+        "verifier_emp_no": employee_no,
+    }
+
+
+# ---------------------------------------------------------------------------
+# 반려 (REJECTED) — 사유 필수
+# ---------------------------------------------------------------------------
+
+async def reject_attachment(
+    application_id: int,
+    attach_id: int,
+    *,
+    employee_no: str,
+    auth_level_cd: str,
+    reason: str,
+) -> dict[str, Any]:
+    _require_admin_level(auth_level_cd)
+    reason_clean = (reason or "").strip()
+    if not reason_clean:
+        raise BusinessError(E_VALIDATION, "반려 사유를 입력해 주세요.")
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        row = await _fetch_attach_for_app(conn, application_id, attach_id)
+        if row is None:
+            raise NotFoundError(E_NOT_FOUND, "첨부 서류를 찾을 수 없어요.")
+        await conn.execute(
+            'UPDATE public."ATTACHED_DOC" '
+            'SET "VERIFY_STATUS_CD" = \'REJECTED\', '
+            '    "REJECT_REASON" = $1, '
+            '    "VERIFIER_EMP_NO" = $2, '
+            '    "UPDATED_BY" = $2, '
+            '    "UPDATED_AT" = NOW() '
+            'WHERE "ATTACH_ID" = $3',
+            reason_clean,
+            employee_no,
+            attach_id,
+        )
+    log.info(
+        "attachment_rejected",
+        application_id=application_id,
+        attach_id=attach_id,
+        employee_no=employee_no,
+    )
+    return {
+        "success": True,
+        "attach_id": attach_id,
+        "status_cd": "REJECTED",
+        "verifier_emp_no": employee_no,
+        "reject_reason": reason_clean,
+    }
+
+
+# ---------------------------------------------------------------------------
+# 파일 경로 해석 — DB FILE_PATH("/files/loan/..") + 마운트 prefix.
+# `api/admin_attach.py:_FILES_ROOT=/app` 와 합쳐 path-traversal 검증 후 응답.
+# 반환: (disk_rel, file_name) — disk_rel 은 _FILES_ROOT 기준 상대.
+# ---------------------------------------------------------------------------
+
+async def resolve_attach_file(
+    application_id: int,
+    attach_id: int,
+) -> tuple[str, str]:
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        row = await _fetch_attach_for_app(conn, application_id, attach_id)
+    if row is None:
+        raise NotFoundError(E_NOT_FOUND, "첨부 파일을 찾을 수 없어요.")
+    file_path = (row["FILE_PATH"] or "").strip()
+    if not file_path:
+        raise NotFoundError(E_NOT_FOUND, "첨부 파일 경로가 비어 있어요.")
+    # DB 예: "/files/loan/20001/id.pdf" → disk_rel "data/files/loan/20001/id.pdf"
+    rel = file_path.lstrip("/")
+    disk_rel = f"data/{rel}"
+    file_name = rel.split("/")[-1] or "attachment"
+    return disk_rel, file_name
