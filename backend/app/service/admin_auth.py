@@ -135,6 +135,17 @@ async def login(employee_no: str, password: str, access_ip: str | None) -> dict:
     }
 
 
+async def refresh(admin: CurrentAdmin) -> dict:
+    """ACTIVE 세션 검증을 통과한 admin 의 JWT 를 재발급.
+
+    require_admin 이 이미 SESSION_STATUS_CD='ACTIVE' 와 LAST_ACTIVITY_DT 갱신을
+    마쳤으므로, 여기서는 새 토큰만 발급.
+    """
+    token, expires_in = _issue_admin_token(admin.employee_no, admin.session_id)
+    log.info("admin_token_refresh", employee_no=admin.employee_no, session_id=admin.session_id)
+    return {"access_token": token, "expires_in": expires_in}
+
+
 async def logout(session_id: int, employee_no: str) -> None:
     pool = get_pool()
     async with pool.acquire() as conn:

@@ -22,7 +22,9 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
   const [admin, setAdmin] = useState<AdminMe | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // 마운트 시 토큰이 있으면 /me 로 검증
+  // 마운트 시 토큰이 있으면 /me 로 검증.
+  // 토큰이 있었는데 검증 실패한 경우는 "자동 로그아웃" — `/auto-logout?reason=expired` 로.
+  // 처음부터 토큰이 없으면 "직접 진입" — 보호 경로 가드에서 `/login` 으로.
   useEffect(() => {
     const token = getAdminToken();
     if (!token) {
@@ -36,19 +38,28 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
       } catch {
         setAdminToken(null);
         setAdmin(null);
+        // api.ts 의 401 hard-redirect 가 우선 적용되지만, 그 외 네트워크 오류 등도 안전망으로 처리.
+        if (pathname && !pathname.startsWith("/login") && !pathname.startsWith("/auto-logout")) {
+          router.replace("/auto-logout?reason=expired");
+        }
       } finally {
         setLoading(false);
       }
     })();
   }, []);
 
-  // 비인증 상태에서 보호 경로 접근 → /login
+  // 비인증 상태에서 보호 경로 접근 → /login (자동 로그아웃 안내 페이지는 예외)
   useEffect(() => {
     if (loading) return;
-    if (!admin && pathname && !pathname.startsWith("/login")) {
+    if (
+      !admin &&
+      pathname &&
+      !pathname.startsWith("/login") &&
+      !pathname.startsWith("/auto-logout")
+    ) {
       router.replace("/login");
     }
-    if (admin && pathname === "/login") {
+    if (admin && (pathname === "/login" || pathname?.startsWith("/auto-logout"))) {
       router.replace("/dashboard");
     }
   }, [admin, loading, pathname, router]);

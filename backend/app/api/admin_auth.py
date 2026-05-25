@@ -16,7 +16,13 @@ from pydantic import BaseModel, Field
 
 from ..exceptions import AuthError
 from ..service.admin_audit import insert_audit_log
-from ..service.admin_auth import CurrentAdmin, login, logout, require_admin
+from ..service.admin_auth import (
+    CurrentAdmin,
+    login,
+    logout,
+    refresh,
+    require_admin,
+)
 
 router = APIRouter(prefix="/admin/auth", tags=["admin-auth"])
 
@@ -88,3 +94,9 @@ async def admin_me(admin: CurrentAdmin = Depends(require_admin)) -> AdminMeRespo
 async def admin_logout(admin: CurrentAdmin = Depends(require_admin)) -> dict:
     await logout(admin.session_id, admin.employee_no)
     return {"success": True}
+
+
+@router.post("/refresh")
+async def admin_refresh(admin: CurrentAdmin = Depends(require_admin)) -> dict:
+    """ACTIVE 세션의 JWT 재발급. require_admin 이 LAST_ACTIVITY_DT 자동 갱신."""
+    return await refresh(admin)
