@@ -10,6 +10,7 @@ import { showApiError } from "@/lib/toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 
 /** 안전한 next path 검증 — open redirect 방지 (외부 도메인 / 스킴 / //path 차단). */
 function safeNextPath(raw: string | null): string {
@@ -35,8 +36,6 @@ function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  const [capsLock, setCapsLock] = useState(false);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -93,38 +92,17 @@ function LoginForm() {
               <label htmlFor="password" className="text-xs font-medium text-muted-foreground">
                 비밀번호
               </label>
-              <div className="relative">
-                <Input
-                  id="password"
-                  name="password"
-                  type={showPassword ? "text" : "password"}
-                  autoComplete="current-password"
-                  required
-                  minLength={8}
-                  maxLength={128}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  onKeyDown={(e) => setCapsLock(e.getModifierState && e.getModifierState("CapsLock"))}
-                  onKeyUp={(e) => setCapsLock(e.getModifierState && e.getModifierState("CapsLock"))}
-                  onBlur={() => setCapsLock(false)}
-                  disabled={loading}
-                  className="pr-12"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword((v) => !v)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-accent"
-                  aria-label={showPassword ? "비밀번호 숨기기" : "비밀번호 표시"}
-                  tabIndex={-1}
-                >
-                  {showPassword ? "숨기기" : "표시"}
-                </button>
-              </div>
-              {capsLock ? (
-                <p className="flex items-center gap-1 text-[11px] text-warning">
-                  ⚠️ Caps Lock 이 켜져 있어요.
-                </p>
-              ) : null}
+              <PasswordInput
+                id="password"
+                name="password"
+                autoComplete="current-password"
+                required
+                minLength={8}
+                maxLength={128}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                disabled={loading}
+              />
             </div>
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? "로그인 중…" : "로그인"}

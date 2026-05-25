@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { api } from "@/lib/api";
 import { showApiError } from "@/lib/toast";
 
@@ -221,8 +222,7 @@ export default function Page() {
             <form onSubmit={resetPw} className="space-y-3">
               <label className="block space-y-1.5">
                 <span className="text-xs text-muted-foreground">새 비밀번호 *</span>
-                <Input
-                  type="password"
+                <PasswordInput
                   autoComplete="new-password"
                   minLength={8}
                   value={newPw}
@@ -237,8 +237,7 @@ export default function Page() {
               </label>
               <label className="block space-y-1.5">
                 <span className="text-xs text-muted-foreground">새 비밀번호 확인 *</span>
-                <Input
-                  type="password"
+                <PasswordInput
                   autoComplete="new-password"
                   minLength={8}
                   value={newPwConfirm}

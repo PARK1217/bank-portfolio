@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { Protected } from "@/components/protected";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { showApiError } from "@/lib/toast";
@@ -74,8 +74,7 @@ function PasswordForm() {
       <CardContent>
         <form onSubmit={onSubmit} className="space-y-4">
           <Field label="현재 비밀번호" required>
-            <Input
-              type="password"
+            <PasswordInput
               autoComplete="current-password"
               value={current}
               onChange={(e) => setCurrent(e.target.value)}
@@ -85,8 +84,7 @@ function PasswordForm() {
           </Field>
 
           <Field label="새 비밀번호" required>
-            <Input
-              type="password"
+            <PasswordInput
               autoComplete="new-password"
               value={next}
               onChange={(e) => setNext(e.target.value)}
@@ -106,8 +104,7 @@ function PasswordForm() {
           </Field>
 
           <Field label="새 비밀번호 확인" required>
-            <Input
-              type="password"
+            <PasswordInput
               autoComplete="new-password"
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
