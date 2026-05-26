@@ -506,25 +506,4 @@ docker exec bank-portfolio-postgres \
 
 ---
 
-## 자주 마주치는 문제와 해법
-
-### 컨테이너 / 포트
-
-| 증상 | 원인 | 해결 |
-|---|---|---|
-| `port is already allocated` | 3001/5001/8001/5434/6006 중 누가 점유 | `netstat -ano \| findstr :8001` 으로 PID 찾아 종료 또는 docker-compose.yml 의 포트 재매핑 |
-| backend 가 5초 만에 죽음 | 시드 마이그레이션 SQL 실패(`db/*.sql`) | `docker compose logs postgres \| grep ERROR` — 누락 컬럼·잘못된 시드 행 확인 후 SQL 픽스 → `down -v` 후 재기동 |
-| backend 컨테이너 OOM | sentence-transformers 모델 로딩 시 2GB+ 사용 | Docker Desktop 의 메모리 한도를 6GB 이상으로 |
-| frontend hot reload 안 됨 | `.next` 캐시 또는 layout 의 server component 변경 | `docker compose restart frontend` |
-
-### 데이터 / 시드
-
-| 증상 | 원인 | 해결 |
-|---|---|---|
-| "대출 상품을 불러오지 못했습니다" 토스트 | (구버전) 잘못된 API path | `git pull` — 이미 픽스됨 (`/api/loans/products`) |
-| /dashboard 총자산이 시드 합과 다름 | 검증 누적 거래 / 검증용 임시 계좌 14장+ | `docker compose down -v && up -d` (DB 전체 reset) |
-| 챗봇이 항상 "관련 정보를 찾지 못했습니다" | sentence-transformers 모델 미로드 또는 RAG 코퍼스 못 찾음 | `docker compose logs backend \| grep model` — fit 완료 메시지 확인 |
-| /security/transfer-limit 진입 시 끝없는 스크롤 | 박철수 검증 누적 18계좌 (시드는 3장) | 시드 reset 또는 카드 기본 접힘 UI (이미 적용) |
-| 상품 가입 후 product_name 이 "통장" 으로 폴백 | backend reload 직후 in-memory dict 휘발 | 자연 — 새로 가입하면 채워짐. 영구화는 `ACCOUNT.PRODUCT_ID` 컬럼 추가 시 해소 |
-
-> 발표 직전 점검 체크리스트와 시연 동선 의도는 [docs/DEMO_PREP.md](docs/DEMO_PREP.md) 로 분리했습니다.
+> 로컬에서 시연을 재현하기 전 환경 점검과 단계별 의도는 [docs/DEMO_PREP.md](docs/DEMO_PREP.md) 를 참고하세요.

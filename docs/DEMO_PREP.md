@@ -1,14 +1,19 @@
-# 시연 운영 노트
+# 로컬 시연 점검 가이드
 
-발표·시연 직전 본인이 확인하는 운영용 체크리스트입니다. README 의 "3분 시연 시나리오" 와는 대상이 다릅니다:
-README 는 외부 리뷰어용 가이드, 이 문서는 발표자용 점검표.
+로컬에서 이 프로젝트를 직접 띄워 시연·데모해 보기 전에 실행 환경이
+일관된 상태인지 확인하기 위한 점검 가이드입니다.
+README 의 "3분 시연 시나리오" 가 화면 흐름을 보여 주는 가이드라면,
+이 문서는 그 시연을 안정적으로 재현하기 위해 컨테이너·시드·트레이스가
+같은 시점에 정합한지 점검하는 운영 절차에 가깝습니다.
 
 ---
 
-## 시연 직전 체크리스트 (5분)
+## 환경 점검 (5분)
 
-발표 자리에서 데이터가 어긋나거나 컨테이너가 꺼져 있어 빈 화면을 보이는
-사고를 피하려면, 시작 직전 아래 순서로 점검합니다.
+장기간 띄워 두면 검증 거래·재가입 데이터가 누적되어 시드 row 수와
+화면 카운트가 어긋날 수 있습니다. 시연 직전에는 아래 순서로 한 번 훑어
+보고, 어긋나면 `docker compose down -v && up -d` 로 초기 상태로
+되돌릴 수 있습니다.
 
 ```bash
 # 1. 컨테이너 상태 — 5개 다 running 인가?
@@ -19,25 +24,25 @@ docker compose ps
 curl http://localhost:8001/health
 # {"status":"ok"} 가 돌아오면 OK
 
-# 3. 박철수 시드 정합 — 누적 검증 데이터로 시연 row 수가 어긋났다면 reset
+# 3. 시드 정합 — 박철수(100001) 의 계좌 row 수가 시드 기준과 같은가?
 docker compose exec postgres psql -U bank -d bank -c \
   "SELECT count(*) FROM public.\"ACCOUNT\" WHERE \"CUSTOMER_NO\"=100001;"
 # 시드 기준 3 (주거래·정기예금·정기적금). 14+ 라면 검증 누적 — reset 권장:
 #   docker compose down -v && docker compose up -d
 
-# 4. OTP 등록 상태 — 박철수는 시드에서 OTP 미등록 (시연 흐름 의도)
+# 4. OTP 등록 상태 — 박철수는 시드에서 OTP 미등록 (송금 시 등록 흐름 의도)
 docker compose exec postgres psql -U bank -d bank -c \
   "SELECT \"CUSTOMER_NO\",\"SIMPLE_PIN\" IS NOT NULL AS pin_set FROM public.\"CUSTOMER\" WHERE \"CUSTOMER_NO\"=100001;"
 
-# 5. FDS 의심거래 시드 — PENDING 2건이 노출돼야 의심거래 시연 가능
+# 5. FDS 의심거래 시드 — PENDING 2건이 있어야 의심거래 화면이 비어 보이지 않음
 docker compose exec postgres psql -U bank -d bank -c \
   "SELECT count(*) FROM public.\"FDS_DETECTION\" WHERE \"CUSTOMER_NO\"=100001 AND \"DECISION_CD\"='PENDING';"
 
-# 6. Phoenix 트레이스 적재 확인 — 챗봇 시연 직후 새 trace 가 보여야 함
+# 6. Phoenix 트레이스 적재 확인 — 챗봇 한 번 호출하면 새 trace 가 보여야 함
 curl -s http://localhost:6006/api/v1/traces?project=banking-rag | python -c "import sys,json; print(len(json.load(sys.stdin)))"
 ```
 
-시연 직전에 한 번 더 클릭으로 확인:
+화면에서도 한 번 더 클릭으로 확인:
 
 - [ ] http://localhost:3001/login — 박철수 로그인 → 대시보드 정상 (총자산·미읽음 알림·이번 달 ±)
 - [ ] http://localhost:3001/security/fds-alerts — FDS PENDING 2건 노출
@@ -46,7 +51,10 @@ curl -s http://localhost:6006/api/v1/traces?project=banking-rag | python -c "imp
 
 ---
 
-## 시연 동선 의도
+## 시연 동선과 의도
+
+각 단계를 어떤 어필 포인트와 연결하기 위해 그 순서로 배치했는지 정리한 표입니다.
+README 의 "3분 시연 시나리오" 가 "무엇을 본다" 라면, 이 표는 "왜 이 순서인가" 의 의도입니다.
 
 | 단계 | 화면 | 어필 포인트 |
 |---|---|---|
