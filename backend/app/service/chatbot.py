@@ -314,12 +314,16 @@ async def chat_send(
         retr.set_attribute("user.id", customer_no)
         query_vec = _embed_query(message)
         # audience 분기 — USER 는 USER+BOTH, ADMIN 은 USER+ADMIN+BOTH 모두 검색
+        # ADMIN 호출 시 SYNTH_SOP 청크에 distance 가산점(-0.15) 부여 — 합성 SOP 가
+        # AI Hub 학술 청크보다 우선 검색되도록 (시연 톤 자연스러움).
         audience_filter = ['USER', 'BOTH'] if audience != 'ADMIN' else ['USER', 'ADMIN', 'BOTH']
         retr.set_attribute("rbac.audience", audience)
         async with pool.acquire() as conn:
             rows = await conn.fetch(
-                'SELECT "FAQ_ID", "CATEGORY", "QUESTION", "ANSWER", "AUDIENCE_CD", '
-                '"EMBEDDING" <=> $1::vector AS distance '
+                'SELECT "FAQ_ID", "CATEGORY", "QUESTION", "ANSWER", "AUDIENCE_CD", "SOURCE_TAG", '
+                '       ("EMBEDDING" <=> $1::vector) - '
+                '       (CASE WHEN "SOURCE_TAG" = \'SYNTH_SOP\' THEN 0.15 ELSE 0.0 END) '
+                '       AS distance '
                 'FROM public."AI_FAQ" '
                 'WHERE "STATUS_CD" = \'ACTIVE\' '
                 '  AND ("DELETE_YN" IS NULL OR "DELETE_YN" = \'N\') '
@@ -358,7 +362,13 @@ async def chat_send(
     sources: list[dict] = []
     matched_category: str | None = None
     matched_faq_id: int | None = None
-    if top_faq is not None and top_faq_d <= 0.50:
+    # ADMIN audience 호출 시 — FAQ/KEYWORD tier 짧은 응답 대신 항상 LLM 합성으로 통과.
+    # 이유: 합성 SOP 본문이 markdown 표 형태라 KEYWORD tier 가 본문 그대로 반환하면
+    # 직원이 받는 답변이 보고서체로 깨짐. LLM 이 단계별 SOP 톤으로 압축·재구성.
+    # 부적합 매칭(distance 큰 데도 가산점으로 1위) 인 경우도 LLM 이 "내부 규정에서
+    # 확인되지 않습니다" 로 정중 거절 가능.
+    force_llm = audience == "ADMIN"
+    if not force_llm and top_faq is not None and top_faq_d <= 0.50:
         tier = "KEYWORD" if top_faq_d <= 0.30 else "FAQ"
         matched_category = top_faq["CATEGORY"]
         matched_faq_id = int(top_faq["FAQ_ID"])
@@ -375,11 +385,14 @@ async def chat_send(
             "score": round(_to_score(top_faq_d), 3),
         })
         confidence = "HIGH" if top_faq_d <= 0.30 else "MEDIUM"
-    elif top_terms is not None and top_terms_d <= 0.70:
+    elif (top_terms is not None and top_terms_d <= 0.70) or (force_llm and rows):
         tier = "VECTOR"
         top_term_rows = []
-        for r in terms_hits[:3]:
-            if float(r["distance"]) > 0.85:
+        # ADMIN: faq_hits (SYNTH_SOP+AIHUB) 우선, USER 도메인 매칭 fallback
+        # USER: terms_hits 만 (기존 동작)
+        candidate_rows = (faq_hits[:3] + terms_hits[:2]) if force_llm else terms_hits[:3]
+        for r in candidate_rows[:3]:
+            if not force_llm and float(r["distance"]) > 0.85:
                 break
             top_term_rows.append(r)
             title, _, clause = (r["QUESTION"] or "").partition(" · ")
@@ -387,7 +400,7 @@ async def chat_send(
                 "doc_token": await tokens.issue(
                     ResourceType.DOC, f"AI_FAQ:{r['FAQ_ID']}", customer_no
                 ),
-                "doc_type": "TERMS",
+                "doc_type": (r.get("CATEGORY") or "TERMS"),
                 "doc_id": int(r["FAQ_ID"]),
                 "title": title or r["QUESTION"],
                 "clause": clause or None,
@@ -403,10 +416,15 @@ async def chat_send(
             )
             if audience == "ADMIN":
                 system_prompt = (
-                    "당신은 다온뱅크 **직원 업무 어시스턴트**입니다. 아래 내부 SOP·규정·법령 발췌만을 "
-                    "근거로 직원 질문에 한국어로 답변하세요. 절차는 단계별로 명시(1·2·3...), 법령·약관은 "
-                    "조항·근거를 함께 인용하세요. 컴플라이언스 의심 사례는 보고 절차(KoFIU·금감원 등)도 "
-                    "함께 안내. 발췌에 없는 내용은 '내부 규정에서 확인되지 않습니다'라고 답하세요."
+                    "당신은 다온뱅크 **직원 업무 어시스턴트**입니다. 아래 발췌 자료를 **참고**하여 "
+                    "직원이 바로 따라할 수 있는 절차로 한국어 답변을 작성하세요.\n\n"
+                    "[작성 규칙]\n"
+                    "- 발췌 본문을 **그대로 길게 옮기지 마세요**. 핵심 절차만 직원 SOP 톤으로 재구성.\n"
+                    "- 답변 구조: ① 결론(한 줄) → ② 단계별 절차(1·2·3 번호) → ③ 주의사항·근거 조항.\n"
+                    "- 전체 분량 6문장 이내. 한 단계는 1문장.\n"
+                    "- 법령·약관 인용은 조항만 짧게(예: '특정금융정보법 §4').\n"
+                    "- 발췌가 학술 보고서·논문이면 결론 부분만 요약하고 보고서체 표현은 피하세요.\n"
+                    "- 발췌에 없는 내용은 추측 금지 — '내부 규정에서 확인되지 않습니다'."
                 )
             else:
                 system_prompt = (

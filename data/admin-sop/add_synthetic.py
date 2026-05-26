@@ -16,6 +16,7 @@ CATEGORY_MAP = {
     "08-privacy-security":  "PRIVACY",
     "09-foreign-exchange":  "FX",
     "10-system-ops":        "SYSTEM_OPS",
+    "11-deposit-termination": "DEPOSIT_OPS",
 }
 
 
