@@ -47,7 +47,7 @@ export default function FdsDetailPage() {
       setData(res);
       setConclusion(res.detection.investigation_conclusion ?? "");
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "의심거래 상세를 불러오지 못했습니다.");
+      setError(err instanceof ApiError ? err.message : "이상거래 상세를 불러오지 못했습니다.");
     }
   }, [customerNo, detectSeq]);
 
@@ -98,7 +98,7 @@ export default function FdsDetailPage() {
           <div className="flex flex-wrap items-end justify-between gap-2">
             <div>
               <h1 className="text-2xl font-semibold tracking-tight">
-                의심거래 #{data.detection.customer_no}-{data.detection.detect_seq}
+                이상거래 #{data.detection.customer_no}-{data.detection.detect_seq}
               </h1>
               <p className="mt-1 font-mono text-xs text-muted-foreground">
                 {data.detection.detect_datetime ? fmtDateTime(data.detection.detect_datetime) : "-"}

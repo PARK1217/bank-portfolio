@@ -20,7 +20,7 @@ export default function ObservabilityPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-primary" />
-            AI 관측 (Arize Phoenix)
+            AI 호출 추적 (Arize Phoenix)
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
             챗봇 RAG · LLM 호출 트레이스 · Faithfulness · Latency · Token 사용량

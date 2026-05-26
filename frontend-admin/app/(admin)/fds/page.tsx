@@ -62,7 +62,7 @@ export default function FdsPage() {
       const res = await api.get<FdsListResponse>(`/api/admin/fds?${params.toString()}`);
       setData(res);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "의심거래를 불러오지 못했습니다.");
+      setError(err instanceof Error ? err.message : "이상거래를 불러오지 못했습니다.");
     } finally {
       setLoading(false);
     }
@@ -76,7 +76,7 @@ export default function FdsPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">의심거래 모니터링 (FDS)</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">이상거래 조사 (FDS)</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           판정·조사 상태별 큐 — 행 클릭 시 거래·접속 컨텍스트와 조사 액션
         </p>
@@ -158,7 +158,7 @@ export default function FdsPage() {
       <Card>
         <CardHeader>
           <CardTitle className="text-base">
-            의심거래 큐
+            이상거래 큐
             {data ? (
               <span className="ml-2 text-xs font-normal text-muted-foreground">
                 {data.count} / 총 {data.total}건
@@ -176,7 +176,7 @@ export default function FdsPage() {
             <Spinner label="불러오는 중…" />
           ) : !data || data.items.length === 0 ? (
             <p className="rounded-md border border-dashed bg-muted/30 p-6 text-center text-sm text-muted-foreground">
-              조건에 맞는 의심거래가 없습니다.
+              조건에 맞는 이상거래가 없습니다.
             </p>
           ) : (
             <div className="overflow-x-auto">

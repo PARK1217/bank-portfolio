@@ -57,7 +57,7 @@ export default function DecisionsPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">AI 의사결정 이력</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">심사 이력</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           ML XGBoost 추론 결과 — 점수 ≥ 0.85 자동 승인 · ≤ 0.30 자동 반려 · 그 외 사람 검토
         </p>

@@ -68,7 +68,7 @@ export default function AccountsPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">계좌 검색</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">계좌 조회</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           계좌번호 · 예금주 · 회원번호 부분 일치 / 유형·상태 필터
         </p>

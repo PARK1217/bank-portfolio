@@ -32,7 +32,7 @@ export default function ReviewQueuePage() {
     <div className="space-y-4">
       <div className="flex items-end justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">대출 검토 큐</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">심사 대기</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             ML 점수가 임계 구간(low ~ high)에 떨어진 신청 — 사람 판단 필요
           </p>

@@ -48,47 +48,47 @@ function isGroup(e: MenuEntry): e is MenuGroup {
 
 const MENU: MenuEntry[] = [
   { href: "/dashboard", label: "대시보드", icon: LayoutDashboard },
+  { href: "/ai-assist", label: "AI 업무 도우미", icon: MessageSquare },
   {
     label: "고객·계좌",
     icon: Users,
     items: [
-      { href: "/customers", label: "회원 검색", icon: UserSearch },
-      { href: "/overdue", label: "연체 추적", icon: AlertOctagon },
-      { href: "/accounts", label: "계좌 검색", icon: Wallet },
-      { href: "/transactions", label: "거래내역 검색", icon: Receipt },
-      { href: "/auto-transfers", label: "자동이체 모니터링", icon: Repeat },
+      { href: "/customers", label: "회원 조회", icon: UserSearch },
+      { href: "/overdue", label: "연체 관리", icon: AlertOctagon },
+      { href: "/accounts", label: "계좌 조회", icon: Wallet },
+      { href: "/transactions", label: "거래내역 조회", icon: Receipt },
+      { href: "/auto-transfers", label: "자동이체 현황", icon: Repeat },
     ],
   },
   {
-    label: "대출",
+    label: "대출 업무",
     icon: Briefcase,
     items: [
-      { href: "/loans/review-queue", label: "검토 큐", icon: ListTodo },
-      { href: "/loans/decisions", label: "AI 의사결정", icon: Bot },
-      { href: "/loans/contracts", label: "실행 계약", icon: Search },
-      { href: "/loans/repayments", label: "상환 내역", icon: Receipt },
+      { href: "/loans/review-queue", label: "심사 대기", icon: ListTodo },
+      { href: "/loans/decisions", label: "심사 이력", icon: Bot },
+      { href: "/loans/contracts", label: "실행 대출", icon: Search },
+      { href: "/loans/repayments", label: "상환 관리", icon: Receipt },
     ],
   },
   {
-    label: "콘텐츠",
+    label: "콘텐츠 관리",
     icon: Package,
     items: [
       { href: "/products", label: "상품 관리", icon: Package },
-      { href: "/notices", label: "공지·이벤트", icon: Megaphone },
       { href: "/terms", label: "약관 관리", icon: FileText },
+      { href: "/notices", label: "공지·이벤트 관리", icon: Megaphone },
     ],
   },
   {
-    label: "리스크·운영",
+    label: "운영·감사",
     icon: ShieldAlert,
     items: [
-      { href: "/fds", label: "의심거래 (FDS)", icon: ShieldAlert },
-      { href: "/health", label: "외부망 헬스", icon: Activity },
-      { href: "/observability", label: "AI 관측 (Phoenix)", icon: Sparkles },
+      { href: "/fds", label: "이상거래 조사 (FDS)", icon: ShieldAlert },
+      { href: "/health", label: "외부 연동 상태", icon: Activity },
+      { href: "/observability", label: "AI 호출 추적 (Phoenix)", icon: Sparkles },
       { href: "/audit", label: "감사 로그", icon: ScrollText },
     ],
   },
-  { href: "/ai-assist", label: "AI 직원 어시스턴트", icon: MessageSquare },
 ];
 
 

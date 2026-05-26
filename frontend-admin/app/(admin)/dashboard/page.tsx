@@ -124,7 +124,7 @@ export default function DashboardPage() {
             />
             <KpiCard
               icon={Sparkles}
-              label="AI 관측"
+              label="AI 호출 추적"
               value="Phoenix"
               unit=""
               href="/observability"
@@ -140,8 +140,8 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-                <QuickLink href="/loans/review-queue" title="대출 검토 큐" desc="ML 스코어 0.30~0.85 사람 검토 대기" />
-                <QuickLink href="/loans/decisions" title="AI 의사결정 이력" desc="자동 승인·반려·검토중 전체 결정 조회" />
+                <QuickLink href="/loans/review-queue" title="심사 대기" desc="ML 스코어 0.30~0.85 사람 검토 대기" />
+                <QuickLink href="/loans/decisions" title="심사 이력" desc="자동 승인·반려·검토중 전체 결정 조회" />
                 <QuickLink href="/overdue" title="연체 회원 추적" desc="등급별 연체액·연체일수" />
                 <QuickLink href="/audit" title="감사 로그" desc="모든 관리자 API 호출 적재 (Phase C)" />
               </div>

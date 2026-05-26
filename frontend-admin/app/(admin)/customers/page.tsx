@@ -58,7 +58,7 @@ export default function CustomersPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">회원 검색</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">회원 조회</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           회원번호 · 이메일 · 이름 부분 일치 검색 / 등급·상태 필터
         </p>

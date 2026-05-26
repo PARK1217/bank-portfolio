@@ -83,7 +83,7 @@ export default function RepaymentsPage() {
       setData(res);
       setMode("results");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "상환 내역을 불러오지 못했습니다.");
+      setError(err instanceof Error ? err.message : "상환 정보를 불러오지 못했습니다.");
     } finally {
       setLoading(false);
     }
@@ -109,7 +109,7 @@ export default function RepaymentsPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">대출 상환 내역</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">상환 관리</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           {mode === "dashboard"
             ? "현재 진행 중인 상환 현황. 검색 폼으로 과거 이력 조회 가능."

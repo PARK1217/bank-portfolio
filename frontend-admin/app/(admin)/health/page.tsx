@@ -33,7 +33,7 @@ export default function HealthPage() {
       );
       setItems(res.items);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "외부망 헬스를 불러오지 못했습니다.");
+      setError(err instanceof Error ? err.message : "외부 연동 상태를 불러오지 못했습니다.");
     } finally {
       setRefreshing(false);
     }
@@ -56,7 +56,7 @@ export default function HealthPage() {
     <div className="space-y-4">
       <div className="flex items-end justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">외부망 헬스</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">외부 연동 상태</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             KFTC / BOK-Wire+ / 마이데이터 / 신용평가사 등 외부 API 의 최근 1분 상태
           </p>
