@@ -82,12 +82,12 @@ function groupByDate(items: SessionListItem[]): Array<{ label: string; items: Se
 }
 
 const PRESET_QUESTIONS = [
-  "보이스피싱 의심 거래 발생 시 1차 조치는 무엇인가요?",
-  "1억 원 이상 현금 입출금 시 보고 절차를 알려주세요",
-  "KYC 본인확인 절차에서 EDD 적용 기준은?",
-  "민원 처리 표준 기한이 어떻게 되나요?",
-  "결제망 장애 발생 시 외부 보고 라인은?",
-  "분실신고 후 환수 책임 분담 기준은?",
+  "보이스피싱 의심 거래가 발생하면 어떤 순서로 응대하나요?",
+  "1억 원 이상 현금 입출금이 들어왔을 때 보고 절차는?",
+  "고위험 고객 본인확인 강화는 언제 적용하나요?",
+  "민원이 들어오면 처리 기한과 답변은 어떻게 잡나요?",
+  "결제망 장애가 발생하면 어디로 보고해야 하나요?",
+  "고객이 카드·통장 분실을 신고하면 환수 책임은 어떻게 나누나요?",
 ];
 
 export default function AiAssistPage() {
@@ -207,9 +207,9 @@ export default function AiAssistPage() {
       <header className="mb-4 flex items-center gap-3">
         <MessageSquare className="h-6 w-6 text-primary" />
         <div>
-          <h1 className="text-xl font-semibold">AI 직원 어시스턴트</h1>
+          <h1 className="text-xl font-semibold">AI 업무 도우미</h1>
           <p className="text-xs text-muted-foreground">
-            내부 SOP·규정·법령 기반 RAG 검색 — 직원 권한 적용 (`audience=ADMIN`)
+            내부 업무 매뉴얼·규정·법령에서 직원용 답변을 찾아드려요
           </p>
         </div>
       </header>
@@ -275,8 +275,8 @@ export default function AiAssistPage() {
         <CardContent className="flex items-start gap-2 py-3 text-xs">
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning" />
           <div>
-            본 어시스턴트는 직원 업무 보조용입니다. 컴플라이언스 의심·법령 해석은 본부 부서에 추가 확인하세요.
-            모든 질의는 ADMIN_AUDIT_LOG 에 기록됩니다.
+            업무 보조용 안내입니다. 규정·법령 해석이 필요하면 본부 담당 부서에 다시 확인하세요.
+            모든 대화는 감사 로그에 자동 기록됩니다.
           </div>
         </CardContent>
       </Card>
@@ -336,7 +336,7 @@ export default function AiAssistPage() {
                 <div className="mt-2 space-y-1 border-t border-foreground/10 pt-2">
                   <div className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wider opacity-60">
                     <FileText className="h-3 w-3" />
-                    근거 ({m.sources.length})
+                    참고 자료 ({m.sources.length})
                   </div>
                   {m.sources.slice(0, 3).map((s, i) => (
                     <button
@@ -352,7 +352,7 @@ export default function AiAssistPage() {
                         <div className="opacity-60 line-clamp-2">{stripMarkdown(s.snippet)}</div>
                       )}
                       {s.doc_token && (
-                        <div className="mt-0.5 text-[10px] text-primary/70">클릭하면 전문 보기</div>
+                        <div className="mt-0.5 text-[10px] text-primary/70">클릭해서 원문 보기</div>
                       )}
                     </button>
                   ))}
@@ -360,7 +360,17 @@ export default function AiAssistPage() {
               )}
               {m.rag_tier_cd && (
                 <div className="mt-1 text-[10px] opacity-50">
-                  RAG: {m.rag_tier_cd} · 신뢰도 {m.confidence}
+                  {(() => {
+                    const tierLabel: Record<string, string> = {
+                      KEYWORD: "정확 매칭",
+                      FAQ: "관련 자료",
+                      VECTOR: "유사 자료",
+                    };
+                    const confLabel: Record<string, string> = {
+                      HIGH: "높음", MEDIUM: "보통", LOW: "낮음",
+                    };
+                    return `${tierLabel[m.rag_tier_cd] ?? m.rag_tier_cd}${m.confidence ? ` · 신뢰도 ${confLabel[m.confidence] ?? m.confidence}` : ""}`;
+                  })()}
                 </div>
               )}
             </div>
@@ -391,7 +401,7 @@ export default function AiAssistPage() {
               send(input);
             }
           }}
-          placeholder="업무 질의를 입력하세요 (예: STR 보고 절차)"
+          placeholder="업무 질문을 입력하세요 (예: 의심거래 보고 절차)"
           className="flex-1 resize-none rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
           rows={2}
           disabled={sending}
@@ -415,7 +425,7 @@ export default function AiAssistPage() {
           >
             <div className="flex items-start justify-between gap-3 border-b px-4 py-3">
               <div>
-                <h2 className="text-sm font-semibold">{sourceModal.title || "근거 전문"}</h2>
+                <h2 className="text-sm font-semibold">{sourceModal.title || "참고 자료 원문"}</h2>
                 {sourceModal.clause && (
                   <div className="mt-0.5 text-[11px] text-muted-foreground">{sourceModal.clause}</div>
                 )}
