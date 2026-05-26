@@ -46,3 +46,42 @@
     font-variant-numeric: tabular-nums;
   }
 }
+
+/* AI 직원 어시스턴트 답변 markdown 렌더 — ### ** | 등 raw 노출 방지 */
+.prose-chat h1, .prose-chat h2, .prose-chat h3 {
+  font-weight: 600;
+  margin-top: 0.5rem;
+  margin-bottom: 0.25rem;
+  font-size: 0.95rem;
+}
+.prose-chat h3 { font-size: 0.9rem; opacity: 0.9; }
+.prose-chat p { margin: 0.35rem 0; }
+.prose-chat ul, .prose-chat ol { padding-left: 1.15rem; margin: 0.35rem 0; }
+.prose-chat ul li { list-style: disc; }
+.prose-chat ol li { list-style: decimal; }
+.prose-chat strong { font-weight: 600; }
+.prose-chat em { font-style: italic; opacity: 0.9; }
+.prose-chat code {
+  background: rgba(127, 127, 127, 0.18);
+  padding: 0.05rem 0.3rem;
+  border-radius: 0.25rem;
+  font-size: 0.85em;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.prose-chat pre { background: rgba(127,127,127,0.12); padding: 0.5rem; border-radius: 0.35rem; overflow-x: auto; margin: 0.35rem 0; }
+.prose-chat pre code { background: transparent; padding: 0; }
+.prose-chat blockquote {
+  border-left: 2px solid rgba(127,127,127,0.4);
+  padding-left: 0.6rem;
+  margin: 0.4rem 0;
+  opacity: 0.85;
+}
+.prose-chat table { border-collapse: collapse; margin: 0.45rem 0; font-size: 0.85em; }
+.prose-chat th, .prose-chat td {
+  border: 1px solid rgba(127,127,127,0.3);
+  padding: 0.2rem 0.45rem;
+  text-align: left;
+}
+.prose-chat th { background: rgba(127,127,127,0.1); font-weight: 600; }
+.prose-chat a { color: rgb(59, 130, 246); text-decoration: underline; }
+.prose-chat hr { border: 0; border-top: 1px solid rgba(127,127,127,0.25); margin: 0.5rem 0; }

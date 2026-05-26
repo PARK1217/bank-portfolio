@@ -20,17 +20,20 @@ SYNTH_DIR = Path("/app/data/admin-sop/synthetic")
 EMBED_MODEL_NAME = "jhgan/ko-sroberta-multitask"
 
 CATEGORY_MAP = {
-    "01-kyc-cdd":             "KYC",
-    "02-aml-str":             "AML",
-    "03-voice-phishing":      "VOICE_PHISHING",
-    "04-complaint-handling":  "COMPLAINT",
-    "05-lost-fraud":          "SECURITY_OPS",
-    "06-settlement-failure":  "SYSTEM_OPS",
-    "07-credit-loan-ops":     "LOAN_OPS",
-    "08-privacy-security":    "PRIVACY",
-    "09-foreign-exchange":    "FX",
-    "10-system-ops":          "SYSTEM_OPS",
-    "11-deposit-termination": "DEPOSIT_OPS",
+    "01-kyc-cdd":             ("KYC",             "ADMIN"),
+    "02-aml-str":             ("AML",             "ADMIN"),
+    "03-voice-phishing":      ("VOICE_PHISHING",  "ADMIN"),
+    "04-complaint-handling":  ("COMPLAINT",       "ADMIN"),
+    "05-lost-fraud":          ("SECURITY_OPS",    "ADMIN"),
+    "06-settlement-failure":  ("SYSTEM_OPS",      "ADMIN"),
+    "07-credit-loan-ops":     ("LOAN_OPS",        "ADMIN"),
+    "08-privacy-security":    ("PRIVACY",         "ADMIN"),
+    "09-foreign-exchange":    ("FX",              "ADMIN"),
+    "10-system-ops":          ("SYSTEM_OPS",      "ADMIN"),
+    "11-deposit-termination": ("DEPOSIT_OPS",     "ADMIN"),
+    "12-products-catalog":    ("PRODUCT_CATALOG", "BOTH"),
+    "13-user-screen-guide":   ("SCREEN_GUIDE",    "BOTH"),
+    "14-admin-screen-guide":  ("SCREEN_GUIDE",    "ADMIN"),
 }
 
 
@@ -71,13 +74,16 @@ async def main() -> int:
     chunks: list[dict] = []
     for mdfile in sorted(SYNTH_DIR.glob("*.md")):
         base_id = mdfile.stem
-        category = CATEGORY_MAP.get(base_id, "GENERAL")
+        cat_aud = CATEGORY_MAP.get(base_id, ("GENERAL", "ADMIN"))
+        category, audience = cat_aud
         text = mdfile.read_text(encoding="utf-8")
         first_h1 = next((l for l in text.splitlines() if l.startswith("# ")), "")
         title = first_h1[2:].strip().split(" (")[0]
         added = chunk_sop(text, base_id, category, title)
+        for c in added:
+            c["audience"] = audience
         chunks.extend(added)
-        print(f"  {mdfile.name}: {len(added)} chunks → {category}")
+        print(f"  {mdfile.name}: {len(added)} chunks → {category} / {audience}")
 
     print(f"\n총 SYNTH_SOP 청크: {len(chunks)}")
 
@@ -112,11 +118,12 @@ async def main() -> int:
                     'INSERT INTO public."AI_FAQ" '
                     '  ("CATEGORY","QUESTION","ANSWER","EMBEDDING",'
                     '   "STATUS_CD","AUDIENCE_CD","SOURCE_TAG","DELETE_YN","CREATED_BY") '
-                    "VALUES ($1,$2,$3,$4::vector,'ACTIVE','ADMIN','SYNTH_SOP','N','SEED_ADMIN')",
+                    "VALUES ($1,$2,$3,$4::vector,'ACTIVE',$5,'SYNTH_SOP','N','SEED_ADMIN')",
                     c["category"],
                     c["question"],
                     c["answer"],
                     emb_str,
+                    c.get("audience", "ADMIN"),
                 )
 
     print(f"\n=== DONE — {len(chunks)} SYNTH_SOP rows inserted ===")

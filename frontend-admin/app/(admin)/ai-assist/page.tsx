@@ -12,6 +12,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { MessageSquare, Send, Sparkles, FileText, AlertTriangle } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -41,6 +43,15 @@ interface SendResponse {
   session_id: number;
   user_message: AssistantMessage;
   assistant_message: AssistantMessage;
+}
+
+function stripMarkdown(text: string): string {
+  return text
+    .replace(/```[\s\S]*?```/g, "")
+    .replace(/\|[^\n]+\|/g, "")
+    .replace(/[#*_`~]+/g, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
 }
 
 const PRESET_QUESTIONS = [
@@ -176,7 +187,13 @@ export default function AiAssistPage() {
                   : "bg-muted"
               }`}
             >
-              <div className="whitespace-pre-wrap leading-6">{m.content}</div>
+              {m.role_cd === "USER" ? (
+                <div className="whitespace-pre-wrap leading-6">{m.content}</div>
+              ) : (
+                <div className="prose-chat text-sm leading-6">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
+                </div>
+              )}
               {m.sources.length > 0 && (
                 <div className="mt-2 space-y-1 border-t border-foreground/10 pt-2">
                   <div className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wider opacity-60">
@@ -188,7 +205,7 @@ export default function AiAssistPage() {
                       <span className="font-medium">{s.title}</span>
                       {s.clause && <span className="opacity-60"> · {s.clause}</span>}
                       {s.snippet && (
-                        <div className="opacity-60 line-clamp-2">{s.snippet}</div>
+                        <div className="opacity-60 line-clamp-2">{stripMarkdown(s.snippet)}</div>
                       )}
                     </div>
                   ))}

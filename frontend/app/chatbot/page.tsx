@@ -3,6 +3,8 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { toast } from "sonner";
 import { Protected } from "@/components/protected";
 import { Button } from "@/components/ui/button";
@@ -92,6 +94,16 @@ const HANDOFF_EMAIL = "support@daon.example";
 
 // 종료된 챗봇 세션 sessionStorage 키 — 탭을 닫으면 자연스럽게 해제.
 const ENDED_SESSIONS_KEY = "chatbot.endedSessions";
+
+
+function stripMarkdown(text: string): string {
+  return text
+    .replace(/```[\s\S]*?```/g, "")
+    .replace(/\|[^\n]+\|/g, "")
+    .replace(/[#*_`~]+/g, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
 
 
 function ChatScreen() {
@@ -583,11 +595,19 @@ function MessageBubble({
       <div className={cn("max-w-[85%] space-y-1", isUser ? "items-end text-right" : "items-start")}>
         <Card
           className={cn(
-            "whitespace-pre-wrap text-sm leading-relaxed",
-            isUser ? "bg-primary text-primary-foreground" : "bg-card",
+            "text-sm leading-relaxed",
+            isUser ? "whitespace-pre-wrap bg-primary text-primary-foreground" : "bg-card",
           )}
         >
-          <CardContent className="px-3 py-2.5">{msg.content}</CardContent>
+          <CardContent className="px-3 py-2.5">
+            {isUser ? (
+              msg.content
+            ) : (
+              <div className="prose-chat">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+              </div>
+            )}
+          </CardContent>
         </Card>
 
         {!isUser ? (
@@ -733,7 +753,7 @@ function AssistantMeta({
                     <span className="num-tabular text-muted-foreground">{s.score.toFixed(2)}</span>
                   ) : null}
                 </div>
-                <p className="mt-1 line-clamp-2 text-[11px] text-muted-foreground">{s.snippet}</p>
+                <p className="mt-1 line-clamp-2 text-[11px] text-muted-foreground">{stripMarkdown(s.snippet)}</p>
               </Link>
             </li>
           ))}
