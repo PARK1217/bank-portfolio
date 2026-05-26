@@ -37,8 +37,8 @@
 - 시스템 로그·접근 이력 조회
 - 「특별조사명령」 근거 보존
 
-### 2-4. 모든 접근 — `ADMIN_AUDIT_LOG` 자동 적재
-- EMPLOYEE_NO + ACTION_CD + TARGET_TABLE + TARGET_ID 필수
+### 2-4. 모든 접근 — `감사 로그` 자동 적재
+- 사번 + ACTION_CD + TARGET_TABLE + TARGET_ID 필수
 - 5년 보존 (개인정보보호법)
 
 ## 3. 개인정보 유출 사고 대응
@@ -75,7 +75,7 @@
 - 영문 대소문자 + 숫자 + 특수문자 4종 중 3종 이상
 - 8자 이상 16자 이하
 - 90일 주기 변경 강제
-- 5회 실패 시 잠금 (`LOGIN_FAIL_COUNT` 5 이상)
+- 5회 실패 시 잠금 (`로그인 실패 횟수` 5 이상)
 
 ### 4-2. 다중인증 (MFA)
 - 1차: 비밀번호 또는 SIMPLE_PIN
@@ -99,7 +99,7 @@
 - CEO 형사 책임 — 5년 이하 징역 또는 5천만 원 이하 벌금
 
 ## 6. 시스템 연동
-- 모든 admin 조회 → `ADMIN_AUDIT_LOG` 자동 적재
-- 권한별 접근 — `EMPLOYEE_MASTER.AUTH_LEVEL_CD` (ADMIN/AUDIT/GENERAL)
-- 본인 외 고객 조회 — `DELEGATION` 테이블에서 위임권한 검증
-- 1억 원 이상 거래 — `ACCOUNT_LIMIT_CHANGE_REQUEST` 7일 cooling-off 적용
+- 모든 admin 조회 → `감사 로그` 자동 적재
+- 권한별 접근 — `직원 마스터.권한 등급` (ADMIN/AUDIT/GENERAL)
+- 본인 외 고객 조회 — `위임` 테이블에서 위임권한 검증
+- 1억 원 이상 거래 — `한도 변경 신청` 7일 cooling-off 적용

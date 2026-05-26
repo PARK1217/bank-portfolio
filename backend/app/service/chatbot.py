@@ -239,6 +239,44 @@ def corpora_stats() -> dict[str, int]:
 # 메시지 전송 (3-tier 매칭)
 # ---------------------------------------------------------------------------
 
+# 욕설·비속어 사전 (한국어 일반 + 영어 흔한 욕). RAG 거치지 않고 짧게 거절.
+_PROFANITY = re.compile(
+    r"(씨발|시발|개새|좆|존나|병신|등신|니애미|니애비|fuck|shit|asshole|bitch|"
+    r"바보(야|아|냐)|멍청이|꺼져|닥쳐|꺼지|죽어|개같|좇같)",
+    re.IGNORECASE,
+)
+
+# 단순 인사·잡담 패턴 — RAG 매칭 부적합이므로 짧게 응답.
+_GREETING = re.compile(r"^(안녕|하이|hi|hello|반가|좋은\s*(아침|오후|저녁)|어디|뭐해|졸려|배고파)", re.IGNORECASE)
+_TINY = re.compile(r"^[\s.?!ㅋㅎㅠ]+$|^.{1,3}$")  # 3자 이하 또는 ㅋㅋ/ㅎㅎ/?? 만
+
+
+def _early_reply(message: str, audience: str) -> str | None:
+    """RAG 검색 전 짧은 가드. None 반환 시 정상 RAG 흐름. 문자열 반환 시 즉시 응답.
+
+    가드 1) 욕설·비속어 → 정중 거절
+    가드 2) 단순 인사·잡담 → 한 줄 안내
+    가드 3) 3자 이하 단답·이모지만 → 다시 질문 유도
+    """
+    txt = (message or "").strip()
+    if not txt:
+        return "내용을 입력해 주세요."
+    if _PROFANITY.search(txt):
+        return (
+            "부적절한 표현이 감지되어 답변할 수 없어요. 업무 관련 질문을 정확히 입력해 주세요. "
+            "본 대화 내용은 감사 로그에 기록됩니다."
+        )
+    if _TINY.match(txt):
+        if audience == "ADMIN":
+            return "업무 관련 질문을 한 문장으로 입력해 주세요. 예) 의심거래 보고 절차"
+        return "궁금한 점을 한 문장으로 알려주세요. 예) 이체 한도는 어떻게 바꾸나요?"
+    if _GREETING.match(txt) and len(txt) < 12:
+        if audience == "ADMIN":
+            return "안녕하세요. 업무 관련 질문이 있으면 입력해 주세요. (예: 의심거래 보고 절차)"
+        return "안녕하세요. 어떤 도움이 필요하신가요? (예: 이체 한도 변경 방법)"
+    return None
+
+
 def _doc_metadata_json(category: str | None, question: str | None) -> str:
     import json as _json
     return _json.dumps({"category": category or "", "question": question or ""}, ensure_ascii=False)
@@ -304,6 +342,30 @@ async def chat_send(
     # LLM_CALL_ID 는 VECTOR tier 에서 LLM 호출 후 동기 INSERT 로 채워짐 (없으면 None).
     llm_call_id: int | None = None
 
+    # 짧은 잡담·욕설·매칭 부적합 가드 — RAG 거치지 않고 즉시 응답.
+    short_reply = _early_reply(message, audience)
+    if short_reply is not None:
+        async with pool.acquire() as conn:
+            asst_row = await conn.fetchrow(
+                'INSERT INTO public."AI_CHATBOT_MESSAGE" '
+                '  ("SESSION_ID", "ROLE_CD", "CONTENT", "RAG_TIER_CD", '
+                '   "RAG_SOURCE_IDS", "LLM_CALL_ID", "CREATED_BY", "DELETE_YN") '
+                "VALUES ($1, 'ASSISTANT', $2, NULL, NULL, NULL, $3, 'N') "
+                'RETURNING "MESSAGE_ID", "CREATED_AT"',
+                session_id, short_reply, f"CUSTOMER:{customer_no}",
+            )
+        assistant_msg = {
+            "message_id": int(asst_row["MESSAGE_ID"]),
+            "role_cd": "ASSISTANT",
+            "content": short_reply,
+            "rag_tier_cd": None,
+            "sources": [],
+            "confidence": "HIGH",
+            "follow_up_questions": [],
+            "created_at": asst_row["CREATED_AT"],
+        }
+        return {"session_id": session_id, "user_message": user_msg, "assistant_message": assistant_msg}
+
     # 임베딩 + 벡터 검색 — Retriever span
     with _tracer.start_as_current_span("chatbot.rag.retrieve") as retr:
         retr.set_attribute("openinference.span.kind", "RETRIEVER")
@@ -353,6 +415,37 @@ async def chat_send(
     top_terms = terms_hits[0] if terms_hits else None
     top_faq_d = float(top_faq["distance"]) if top_faq else 999.0
     top_terms_d = float(top_terms["distance"]) if top_terms else 999.0
+
+    # 매칭 부적합 가드 — 모든 청크 distance > 0.70 면 RAG 자료가 질문과 무관.
+    # LLM 합성 시도 대신 짧고 정직한 거절. 단계 절차 강제 X.
+    top_dist_overall = float(rows[0]["distance"]) if rows else 999.0
+    if top_dist_overall > 0.70:
+        deny = (
+            "관련 내부 자료를 찾지 못했어요. 질문을 더 구체적으로 입력하시거나, 관련 부서 "
+            "또는 시스템 화면(예: 회원 검색·상품 카탈로그·감사 로그)에서 직접 확인해 주세요."
+            if audience == "ADMIN"
+            else "관련 약관·안내 자료를 찾지 못했어요. 질문을 더 구체적으로 입력하시거나, 상담원 연결을 이용해 주세요."
+        )
+        async with pool.acquire() as conn:
+            asst_row = await conn.fetchrow(
+                'INSERT INTO public."AI_CHATBOT_MESSAGE" '
+                '  ("SESSION_ID", "ROLE_CD", "CONTENT", "RAG_TIER_CD", '
+                '   "RAG_SOURCE_IDS", "LLM_CALL_ID", "CREATED_BY", "DELETE_YN") '
+                "VALUES ($1, 'ASSISTANT', $2, NULL, NULL, NULL, $3, 'N') "
+                'RETURNING "MESSAGE_ID", "CREATED_AT"',
+                session_id, deny, f"CUSTOMER:{customer_no}",
+            )
+        assistant_msg = {
+            "message_id": int(asst_row["MESSAGE_ID"]),
+            "role_cd": "ASSISTANT",
+            "content": deny,
+            "rag_tier_cd": None,
+            "sources": [],
+            "confidence": "LOW",
+            "follow_up_questions": [],
+            "created_at": asst_row["CREATED_AT"],
+        }
+        return {"session_id": session_id, "user_message": user_msg, "assistant_message": assistant_msg}
 
     def _to_score(d: float) -> float:
         # 정규화 임베딩 — 코사인 거리 [0, 2], 실제 사용 범위 대략 [0, 1].

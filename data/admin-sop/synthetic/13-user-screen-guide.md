@@ -72,7 +72,7 @@
 - 단계: 계좌별 카드 → 한도 변경 신청 → OTP → 7일 점검 후 적용 (cooling-off)
 
 ### 5-3. OTP 등록
-- 경로: 보안 설정 → "OTP 등록" 또는 `/setup/otp`
+- 경로: 보안 설정 → "OTP 등록" 또는 `OTP 등록 화면`
 - 단계: QR 코드 스캔(Google Authenticator) → 6자리 입력 → 검증
 
 ### 5-4. 간편 PIN 등록·재설정

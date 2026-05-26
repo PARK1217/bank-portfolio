@@ -12,7 +12,7 @@
 3. 회사 재직 6개월 이상 + 4대보험 가입 확인
 
 ### 1-2. 2단계 — AI 자동 분류 (시스템)
-- 모델: XGBoost (Phase 6 §9.2.6)
+- 모델: AI 모델 (Phase 6 §9.2.6)
 - 입력 피처: 신용점수·연소득·기존부채·DSR·재직기간·연체이력
 - 출력 SCORE 0~1
   - **≥0.80**: AUTO_APPROVE (자동 승인)
@@ -30,7 +30,7 @@
 ### 1-4. 4단계 — 약정·실행
 - 약정서 전자서명 (PKI 인증)
 - 첨부서류 4종 검증 (주민등록증·재직증명·소득증명·가족관계)
-- 실행 — `LOAN_EXEC_HISTORY` 적재 + 입금계좌로 자금 이체
+- 실행 — `대출 실행 이력` 적재 + 입금계좌로 자금 이체
 - 회차별 상환 스케줄 자동 생성 (원리금균등 EPI)
 
 ## 2. DSR 계산식 (가이드라인)
@@ -83,7 +83,7 @@ DSR = (해당 대출 연간 원리금 + 기존 대출 연간 원리금) / 연소
 - 개인회생 결정 시 — 법원 절차 준수
 
 ## 7. 시스템 연동
-- `AI_LOAN_DECISION` — ML 분류 결과 영구화
-- `LOAN_APPLICATION` `LOAN_CONTRACT` `LOAN_REPAY_SCHEDULE` 세 단계
-- 회색지대(HUMAN_REVIEW) → 관리자 콘솔 `/loans/review-queue` 진입
-- 사람 검토 결정 → `HUMAN_DECISION_CD` UPDATE + ADMIN_AUDIT_LOG 자동 적재
+- `대출 자동 판정` — ML 분류 결과 영구화
+- `대출 신청서` `대출 계약` `상환 스케줄` 세 단계
+- 회색지대(HUMAN_REVIEW) → 관리자 콘솔 `대출 검토 큐` 진입
+- 사람 검토 결정 → `HUMAN_DECISION_CD` UPDATE + 감사 로그 자동 적재

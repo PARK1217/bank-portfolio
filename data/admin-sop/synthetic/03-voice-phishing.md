@@ -22,7 +22,7 @@
 
 ### 0~10분 (즉시)
 1. 거래 중단 — 출금/이체 모두 정지
-2. 해당 계좌 임시 거래제한 처리 (`LIMITED_ACCOUNT_YN='Y'`)
+2. 해당 계좌 임시 거래제한 처리 (`계좌 거래제한 여부='Y'`)
 3. 고객 본인 확인 — 영상통화 또는 창구 직접 출석 요구
 4. 의심거래 사실 기록 (FDS 시스템 + 콜 녹취)
 
@@ -71,6 +71,6 @@
 - 고객·외부에 보고 사실 누설 금지
 
 ## 6. 시스템 연동
-- AI_FDS_DECISION 룰 8종 — `R_NIGHT/R_AMOUNT_ZSCORE/R_NEW_COUNTERPART/R_BURST/R_FOREIGN_IP/R_DAILY_LIMIT_NEAR/R_NEW_DEVICE/R_LARGE_INTERBANK`
-- 합산 점수 60+ 자동 거래 보류 + LLM 한국어 설명 생성 + NOTIFICATION 발송
-- 관리자 콘솔 `/fds` 에서 사람 검토 → CONFIRM/REPORT/CLOSE 분류
+- 이상거래 자동 분류 룰 8종 — `심야 거래/금액 이상치/신규 수취인/단기 다발 거래/해외 IP/일일 한도 임박/새 디바이스/거액 타행 이체`
+- 합산 점수 60+ 자동 거래 보류 + LLM 한국어 설명 생성 + 알림 발송
+- 관리자 콘솔 `이상거래 화면` 에서 사람 검토 → CONFIRM/REPORT/CLOSE 분류
