@@ -1,9 +1,10 @@
 """RAG 응답 품질 평가 — LLM-as-judge (가이드 §9.2.2 Phoenix Faithfulness).
 
-응답 직후 호출 → 세 지표 0.0~1.0 점수 산출:
+응답 직후 호출 → 네 지표 0.0~1.0 점수 산출:
 - faithfulness        : 답변이 retrieved 문서에 근거 있나? (환각 여부)
 - answer_relevancy    : 답변이 사용자 질문에 답하고 있나?
-- context_precision   : 검색된 문서가 질문과 관련 있나?
+- context_precision   : 검색된 문서가 질문과 관련 있나? (top-k 안의 문서 중 관련 문서 비율)
+- context_recall      : 답변에 담겨야 할 정보가 retrieved 문서에 충분히 포함됐나? (정답 누락 여부)
 
 평가자 LLM 은 `service/llm.chat_completion` 을 재사용 — 응답 생성과 동일한 provider (Groq Llama 3.1) 가
 스스로 채점 (운영에선 더 큰 모델로 분리 권장). 메인 흐름을 막지 않도록 호출 측에서 `asyncio.create_task`
@@ -69,8 +70,15 @@ _ANSWER_RULE = (
 )
 
 _CONTEXT_RULE = (
-    "[Context Precision] 검색된 문서들이 사용자 질문과 관련 있는지 평가합니다. "
-    "엉뚱한 도메인 문서가 섞였으면 낮은 점수. 모든 top-k 문서가 질문 관련이면 높은 점수."
+    "[Context Precision] 검색된 top-k 문서 중 사용자 질문과 직접 관련 있는 문서의 비율을 평가합니다. "
+    "질문 도메인과 일치하는 문서가 하나라도 있으면 최소 0.3 이상, 절반 이상이 관련 있으면 0.6 이상, "
+    "전부 관련 있으면 0.9 이상. 모든 문서가 엉뚱한 도메인일 때만 0.1 이하."
+)
+
+_RECALL_RULE = (
+    "[Context Recall] 답변에 담긴 정보가 retrieved 문서 안에서 모두 근거를 찾을 수 있는지 평가합니다. "
+    "답변의 모든 사실이 문서에 있으면 1.0, 답변의 일부가 문서 밖에서 왔거나 문서에 정보가 빈 채 답이 만들어졌으면 낮은 점수. "
+    "단, 답변이 '약관에서 확인되지 않습니다' 같은 정직한 거절이면 0.5 중립."
 )
 
 
@@ -79,7 +87,7 @@ async def evaluate_rag(
     retrieved_docs: list[dict],
     answer: str,
 ) -> dict[str, float | None]:
-    """RAG 응답 3 지표 평가. 병렬 LLM 호출.
+    """RAG 응답 4 지표 평가. 병렬 LLM 호출.
 
     Args:
         question: 사용자 원 질문.
@@ -87,7 +95,7 @@ async def evaluate_rag(
         answer: LLM 이 생성한 응답.
 
     Returns:
-        {"faithfulness": 0.0~1.0 | None, "answer_relevancy": ..., "context_precision": ...}
+        {"faithfulness": 0.0~1.0 | None, "answer_relevancy": ..., "context_precision": ..., "context_recall": ...}
     """
     # 문서가 너무 많으면 평가자 prompt 가 비대해짐 → 상위 5건 + snippet 잘라서 전달.
     docs_brief = [
@@ -106,11 +114,17 @@ async def evaluate_rag(
     }
     answer_payload = {"question": question, "answer": answer}
     context_payload = {"question": question, "retrieved_docs": docs_brief}
+    recall_payload = {
+        "question": question,
+        "retrieved_docs": docs_brief,
+        "answer": answer,
+    }
 
-    faithfulness, answer_relevancy, context_precision = await asyncio.gather(
+    faithfulness, answer_relevancy, context_precision, context_recall = await asyncio.gather(
         _score_one(_FAITH_RULE, faith_payload, "faithfulness"),
         _score_one(_ANSWER_RULE, answer_payload, "answer_relevancy"),
         _score_one(_CONTEXT_RULE, context_payload, "context_precision"),
+        _score_one(_RECALL_RULE, recall_payload, "context_recall"),
         return_exceptions=False,
     )
 
@@ -119,6 +133,7 @@ async def evaluate_rag(
         faithfulness=faithfulness,
         answer_relevancy=answer_relevancy,
         context_precision=context_precision,
+        context_recall=context_recall,
         docs_count=len(docs_brief),
     )
 
@@ -126,4 +141,5 @@ async def evaluate_rag(
         "faithfulness": faithfulness,
         "answer_relevancy": answer_relevancy,
         "context_precision": context_precision,
+        "context_recall": context_recall,
     }

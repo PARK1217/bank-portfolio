@@ -268,19 +268,21 @@ async def chat_send(
         if session_id is None:
             session_id = await conn.fetchval(
                 'INSERT INTO public."AI_CHATBOT_SESSION" '
-                '  ("CUSTOMER_NO", "STATUS_CD", "DELETE_YN") '
-                "VALUES ($1, 'ACTIVE', 'N') "
+                '  ("CUSTOMER_NO", "STATUS_CD", "CREATED_BY", "DELETE_YN") '
+                "VALUES ($1, 'ACTIVE', $2, 'N') "
                 'RETURNING "SESSION_ID"',
                 customer_no,
+                f"CUSTOMER:{customer_no}",
             )
         # USER 메시지 INSERT (응답 메타 채우기 위해 row 받아옴)
         user_row = await conn.fetchrow(
             'INSERT INTO public."AI_CHATBOT_MESSAGE" '
-            '  ("SESSION_ID", "ROLE_CD", "CONTENT", "DELETE_YN") '
-            "VALUES ($1, 'USER', $2, 'N') "
+            '  ("SESSION_ID", "ROLE_CD", "CONTENT", "CREATED_BY", "DELETE_YN") '
+            "VALUES ($1, 'USER', $2, $3, 'N') "
             'RETURNING "MESSAGE_ID", "CREATED_AT"',
             session_id,
             message,
+            f"CUSTOMER:{customer_no}",
         )
     user_msg = {
         "message_id": int(user_row["MESSAGE_ID"]),
@@ -291,6 +293,9 @@ async def chat_send(
         "confidence": None,
         "created_at": user_row["CREATED_AT"],
     }
+
+    # LLM_CALL_ID 는 VECTOR tier 에서 LLM 호출 후 동기 INSERT 로 채워짐 (없으면 None).
+    llm_call_id: int | None = None
 
     # 임베딩 + 벡터 검색 — Retriever span
     with _tracer.start_as_current_span("chatbot.rag.retrieve") as retr:
@@ -393,8 +398,9 @@ async def chat_send(
             llm_answer = await _llm_chat_completion(
                 system_prompt, user_prompt, max_tokens=400
             )
-            # LLM 호출이 성공했으면 사용량 메타를 Kafka 토픽으로 발행 (가이드 §2.4 + §3.7).
-            # consumer 가 AI_LLM_CALL_LOG 에 INSERT — Phase 6 Phoenix 트레이스와 연동 후보.
+            # LLM 호출이 성공했으면 (a) AI_LLM_CALL_LOG 동기 INSERT 후 LLM_CALL_ID 수령,
+            # (b) Kafka 발행 (Phoenix trace 용도), (c) RAG 품질 평가 비동기 fire-and-forget.
+            # 동기 INSERT 패턴이라 LLM_CALL_ID 를 ASSISTANT 메시지 INSERT 시 그대로 채움.
             if llm_answer:
                 import uuid
 
@@ -403,24 +409,41 @@ async def chat_send(
 
                 usage_meta = get_last_usage()
                 if usage_meta:
-                    trace_id = uuid.uuid4().hex
+                    llm_trace_id = uuid.uuid4().hex
+                    try:
+                        async with pool.acquire() as conn:
+                            llm_call_id = int(await conn.fetchval(
+                                'INSERT INTO public."AI_LLM_CALL_LOG" ('
+                                '  "TRACE_ID", "MODEL_NAME", "PURPOSE_CD", '
+                                '  "PROMPT_TOKENS", "COMPLETION_TOKENS", '
+                                '  "STATUS_CD", "CREATED_BY", "DELETE_YN"'
+                                ") VALUES ($1, $2, 'CHATBOT_RAG', $3, $4, 'OK', $5, 'N') "
+                                'RETURNING "LLM_CALL_ID"',
+                                llm_trace_id,
+                                usage_meta["model_name"],
+                                usage_meta["prompt_tokens"],
+                                usage_meta["completion_tokens"],
+                                f"CUSTOMER:{customer_no}",
+                            ))
+                    except Exception:
+                        log.exception("llm_call_log_insert_failed", trace_id=llm_trace_id)
                     await kafka_svc.send_event(
                         kafka_svc.TOPIC_CHATBOT_LLM_CALLS,
                         {
-                            "trace_id": trace_id,
+                            "trace_id": llm_trace_id,
                             "model_name": usage_meta["model_name"],
                             "purpose_cd": "CHATBOT_RAG",
                             "prompt_tokens": usage_meta["prompt_tokens"],
                             "completion_tokens": usage_meta["completion_tokens"],
                             "status_cd": "OK",
                         },
-                        key=trace_id,
+                        key=llm_trace_id,
                     )
-                    # RAG 응답 품질 추적 — 평가는 LLM 3번 호출이라 3~6초 걸려 사용자 응답을 막지 않도록
+                    # RAG 응답 품질 추적 — 평가는 LLM 4번 호출이라 4~8초 걸려 사용자 응답을 막지 않도록
                     # asyncio.create_task 로 백그라운드 fire-and-forget. 평가 끝나면 같은 trace_id 로 발행.
                     asyncio.create_task(
                         _evaluate_and_publish(
-                            trace_id=trace_id,
+                            trace_id=llm_trace_id,
                             question=message,
                             retrieved_docs=sources,
                             answer=llm_answer,
@@ -450,13 +473,15 @@ async def chat_send(
         asst_row = await conn.fetchrow(
             'INSERT INTO public."AI_CHATBOT_MESSAGE" '
             '  ("SESSION_ID", "ROLE_CD", "CONTENT", "RAG_TIER_CD", '
-            '   "RAG_SOURCE_IDS", "DELETE_YN") '
-            "VALUES ($1, 'ASSISTANT', $2, $3, $4::jsonb, 'N') "
+            '   "RAG_SOURCE_IDS", "LLM_CALL_ID", "CREATED_BY", "DELETE_YN") '
+            "VALUES ($1, 'ASSISTANT', $2, $3, $4::jsonb, $5, $6, 'N') "
             'RETURNING "MESSAGE_ID", "CREATED_AT"',
             session_id,
             answer,
             tier,
             _sources_for_db(sources),
+            llm_call_id,
+            f"CUSTOMER:{customer_no}",
         )
     assistant_msg = {
         "message_id": int(asst_row["MESSAGE_ID"]),
@@ -766,6 +791,7 @@ async def _evaluate_and_publish(
                 "faithfulness": scores.get("faithfulness"),
                 "answer_relevancy": scores.get("answer_relevancy"),
                 "context_precision": scores.get("context_precision"),
+                "context_recall": scores.get("context_recall"),
             },
             key=trace_id,
         )
