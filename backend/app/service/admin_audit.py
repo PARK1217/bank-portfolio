@@ -55,6 +55,7 @@ _EXPLICIT_ACTIONS: dict[tuple[str, str], str] = {
     ("POST", "/api/admin/chatbot/messages"):                   "CHATBOT_QUERY",
     ("GET",  "/api/admin/chatbot/sessions"):                   "CHATBOT_SESSIONS",
     ("GET",  "/api/admin/chatbot/sessions/:id"):               "CHATBOT_SESSION_DETAIL",
+    ("GET",  "/api/admin/chatbot/source/:id"):                 "CHATBOT_SOURCE_VIEW",
 }
 
 # ---------------------------------------------------------------------------

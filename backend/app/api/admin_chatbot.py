@@ -12,7 +12,7 @@
 from __future__ import annotations
 
 import structlog
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from ..schema.chatbot import (
     ChatMessageItem,
@@ -22,7 +22,7 @@ from ..schema.chatbot import (
 )
 from ..service.admin_auth import CurrentAdmin, require_admin
 from ..service.auth import get_token_service
-from ..service.chatbot import chat_send, get_session, list_sessions
+from ..service.chatbot import chat_send, get_session, get_source, list_sessions
 from ..service.token import TokenService
 
 router = APIRouter(prefix="/admin/chatbot", tags=["admin-chatbot"])
@@ -82,11 +82,12 @@ async def send_message(
 
 @router.get("/sessions")
 async def get_my_sessions(
+    q: str | None = Query(None, max_length=100, description="메시지 본문 부분일치"),
     admin: CurrentAdmin = Depends(require_admin),
-    tokens: TokenService = Depends(get_token_service),
 ) -> dict:
     pseudo_customer_no = _employee_session_id(admin.employee_no)
-    return await list_sessions(pseudo_customer_no, tokens)
+    items = await list_sessions(pseudo_customer_no, q=q)
+    return {"items": items, "total": len(items)}
 
 
 @router.get("/sessions/{session_id}")
@@ -97,3 +98,14 @@ async def get_my_session_detail(
 ) -> dict:
     pseudo_customer_no = _employee_session_id(admin.employee_no)
     return await get_session(pseudo_customer_no, session_id, tokens)
+
+
+@router.get("/source/{doc_token}")
+async def get_admin_source(
+    doc_token: str,
+    admin: CurrentAdmin = Depends(require_admin),
+    tokens: TokenService = Depends(get_token_service),
+) -> dict:
+    """근거 전문 — 챗봇 sources 카드 클릭 → modal 본문. token 발급은 admin pseudo_no 기준."""
+    pseudo_customer_no = _employee_session_id(admin.employee_no)
+    return await get_source(doc_token, tokens, pseudo_customer_no)
