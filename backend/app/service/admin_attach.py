@@ -95,7 +95,9 @@ async def get_attachments(application_id: int) -> dict[str, Any]:
         # CONTRACT_NO 매칭은 신청 단계 표기 'LA-{id}' 와 실 계약번호(LOAN_CONTRACT 발급 후) 둘 다 허용.
         attached = await conn.fetch(
             'SELECT "ATTACH_ID","DOC_TYPE_ID","DOC_ISSUE_DATE","DOC_EXPIRE_DATE",'
-            '       "SUBMIT_DATETIME","FILE_PATH","VERIFIER_EMP_NO","VERIFY_STATUS_CD","REJECT_REASON" '
+            '       "SUBMIT_DATETIME","FILE_PATH",'
+            '       "FILE_NAME","MIME_TYPE","FILE_SIZE",'
+            '       "VERIFIER_EMP_NO","VERIFY_STATUS_CD","REJECT_REASON" '
             'FROM public."ATTACHED_DOC" '
             'WHERE "DELETE_YN" = \'N\' '
             '  AND ("CONTRACT_NO" = $1 OR "CONTRACT_NO" = $2) '
@@ -109,6 +111,8 @@ async def get_attachments(application_id: int) -> dict[str, Any]:
     submissions: dict[int, dict] = {}
     for r in attached:
         type_id = int(r["DOC_TYPE_ID"])
+        # FILE_NAME 컬럼 있으면 그것을, 없으면 FILE_PATH 끝 토큰명 폴백 (db/20 마이그 이전 데이터 호환).
+        fn = r["FILE_NAME"] or (r["FILE_PATH"] or "").rsplit("/", 1)[-1] or None
         cand = {
             "attach_id": int(r["ATTACH_ID"]),
             "doc_type_id": type_id,
@@ -116,6 +120,9 @@ async def get_attachments(application_id: int) -> dict[str, Any]:
             "doc_expire_date": r["DOC_EXPIRE_DATE"],
             "submit_at": _parse_dt14(r["SUBMIT_DATETIME"]),
             "file_path": r["FILE_PATH"],
+            "file_name": fn,
+            "mime_type": r["MIME_TYPE"],
+            "file_size": int(r["FILE_SIZE"]) if r["FILE_SIZE"] is not None else None,
             "verifier_emp_no": r["VERIFIER_EMP_NO"],
             "verify_status_cd": r["VERIFY_STATUS_CD"],
             "reject_reason": r["REJECT_REASON"],

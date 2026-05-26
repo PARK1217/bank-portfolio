@@ -29,6 +29,8 @@ services:
       - ./db/14_human_review_seed.sql:/docker-entrypoint-initdb.d/14_human_review_seed.sql:ro
       # 로그인 5회 실패 잠금 정책 — CUSTOMER.LOGIN_FAIL_COUNT 컬럼 추가. fresh init 자동 적용.
       - ./db/16_login_fail_count.sql:/docker-entrypoint-initdb.d/16_login_fail_count.sql:ro
+      # ATTACHED_DOC 원본 파일 메타 컬럼 (FILE_NAME / MIME_TYPE / FILE_SIZE) — fresh init 자동 적용.
+      - ./db/20_attached_doc_filemeta.sql:/docker-entrypoint-initdb.d/20_attached_doc_filemeta.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U bank -d bank"]
       interval: 5s

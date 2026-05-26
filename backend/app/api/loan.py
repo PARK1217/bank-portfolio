@@ -302,6 +302,8 @@ async def detail(
     principal = int(c["CONTRACT_LIMIT"] or 0)
     used = int(c["CURRENT_USAGE"] or 0)
     rate = float(c["CONTRACT_RATE"] or 0.0)
+    schedule_count = int(c.get("schedule_count") or 0)
+    next_total = int(c.get("next_scheduled_total") or 0)
     return LoanDetailResponse(
         loan_token=loan_token,
         loan_contract_no_masked=mask_account_no(contract_no),
@@ -309,9 +311,9 @@ async def detail(
         principal_krw=principal,
         balance_krw=used,
         rate_applied=rate,
-        period_months=12,  # 임시
-        next_payment_date=None,  # 스케줄 첫 WAITING 조회는 후속 보강
-        monthly_payment_krw=0,
+        period_months=schedule_count or 12,
+        next_payment_date=_parse_date(c.get("next_scheduled_date")),
+        monthly_payment_krw=next_total,
         overdue_days=0,
         exec_histories=[
             LoanExecHistoryItem(

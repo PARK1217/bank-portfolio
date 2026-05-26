@@ -569,13 +569,26 @@ async def _find_loan_exec_tx(contract_no: str, exec_seq: int) -> int | None:
 async def fetch_loan_detail(contract_no: str, customer_no: int) -> dict:
     pool = get_pool()
     async with pool.acquire() as conn:
+        # LOAN_REPAY_SCHEDULE LATERAL JOIN — 첫 미상환 회차로 next_payment_date / monthly_payment 합성.
+        # schedule_count 는 총 회차 수 (= period_months 근사).
         contract = await conn.fetchrow(
             'SELECT lc."LOAN_CONTRACT_NO", lc."CONTRACT_LIMIT", lc."CURRENT_USAGE", '
             '  lc."CONTRACT_RATE", lc."CONTRACT_DATE", lc."MATURITY_DATE", '
             '  lc."LOAN_STATUS_CD", lc."OVERDUE_STAGE_CD", '
-            '  p."PRODUCT_NAME" '
+            '  p."PRODUCT_NAME", '
+            '  next_sched."SCHEDULED_DATE" AS next_scheduled_date, '
+            '  next_sched."SCHEDULED_TOTAL" AS next_scheduled_total, '
+            '  (SELECT COUNT(*) FROM public."LOAN_REPAY_SCHEDULE" rs '
+            '    WHERE rs."LOAN_CONTRACT_NO" = lc."LOAN_CONTRACT_NO" AND rs."DELETE_YN" = \'N\') AS schedule_count '
             'FROM public."LOAN_CONTRACT" lc '
             'LEFT JOIN public."PRODUCT" p ON p."PRODUCT_ID" = lc."LOAN_PRODUCT_ID" '
+            'LEFT JOIN LATERAL ('
+            '  SELECT "SCHEDULED_DATE", "SCHEDULED_TOTAL" FROM public."LOAN_REPAY_SCHEDULE" '
+            '  WHERE "LOAN_CONTRACT_NO" = lc."LOAN_CONTRACT_NO" '
+            '    AND "DELETE_YN" = \'N\' '
+            '    AND "SCHEDULE_STATUS_CD" IN (\'WAITING\',\'PENDING\',\'SCHEDULED\',\'OVERDUE\') '
+            '  ORDER BY "INSTALLMENT_NO" LIMIT 1'
+            ') next_sched ON TRUE '
             'WHERE lc."LOAN_CONTRACT_NO" = $1 AND lc."CUSTOMER_NO" = $2',
             contract_no,
             customer_no,

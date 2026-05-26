@@ -84,6 +84,7 @@ async def get_required_docs(application_id: int, customer_no: int) -> dict[str, 
 
         attached = await conn.fetch(
             'SELECT "ATTACH_ID","DOC_TYPE_ID","SUBMIT_DATETIME","FILE_PATH",'
+            '       "FILE_NAME","MIME_TYPE","FILE_SIZE",'
             '       "VERIFY_STATUS_CD","REJECT_REASON" '
             'FROM public."ATTACHED_DOC" '
             'WHERE "DELETE_YN" = \'N\' AND "CONTRACT_NO" = $1 '
@@ -95,10 +96,15 @@ async def get_required_docs(application_id: int, customer_no: int) -> dict[str, 
     latest: dict[int, dict] = {}
     for r in attached:
         tid = int(r["DOC_TYPE_ID"])
+        # FILE_NAME 컬럼이 있으면 그것을, 없으면 FILE_PATH 끝 토큰명을 폴백 (db/20 마이그 이전 데이터).
+        fn = r["FILE_NAME"] or (r["FILE_PATH"] or "").rsplit("/", 1)[-1] or None
         cand = {
             "attach_id": int(r["ATTACH_ID"]),
             "submitted_at_raw": r["SUBMIT_DATETIME"],
-            "file_name": (r["FILE_PATH"] or "").rsplit("/", 1)[-1] or None,
+            "file_name": fn,
+            "mime_type": r["MIME_TYPE"],
+            "file_size": int(r["FILE_SIZE"]) if r["FILE_SIZE"] is not None else None,
+            "verify_status_cd": r["VERIFY_STATUS_CD"],
             "status_cd": (r["VERIFY_STATUS_CD"] or "PENDING").upper(),
             "reject_reason": r["REJECT_REASON"],
         }
@@ -107,7 +113,8 @@ async def get_required_docs(application_id: int, customer_no: int) -> dict[str, 
             latest[tid] = cand
 
     items: list[dict[str, Any]] = []
-    required_total = required_verified = required_missing = 0
+    required_total = required_submitted = required_verified = required_missing = 0
+    optional_total = optional_submitted = 0
     for req in requirements:
         tid = int(req["DOC_TYPE_ID"])
         is_required = (req["REQUIRED_YN"] or "N") == "Y"
@@ -125,24 +132,36 @@ async def get_required_docs(application_id: int, customer_no: int) -> dict[str, 
             "submission": {
                 "attach_id": sub["attach_id"],
                 "file_name": sub["file_name"],
+                "mime_type": sub["mime_type"],
+                "file_size": sub["file_size"],
                 "status_cd": sub["status_cd"],
+                "verify_status_cd": sub["verify_status_cd"],
                 "reject_reason": sub["reject_reason"],
             } if sub else None,
         })
         if is_required:
             required_total += 1
+            if status != "MISSING":
+                required_submitted += 1
+            else:
+                required_missing += 1
             if status == "VERIFIED":
                 required_verified += 1
-            if status == "MISSING":
-                required_missing += 1
+        else:
+            optional_total += 1
+            if status != "MISSING":
+                optional_submitted += 1
 
     return {
         "application_id": application_id,
         "apply_status_cd": app["APPLY_STATUS_CD"],
         "summary": {
             "required_total": required_total,
+            "required_submitted": required_submitted,
             "required_verified": required_verified,
             "required_missing": required_missing,
+            "optional_total": optional_total,
+            "optional_submitted": optional_submitted,
             "complete_yn": "Y" if required_total > 0 and required_verified == required_total else "N",
         },
         "items": items,
@@ -219,20 +238,25 @@ async def upload_attachment(
             doc_type_id,
         )
 
-        # 6. 새 행 INSERT
+        # 6. 새 행 INSERT (FILE_NAME / MIME_TYPE / FILE_SIZE 메타 포함 — db/20 마이그)
         attach_id = int(await conn.fetchval(_next_attach_id_sql()))
         submit_dt = datetime.now().strftime("%Y%m%d%H%M%S")
+        safe_name = (original_name or stored_name)[:200]
         await conn.execute(
             'INSERT INTO public."ATTACHED_DOC" ('
             '  "ATTACH_ID","CUSTOMER_NO","CONTRACT_NO","DOC_TYPE_ID",'
-            '  "SUBMIT_DATETIME","FILE_PATH","VERIFY_STATUS_CD","DELETE_YN","CREATED_BY"'
-            ") VALUES ($1, $2, $3, $4, $5, $6, 'PENDING', 'N', $7)",
+            '  "SUBMIT_DATETIME","FILE_PATH","FILE_NAME","MIME_TYPE","FILE_SIZE",'
+            '  "VERIFY_STATUS_CD","DELETE_YN","CREATED_BY"'
+            ") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'PENDING', 'N', $10)",
             attach_id,
             customer_no,
             _contract_key(application_id),
             doc_type_id,
             submit_dt,
             file_path,
+            safe_name,
+            mime[:80],
+            len(file_bytes),
             str(customer_no),
         )
 
