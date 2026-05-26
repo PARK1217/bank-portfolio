@@ -26,6 +26,28 @@ from ..exceptions import NotFoundError
 log = structlog.get_logger("admin_overdue")
 
 
+def _schedule_row(s: Any) -> dict[str, Any]:
+    """LOAN_REPAY_SCHEDULE row → 프론트 OverdueScheduleItem 매핑.
+
+    PAID 회차는 paid_amount=scheduled_total, unpaid_amount=0.
+    OVERDUE/PENDING/WAITING 회차는 반대로 unpaid_amount=scheduled_total.
+    """
+    total = int(s["SCHEDULED_TOTAL"] or 0)
+    status = s["SCHEDULE_STATUS_CD"] or ""
+    is_paid = status == "PAID"
+    return {
+        "installment_no": int(s["INSTALLMENT_NO"]),
+        "scheduled_date": s["SCHEDULED_DATE"],
+        "principal_amount": int(s["SCHEDULED_PRINCIPAL"] or 0),
+        "interest_amount": int(s["SCHEDULED_INTEREST"] or 0),
+        "total_amount": total,
+        "paid_amount": total if is_paid else 0,
+        "unpaid_amount": 0 if is_paid else total,
+        "status_cd": status,
+        "overdue_days": s["days_overdue"],
+    }
+
+
 async def list_overdue_customers(limit: int = 100) -> list[dict[str, Any]]:
     pool = get_pool()
     async with pool.acquire() as conn:
@@ -122,15 +144,7 @@ async def get_overdue_detail(customer_no: int) -> dict[str, Any]:
                 "overdue_amount_krw": sum(int(s["SCHEDULED_TOTAL"] or 0) for s in overdue_rows),
                 "max_overdue_days": max((s["days_overdue"] or 0 for s in overdue_rows), default=0),
                 "schedules": [
-                    {
-                        "installment_no": int(s["INSTALLMENT_NO"]),
-                        "scheduled_date": s["SCHEDULED_DATE"],
-                        "scheduled_principal": int(s["SCHEDULED_PRINCIPAL"] or 0),
-                        "scheduled_interest": int(s["SCHEDULED_INTEREST"] or 0),
-                        "scheduled_total": int(s["SCHEDULED_TOTAL"] or 0),
-                        "status_cd": s["SCHEDULE_STATUS_CD"] or "",
-                        "days_overdue": s["days_overdue"],
-                    }
+                    _schedule_row(s)
                     for s in schedules
                 ],
             })
