@@ -36,11 +36,11 @@ async def list_notifications(
     types: list[str] | None = None,
     limit: int = 20,
     offset: int = 0,
-) -> tuple[list[dict], bool, int, dict[str, int]]:
-    """반환: (items, has_next, unread_count, unread_by_type).
+) -> tuple[list[dict], bool, int, int, dict[str, int]]:
+    """반환: (items, has_next, total, unread_count, unread_by_type).
 
-    types 가 주어지면 해당 TYPE_CD 만 필터. unread_count/unread_by_type 는
-    필터와 무관하게 본인 전체 기준 — 화면이 탭별 미읽음 배지를 그리도록.
+    types 가 주어지면 해당 TYPE_CD 만 필터. total 은 같은 필터를 적용한 전체 건수.
+    unread_count/unread_by_type 는 필터와 무관하게 본인 전체 기준 — 화면 탭별 미읽음 배지용.
     """
     pool = get_pool()
     where = ['"CUSTOMER_NO" = $1', '"DELETE_YN" = \'N\'']
@@ -52,6 +52,7 @@ async def list_notifications(
         where.append(f'"TYPE_CD" = ANY(${len(params)}::text[])')
     where_sql = " AND ".join(where)
 
+    base_params = list(params)
     limit_idx = len(params) + 1
     offset_idx = len(params) + 2
     params.extend([limit + 1, offset])
@@ -63,6 +64,10 @@ async def list_notifications(
             f'ORDER BY "CREATED_AT" DESC, "NOTIFICATION_ID" DESC '
             f"LIMIT ${limit_idx} OFFSET ${offset_idx}",
             *params,
+        )
+        total = await conn.fetchval(
+            f'SELECT count(*) FROM public."NOTIFICATION" WHERE {where_sql}',
+            *base_params,
         )
         breakdown = await conn.fetch(
             'SELECT "TYPE_CD", count(*) AS n FROM public."NOTIFICATION" '
@@ -76,7 +81,7 @@ async def list_notifications(
     unread = sum(unread_by_type.values())
     has_next = len(rows) > limit
     items = [_row_to_item(r) for r in rows[:limit]]
-    return items, has_next, unread, unread_by_type
+    return items, has_next, int(total or 0), unread, unread_by_type
 
 
 async def mark_read(customer_no: int, ids: list[int] | None) -> int:

@@ -8,7 +8,7 @@ from ..exceptions import NotFoundError
 
 
 _COLS = (
-    '"FREQUENT_ACCOUNT_ID", "ALIAS", "BANK_CD", "ACCOUNT_NO", '
+    '"FREQUENT_ACCOUNT_ID", "ALIAS", "MEMO", "BANK_CD", "ACCOUNT_NO", '
     '"ACCOUNT_HOLDER_NAME", "DISPLAY_ORDER", "USE_COUNT", "LAST_USED_AT"'
 )
 
@@ -34,18 +34,20 @@ async def create_favorite(
     account_no: str,
     account_holder_name: str,
     display_order: int | None,
+    memo: str | None = None,
 ) -> int:
     pool = get_pool()
     async with pool.acquire() as conn:
         return int(
             await conn.fetchval(
                 'INSERT INTO public."FREQUENT_ACCOUNT" ('
-                '  "CUSTOMER_NO", "ALIAS", "BANK_CD", "ACCOUNT_NO", '
+                '  "CUSTOMER_NO", "ALIAS", "MEMO", "BANK_CD", "ACCOUNT_NO", '
                 '  "ACCOUNT_HOLDER_NAME", "DISPLAY_ORDER", "USE_COUNT", "DELETE_YN"'
-                ") VALUES ($1, $2, $3, $4, $5, $6, 0, 'N') "
+                ") VALUES ($1, $2, $3, $4, $5, $6, $7, 0, 'N') "
                 'RETURNING "FREQUENT_ACCOUNT_ID"',
                 customer_no,
                 alias,
+                memo,
                 bank_cd,
                 account_no,
                 account_holder_name,
@@ -54,14 +56,21 @@ async def create_favorite(
         )
 
 
-async def update_favorite(customer_no: int, fav_id: int, *, alias: str) -> None:
+async def update_favorite(
+    customer_no: int, fav_id: int, *, alias: str, memo: str | None = None,
+) -> None:
+    """alias 는 필수, memo 는 None 이면 무변경(COALESCE)."""
     pool = get_pool()
     async with pool.acquire() as conn:
         result = await conn.execute(
-            'UPDATE public."FREQUENT_ACCOUNT" SET "ALIAS" = $1, "UPDATED_AT" = NOW() '
-            'WHERE "FREQUENT_ACCOUNT_ID" = $2 AND "CUSTOMER_NO" = $3 '
+            'UPDATE public."FREQUENT_ACCOUNT" SET '
+            '  "ALIAS" = $1, '
+            '  "MEMO"  = COALESCE($2, "MEMO"), '
+            '  "UPDATED_AT" = NOW() '
+            'WHERE "FREQUENT_ACCOUNT_ID" = $3 AND "CUSTOMER_NO" = $4 '
             '  AND "DELETE_YN" = \'N\'',
             alias,
+            memo,
             fav_id,
             customer_no,
         )

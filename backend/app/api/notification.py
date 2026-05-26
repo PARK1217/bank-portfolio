@@ -33,7 +33,7 @@ async def list_for_me(
         parsed = [t.strip().upper() for t in types.split(",") if t.strip()]
         type_filter = parsed or None
 
-    items, has_next, unread, unread_by_type = await list_notifications(
+    items, has_next, total, unread, unread_by_type = await list_notifications(
         user.customer_no,
         unread_only=unread_only,
         types=type_filter,
@@ -42,6 +42,7 @@ async def list_for_me(
     )
     return NotificationListResponse(
         items=[NotificationItem(**i) for i in items],
+        total=total,
         unread_count=unread,
         unread_by_type=unread_by_type,
         page=page,

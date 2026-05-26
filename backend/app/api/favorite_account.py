@@ -28,6 +28,7 @@ def _to_item(r: dict) -> FavoriteAccountItem:
     return FavoriteAccountItem(
         id=int(r["FREQUENT_ACCOUNT_ID"]),
         alias=r["ALIAS"] or "",
+        memo=r.get("MEMO"),
         bank_cd=r["BANK_CD"] or "",
         account_no=raw,
         masked_account_no=mask_account_no(raw),
@@ -57,11 +58,13 @@ async def add_favorite(
         account_no=req.account_no,
         account_holder_name=req.account_holder_name,
         display_order=req.display_order,
+        memo=req.memo,
     )
     log.info("favorite_added", id=fav_id)
     return FavoriteAccountItem(
         id=fav_id,
         alias=req.alias,
+        memo=req.memo,
         bank_cd=req.bank_cd,
         account_no=req.account_no,
         masked_account_no=mask_account_no(req.account_no),
@@ -77,7 +80,7 @@ async def patch_favorite(
     req: FavoriteAccountUpdate,
     user: CurrentCustomer = Depends(current_customer),
 ) -> dict:
-    await update_favorite(user.customer_no, fav_id, alias=req.alias)
+    await update_favorite(user.customer_no, fav_id, alias=req.alias, memo=req.memo)
     log.info("favorite_updated", id=fav_id)
     return {"updated": True}
 

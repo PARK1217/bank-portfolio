@@ -48,6 +48,7 @@ class DeviceItem(BaseModel):
 
 class DeviceListResponse(BaseModel):
     items: list[DeviceItem]
+    total: int = Field(0, description="등록된 기기 수")
 
 
 class DeviceRegisterRequest(BaseModel):
@@ -143,7 +144,7 @@ async def list_devices(
                 registered_at=str(r["DEVICE_REG_DATE"]) if r["DEVICE_REG_DATE"] else "",
             )
         )
-    return DeviceListResponse(items=items)
+    return DeviceListResponse(items=items, total=len(items))
 
 
 # ---------------------------------------------------------------------------

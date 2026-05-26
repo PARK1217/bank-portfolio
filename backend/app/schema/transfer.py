@@ -85,6 +85,7 @@ class TransferDetailResponse(BaseModel):
 class FavoriteAccountItem(BaseModel):
     id: int
     alias: str
+    memo: str | None = Field(None, description="메모 — db/19 MEMO 컬럼", max_length=200)
     bank_cd: str
     account_no: str = Field(..., description="평문 — 즐겨찾기→이체 prefill 용도")
     masked_account_no: str = Field(..., description="목록 표시용 마스킹")
@@ -95,6 +96,7 @@ class FavoriteAccountItem(BaseModel):
 
 class FavoriteAccountCreate(BaseModel):
     alias: str = Field(..., max_length=50)
+    memo: str | None = Field(None, max_length=200)
     bank_cd: str
     account_no: str
     account_holder_name: str
@@ -103,6 +105,7 @@ class FavoriteAccountCreate(BaseModel):
 
 class FavoriteAccountUpdate(BaseModel):
     alias: str = Field(..., min_length=1, max_length=50)
+    memo: str | None = Field(None, max_length=200)
 
 
 # ----------------------------------------------------------------------

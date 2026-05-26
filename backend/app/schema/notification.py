@@ -27,6 +27,7 @@ class NotificationListParams(BaseModel):
 
 class NotificationListResponse(BaseModel):
     items: list[NotificationItem]
+    total: int = Field(0, description="필터 적용 후 전체 건수 (paging 도 기준)")
     unread_count: int
     unread_by_type: dict[str, int] = Field(
         default_factory=dict,
