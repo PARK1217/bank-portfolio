@@ -76,6 +76,11 @@ _TARGET_TABLE_RULES: list[tuple[re.Pattern[str], str, int | None]] = [
     (re.compile(r"^/api/admin/products/(\d+)/status$"),              "PRODUCT", 1),
     (re.compile(r"^/api/admin/products/(\d+)$"),                     "PRODUCT", 1),
     (re.compile(r"^/api/admin/products$"),                           "PRODUCT", None),
+    # FDS — composite key (customer_no, detect_seq) → TARGET_ID 에 "C:DS" 형태로 적재.
+    (re.compile(r"^/api/admin/fds/(\d+/\d+)/investigation$"),        "FDS_DETECTION", 1),
+    (re.compile(r"^/api/admin/fds/(\d+/\d+)$"),                      "FDS_DETECTION", 1),
+    (re.compile(r"^/api/admin/fds/dashboard$"),                      "FDS_DETECTION", None),
+    (re.compile(r"^/api/admin/fds$"),                                "FDS_DETECTION", None),
 ]
 
 

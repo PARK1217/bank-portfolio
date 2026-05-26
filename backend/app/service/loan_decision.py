@@ -271,6 +271,30 @@ async def predict_and_persist(
 # 관리자 큐 / 사람 검토
 # ---------------------------------------------------------------------------
 
+def _to_decision_dict(r) -> dict:
+    """admin loan decision row → snake_case dict (다른 admin 라우트와 응답 키 일관성).
+
+    review-queue / decisions 두 쿼리가 SELECT 컬럼 집합이 달라 일부 키가 없을 수 있음 → dict 변환 후 .get().
+    """
+    d = dict(r)
+    apply_pid = d.get("APPLY_PRODUCT_ID")
+    score = d.get("SCORE")
+    return {
+        "decision_id": int(d["DECISION_ID"]),
+        "application_id": int(d["APPLICATION_ID"]),
+        "model_version": d.get("MODEL_VERSION"),
+        "score": float(score) if score is not None else None,
+        "decision_cd": d.get("DECISION_CD"),
+        "human_decision_cd": d.get("HUMAN_DECISION_CD"),
+        "human_reviewed_by": d.get("HUMAN_REVIEWED_BY"),
+        "created_at": d.get("CREATED_AT"),
+        "customer_no": int(d["CUSTOMER_NO"]),
+        "desired_amount": int(d.get("DESIRED_AMOUNT") or 0),
+        "apply_product_id": int(apply_pid) if apply_pid is not None else None,
+        "party_name": d.get("PARTY_NAME"),
+    }
+
+
 async def list_review_queue(limit: int = 50) -> list[dict]:
     """HUMAN_REVIEW 미검토 대기 큐."""
     pool = get_pool()
@@ -288,7 +312,7 @@ async def list_review_queue(limit: int = 50) -> list[dict]:
             'ORDER BY d."CREATED_AT" DESC LIMIT $1',
             limit,
         )
-    return [dict(r) for r in rows]
+    return [_to_decision_dict(r) for r in rows]
 
 
 async def list_decisions(decision_cd: str | None = None, limit: int = 100) -> list[dict]:
@@ -314,7 +338,7 @@ async def list_decisions(decision_cd: str | None = None, limit: int = 100) -> li
     pool = get_pool()
     async with pool.acquire() as conn:
         rows = await conn.fetch(sql, *args)
-    return [dict(r) for r in rows]
+    return [_to_decision_dict(r) for r in rows]
 
 
 async def human_review(
@@ -366,7 +390,13 @@ async def human_review(
         by=employee_no,
         decision=human_decision_cd,
     )
-    return dict(row) | {
+    score = row["SCORE"]
+    return {
+        "decision_id": int(row["DECISION_ID"]),
+        "application_id": int(row["APPLICATION_ID"]),
+        "score": float(score) if score is not None else None,
+        "decision_cd": row["DECISION_CD"],
         "human_decision_cd": human_decision_cd,
         "human_reviewed_by": employee_no,
+        "review_memo": memo,
     }
