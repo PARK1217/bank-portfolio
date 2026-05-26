@@ -11,7 +11,7 @@ ACTION_CD 명시 매핑 + TARGET_TABLE 규칙은 `service/admin_audit.py` 참조
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Path, Query
+from fastapi import APIRouter, Depends, Path, Query, Request
 from pydantic import BaseModel, Field
 
 from ..service.admin_auth import CurrentAdmin, require_admin
@@ -62,9 +62,10 @@ async def admin_list_products(
 @router.post("", status_code=201)
 async def admin_create_product(
     req: ProductCreateRequest,
+    request: Request,
     admin: CurrentAdmin = Depends(require_admin),
 ) -> dict:
-    return await create_product(
+    result = await create_product(
         product_id=req.product_id,
         product_name=req.product_name,
         product_type_cd=req.product_type_cd,
@@ -79,6 +80,13 @@ async def admin_create_product(
         product_features=req.product_features,
         employee_no=admin.employee_no,
     )
+    request.state.audit_after = {
+        "product_id": req.product_id,
+        "product_name": req.product_name,
+        "product_type_cd": req.product_type_cd,
+        "product_status_cd": req.product_status_cd,
+    }
+    return result
 
 
 @router.get("/{product_id}")
@@ -92,6 +100,7 @@ async def admin_product_detail(
 @router.patch("/{product_id}/status")
 async def admin_product_status(
     req: ProductStatusUpdateRequest,
+    request: Request,
     product_id: int = Path(..., ge=1, le=32767),
     admin: CurrentAdmin = Depends(require_admin),
 ) -> dict:
@@ -100,4 +109,8 @@ async def admin_product_status(
         new_status=req.new_status,
         employee_no=admin.employee_no,
     )
+    request.state.audit_after = {
+        "product_id": product_id,
+        "new_status": req.new_status,
+    }
     return result

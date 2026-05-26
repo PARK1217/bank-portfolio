@@ -53,6 +53,7 @@ _EXPLICIT_ACTIONS: dict[tuple[str, str], str] = {
     ("GET",  "/api/admin/products/:id"):                       "PRODUCT_DETAIL",
     ("PATCH","/api/admin/products/:id/status"):                "PRODUCT_STATUS_UPDATE",
     ("POST", "/api/admin/chatbot/messages"):                   "CHATBOT_QUERY",
+    ("POST", "/api/admin/chatbot/feedback"):                   "CHATBOT_FEEDBACK",
     ("GET",  "/api/admin/chatbot/sessions"):                   "CHATBOT_SESSIONS",
     ("GET",  "/api/admin/chatbot/sessions/:id"):               "CHATBOT_SESSION_DETAIL",
     ("GET",  "/api/admin/chatbot/source/:id"):                 "CHATBOT_SOURCE_VIEW",
@@ -87,6 +88,7 @@ _TARGET_TABLE_RULES: list[tuple[re.Pattern[str], str, int | None]] = [
     (re.compile(r"^/api/admin/fds$"),                                "FDS_DETECTION", None),
     (re.compile(r"^/api/admin/chatbot/sessions/(\d+)$"),              "AI_CHATBOT_SESSION", 1),
     (re.compile(r"^/api/admin/chatbot/(messages|sessions)$"),         "AI_CHATBOT_SESSION", None),
+    (re.compile(r"^/api/admin/chatbot/feedback$"),                    "AI_CHATBOT_FEEDBACK", None),
 ]
 
 
@@ -197,14 +199,42 @@ def _json_or_null(obj: dict[str, Any] | None) -> str | None:
 # 민감 정보 redaction — 로그인 라우터가 BEFORE_JSON 으로 body 일부 적재 시 사용
 # ---------------------------------------------------------------------------
 
-_SENSITIVE_KEYS = {"password", "new_pin", "current_pin", "otp_code"}
+# 키 매칭(소문자) — 부분 일치도 redact (예: account_password, jwt_token, refresh_token)
+_SENSITIVE_KEYS = {
+    "password", "new_password", "current_password", "account_password",
+    "pin", "new_pin", "current_pin", "old_pin",
+    "otp_code", "otp", "totp_code",
+    "ssn", "rrn",  # 주민등록번호
+    "token", "access_token", "refresh_token", "jwt",
+    "secret", "api_key", "private_key",
+    "card_number", "cvv",
+    "signature", "biometric",
+}
+
+# 값 길이 상한 — 너무 큰 base64/blob 적재 방지
+_MAX_VALUE_LEN = 4000
 
 
-def redact(payload: dict[str, Any]) -> dict[str, Any]:
-    return {
-        k: ("***" if k.lower() in _SENSITIVE_KEYS else v)
-        for k, v in payload.items()
-    }
+def redact(payload: Any) -> Any:
+    """dict/list/scalar 재귀 redact.
+
+    - 키 이름이 _SENSITIVE_KEYS 와 부분 일치하면 값 마스킹
+    - 문자열 값은 _MAX_VALUE_LEN 초과 시 잘림
+    """
+    if isinstance(payload, dict):
+        out: dict[str, Any] = {}
+        for k, v in payload.items():
+            kl = str(k).lower()
+            if any(s in kl for s in _SENSITIVE_KEYS):
+                out[k] = "***"
+            else:
+                out[k] = redact(v)
+        return out
+    if isinstance(payload, list):
+        return [redact(x) for x in payload[:50]]  # 리스트도 50 개로 제한
+    if isinstance(payload, str) and len(payload) > _MAX_VALUE_LEN:
+        return payload[:_MAX_VALUE_LEN] + f"…(+{len(payload) - _MAX_VALUE_LEN})"
+    return payload
 
 
 # ---------------------------------------------------------------------------
@@ -283,6 +313,19 @@ async def list_audit_logs(
             *params_paged,
         )
 
+    import json as _json
+
+    def _parse_jsonb(v: Any) -> Any:
+        # asyncpg 는 jsonb 를 str 그대로 반환 — 화면이 raw 노출하지 않게 dict 로 변환
+        if v is None or isinstance(v, (dict, list)):
+            return v
+        if isinstance(v, str):
+            try:
+                return _json.loads(v)
+            except Exception:
+                return v
+        return v
+
     items = [
         {
             "audit_id": int(r["AUDIT_ID"]),
@@ -295,8 +338,8 @@ async def list_audit_logs(
             "user_agent": r["USER_AGENT"],
             "remark": r["REMARK"],
             "created_at": r["CREATED_AT"],
-            "before_json": r["BEFORE_JSON"],
-            "after_json": r["AFTER_JSON"],
+            "before_json": _parse_jsonb(r["BEFORE_JSON"]),
+            "after_json": _parse_jsonb(r["AFTER_JSON"]),
         }
         for r in rows
     ]

@@ -14,13 +14,24 @@ log = structlog.get_logger("chatbot_feedback")
 
 
 async def submit_feedback_db(
-    customer_no: int, message_id: int, rating: int, comment: str | None
+    customer_no: int,
+    message_id: int,
+    rating: int,
+    comment: str | None,
+    *,
+    audience_cd: str = "USER",
+    issue_category: str | None = None,
 ) -> None:
     """AI_CHATBOT_FEEDBACK upsert — 같은 (customer, message) 있으면 UPDATE.
 
     v53 에 UNIQUE 제약이 없어 service 단에서 SELECT → INSERT/UPDATE 분기.
     실패는 로그만 남기고 silent.
+
+    audience_cd: USER(고객) / ADMIN(직원). 같은 테이블 + 라벨 분리.
+    issue_category: 👎 시 카테고리 (RETRIEVAL_MISS, ANSWER_INCORRECT 등).
     """
+    aud = (audience_cd or "USER").upper()[:5]
+    cat = (issue_category or None) and str(issue_category)[:40]
     try:
         pool = get_pool()
         async with pool.acquire() as conn:
@@ -35,10 +46,14 @@ async def submit_feedback_db(
             if existing_id:
                 await conn.execute(
                     'UPDATE public."AI_CHATBOT_FEEDBACK" '
-                    'SET "RATING" = $1, "COMMENT" = $2, "UPDATED_AT" = NOW() '
-                    'WHERE "FEEDBACK_ID" = $3',
+                    'SET "RATING" = $1, "COMMENT" = $2, '
+                    '    "AUDIENCE_CD" = $3, "ISSUE_CATEGORY" = $4, '
+                    '    "UPDATED_AT" = NOW() '
+                    'WHERE "FEEDBACK_ID" = $5',
                     rating,
                     comment,
+                    aud,
+                    cat,
                     existing_id,
                 )
                 log.info(
@@ -46,17 +61,28 @@ async def submit_feedback_db(
                     message_id=message_id,
                     rating=rating,
                     feedback_id=int(existing_id),
+                    audience=aud,
+                    issue=cat,
                 )
             else:
                 await conn.execute(
                     'INSERT INTO public."AI_CHATBOT_FEEDBACK" ('
-                    '  "MESSAGE_ID", "CUSTOMER_NO", "RATING", "COMMENT", "DELETE_YN"'
-                    ") VALUES ($1, $2, $3, $4, 'N')",
+                    '  "MESSAGE_ID", "CUSTOMER_NO", "RATING", "COMMENT", '
+                    '  "AUDIENCE_CD", "ISSUE_CATEGORY", "DELETE_YN"'
+                    ") VALUES ($1, $2, $3, $4, $5, $6, 'N')",
                     message_id,
                     customer_no,
                     rating,
                     comment,
+                    aud,
+                    cat,
                 )
-                log.info("feedback_saved", message_id=message_id, rating=rating)
+                log.info(
+                    "feedback_saved",
+                    message_id=message_id,
+                    rating=rating,
+                    audience=aud,
+                    issue=cat,
+                )
     except Exception:
         log.exception("feedback_db_upsert_failed", message_id=message_id)

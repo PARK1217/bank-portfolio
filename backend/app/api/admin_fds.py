@@ -11,7 +11,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Path, Query
+from fastapi import APIRouter, Depends, Path, Query, Request
 from pydantic import BaseModel, Field
 
 from ..service.admin_auth import CurrentAdmin, require_admin
@@ -69,14 +69,22 @@ async def fds_detail(
 @router.patch("/{customer_no}/{detect_seq}/investigation")
 async def fds_investigation_patch(
     req: InvestigationPatch,
+    request: Request,
     customer_no: int = Path(..., ge=1),
     detect_seq: int = Path(..., ge=1, le=32767),
     admin: CurrentAdmin = Depends(require_admin),
 ) -> dict:
-    return await update_investigation(
+    result = await update_investigation(
         customer_no=customer_no,
         detect_seq=detect_seq,
         status_cd=req.investigation_status_cd,
         conclusion=req.conclusion,
         employee_no=admin.employee_no,
     )
+    request.state.audit_after = {
+        "customer_no": customer_no,
+        "detect_seq": detect_seq,
+        "new_status_cd": req.investigation_status_cd,
+        "conclusion": (req.conclusion or "")[:500],
+    }
+    return result

@@ -12,9 +12,10 @@
 from __future__ import annotations
 
 import structlog
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 
 from ..schema.chatbot import (
+    ChatFeedbackRequest,
     ChatMessageItem,
     ChatSendRequest,
     ChatSendResponse,
@@ -23,6 +24,7 @@ from ..schema.chatbot import (
 from ..service.admin_auth import CurrentAdmin, require_admin
 from ..service.auth import get_token_service
 from ..service.chatbot import chat_send, get_session, get_source, list_sessions
+from ..service.chatbot_feedback import submit_feedback_db
 from ..service.token import TokenService
 
 router = APIRouter(prefix="/admin/chatbot", tags=["admin-chatbot"])
@@ -55,6 +57,7 @@ def _employee_session_id(employee_no: str) -> int:
 @router.post("/messages", response_model=ChatSendResponse)
 async def send_message(
     req: ChatSendRequest,
+    request: Request,
     admin: CurrentAdmin = Depends(require_admin),
     tokens: TokenService = Depends(get_token_service),
 ) -> ChatSendResponse:
@@ -66,12 +69,23 @@ async def send_message(
         tokens=tokens,
         audience="ADMIN",
     )
+    asst = result["assistant_message"]
+    # 감사로그 AFTER_JSON 채움 — 미들웨어가 적재
+    request.state.audit_after = {
+        "session_id": result["session_id"],
+        "question": req.message[:500],
+        "answer_snippet": (asst.get("content") or "")[:1000],
+        "rag_tier_cd": asst.get("rag_tier_cd"),
+        "confidence": asst.get("confidence"),
+        "source_count": len(asst.get("sources") or []),
+        "follow_up_count": len(asst.get("follow_up_questions") or []),
+    }
     log.info(
         "admin_chat_message",
         employee_no=admin.employee_no,
         session_id=result["session_id"],
-        tier=result["assistant_message"]["rag_tier_cd"],
-        confidence=result["assistant_message"]["confidence"],
+        tier=asst["rag_tier_cd"],
+        confidence=asst["confidence"],
     )
     return ChatSendResponse(
         session_id=result["session_id"],
@@ -109,3 +123,31 @@ async def get_admin_source(
     """근거 전문 — 챗봇 sources 카드 클릭 → modal 본문. token 발급은 admin pseudo_no 기준."""
     pseudo_customer_no = _employee_session_id(admin.employee_no)
     return await get_source(doc_token, tokens, pseudo_customer_no)
+
+
+# ---------------------------------------------------------------------------
+# 피드백 — 👍/👎 + 카테고리 + 자유 입력 (관리자 챗봇 신호 수집)
+# ---------------------------------------------------------------------------
+
+@router.post("/feedback")
+async def post_admin_feedback(
+    req: ChatFeedbackRequest,
+    admin: CurrentAdmin = Depends(require_admin),
+) -> dict:
+    pseudo_customer_no = _employee_session_id(admin.employee_no)
+    await submit_feedback_db(
+        pseudo_customer_no,
+        req.message_id,
+        req.rating,
+        req.comment,
+        audience_cd="ADMIN",
+        issue_category=req.issue_category,
+    )
+    log.info(
+        "admin_chat_feedback",
+        employee_no=admin.employee_no,
+        message_id=req.message_id,
+        rating=req.rating,
+        issue=req.issue_category,
+    )
+    return {"received": True}

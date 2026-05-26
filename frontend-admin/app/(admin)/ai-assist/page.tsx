@@ -10,7 +10,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   MessageSquare, Send, Sparkles, FileText, AlertTriangle,
-  Search, Plus, X as XIcon,
+  Search, Plus, X as XIcon, ThumbsUp, ThumbsDown, Check,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -81,6 +81,15 @@ function groupByDate(items: SessionListItem[]): Array<{ label: string; items: Se
   return Object.entries(buckets).filter(([, arr]) => arr.length > 0).map(([label, items]) => ({ label, items }));
 }
 
+// 👎 카테고리 — 라벨은 사용자 친화, 값은 backend 코드
+const FEEDBACK_CATEGORIES: { value: string; label: string }[] = [
+  { value: "RETRIEVAL_MISS", label: "검색이 엉뚱한 자료를 가져왔어요" },
+  { value: "ANSWER_INCORRECT", label: "자료는 맞는데 답이 부정확해요" },
+  { value: "KNOWLEDGE_GAP", label: "이 주제 매뉴얼이 아직 없어요" },
+  { value: "LENGTH", label: "답이 너무 길거나 짧아요" },
+  { value: "OTHER", label: "기타" },
+];
+
 const PRESET_QUESTIONS = [
   "보이스피싱 의심 거래가 발생하면 어떤 순서로 응대하나요?",
   "1억 원 이상 현금 입출금이 들어왔을 때 보고 절차는?",
@@ -104,6 +113,30 @@ export default function AiAssistPage() {
 
   // 근거 modal
   const [sourceModal, setSourceModal] = useState<{ open: boolean; doc_token?: string; title?: string; content?: string; clause?: string | null; loading?: boolean }>({ open: false });
+
+  // 피드백 상태 — messageId → { rating?, category?, comment?, submitted?, expandDown? }
+  type FeedbackState = { rating?: 1 | 5; category?: string; comment?: string; submitted?: boolean; expandDown?: boolean };
+  const [feedback, setFeedback] = useState<Record<number, FeedbackState>>({});
+
+  function setFb(messageId: number, patch: Partial<FeedbackState>) {
+    setFeedback((prev) => ({ ...prev, [messageId]: { ...prev[messageId], ...patch } }));
+  }
+
+  async function submitFeedback(messageId: number, rating: 1 | 5, category?: string, comment?: string) {
+    try {
+      await api.post("/api/admin/chatbot/feedback", {
+        message_id: messageId,
+        rating,
+        comment: comment?.trim() || null,
+        issue_category: category || null,
+      });
+      setFb(messageId, { submitted: true, expandDown: false });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "전송 실패";
+      setFb(messageId, { submitted: false });
+      alert(`피드백 전송 실패: ${msg}`);
+    }
+  }
 
   async function loadSessions() {
     try {
@@ -358,19 +391,73 @@ export default function AiAssistPage() {
                   ))}
                 </div>
               )}
-              {m.rag_tier_cd && (
-                <div className="mt-1 text-[10px] opacity-50">
-                  {(() => {
-                    const tierLabel: Record<string, string> = {
-                      KEYWORD: "정확 매칭",
-                      FAQ: "관련 자료",
-                      VECTOR: "유사 자료",
-                    };
-                    const confLabel: Record<string, string> = {
-                      HIGH: "높음", MEDIUM: "보통", LOW: "낮음",
-                    };
-                    return `${tierLabel[m.rag_tier_cd] ?? m.rag_tier_cd}${m.confidence ? ` · 신뢰도 ${confLabel[m.confidence] ?? m.confidence}` : ""}`;
-                  })()}
+              {m.role_cd === "ASSISTANT" && (
+                <div className="mt-2 flex items-center justify-between gap-2 border-t border-foreground/10 pt-1.5">
+                  {m.rag_tier_cd ? (
+                    <div className="text-[10px] opacity-50">
+                      {(() => {
+                        const tierLabel: Record<string, string> = {
+                          KEYWORD: "정확 매칭",
+                          FAQ: "관련 자료",
+                          VECTOR: "유사 자료",
+                        };
+                        const confLabel: Record<string, string> = {
+                          HIGH: "높음", MEDIUM: "보통", LOW: "낮음",
+                        };
+                        return `${tierLabel[m.rag_tier_cd] ?? m.rag_tier_cd}${m.confidence ? ` · 신뢰도 ${confLabel[m.confidence] ?? m.confidence}` : ""}`;
+                      })()}
+                    </div>
+                  ) : <span />}
+                  <FeedbackButtons
+                    messageId={m.message_id}
+                    state={feedback[m.message_id]}
+                    onUp={() => submitFeedback(m.message_id, 5)}
+                    onToggleDown={() => setFb(m.message_id, { rating: 1, expandDown: !feedback[m.message_id]?.expandDown })}
+                  />
+                </div>
+              )}
+              {m.role_cd === "ASSISTANT" && feedback[m.message_id]?.expandDown && !feedback[m.message_id]?.submitted && (
+                <div className="mt-2 space-y-2 rounded-md border border-foreground/15 bg-background/50 p-2">
+                  <div className="text-[10px] font-medium text-muted-foreground">어떤 점이 아쉬웠나요?</div>
+                  <div className="space-y-1">
+                    {FEEDBACK_CATEGORIES.map((cat) => (
+                      <label key={cat.value} className="flex cursor-pointer items-center gap-2 text-[11px]">
+                        <input
+                          type="radio"
+                          name={`fb-cat-${m.message_id}`}
+                          value={cat.value}
+                          checked={feedback[m.message_id]?.category === cat.value}
+                          onChange={() => setFb(m.message_id, { category: cat.value })}
+                          className="h-3 w-3"
+                        />
+                        <span>{cat.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <textarea
+                    value={feedback[m.message_id]?.comment || ""}
+                    onChange={(e) => setFb(m.message_id, { comment: e.target.value })}
+                    placeholder="자세히 알려주시면 좋아요 (선택)"
+                    rows={2}
+                    className="w-full resize-none rounded border bg-background px-2 py-1 text-[11px] focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                  <div className="flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setFb(m.message_id, { expandDown: false })}
+                      className="rounded px-2 py-1 text-[11px] text-muted-foreground hover:bg-accent"
+                    >
+                      취소
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => submitFeedback(m.message_id, 1, feedback[m.message_id]?.category, feedback[m.message_id]?.comment)}
+                      disabled={!feedback[m.message_id]?.category}
+                      className="rounded bg-primary px-2 py-1 text-[11px] font-medium text-primary-foreground disabled:opacity-50"
+                    >
+                      보내기
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
@@ -451,5 +538,46 @@ export default function AiAssistPage() {
         </div>
       )}
     </main>
+  );
+}
+
+
+function FeedbackButtons({
+  messageId, state, onUp, onToggleDown,
+}: {
+  messageId: number;
+  state: { rating?: 1 | 5; submitted?: boolean; expandDown?: boolean } | undefined;
+  onUp: () => void;
+  onToggleDown: () => void;
+}) {
+  if (state?.submitted) {
+    return (
+      <div className="flex items-center gap-1 text-[10px] text-success">
+        <Check className="h-3 w-3" />
+        평가 감사합니다
+      </div>
+    );
+  }
+  const upActive = state?.rating === 5;
+  const downActive = state?.rating === 1;
+  return (
+    <div className="flex items-center gap-1">
+      <button
+        type="button"
+        title="도움이 됐어요"
+        onClick={onUp}
+        className={`rounded p-1 transition-colors hover:bg-accent ${upActive ? "text-primary" : "text-muted-foreground"}`}
+      >
+        <ThumbsUp className="h-3.5 w-3.5" />
+      </button>
+      <button
+        type="button"
+        title="아쉬워요"
+        onClick={onToggleDown}
+        className={`rounded p-1 transition-colors hover:bg-accent ${downActive ? "text-destructive" : "text-muted-foreground"}`}
+      >
+        <ThumbsDown className="h-3.5 w-3.5" />
+      </button>
+    </div>
   );
 }

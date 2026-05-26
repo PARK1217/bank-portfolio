@@ -125,7 +125,14 @@ async def post_feedback(
     req: ChatFeedbackRequest,
     user: CurrentCustomer = Depends(current_customer),
 ) -> dict:
-    await submit_feedback_db(user.customer_no, req.message_id, req.rating, req.comment)
+    await submit_feedback_db(
+        user.customer_no,
+        req.message_id,
+        req.rating,
+        req.comment,
+        audience_cd="USER",
+        issue_category=req.issue_category,
+    )
     return {"received": True}
 
 

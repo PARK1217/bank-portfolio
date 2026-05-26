@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from ..service import loan_decision
@@ -86,15 +86,22 @@ async def list_all_decisions(
 async def review_decision(
     decision_id: int,
     req: ReviewRequest,
+    request: Request,
     admin: CurrentAdmin = Depends(require_admin),
 ):
     """사람 검토 결과 등록 (HUMAN_REVIEW → APPROVE/REJECT 확정)."""
     try:
-        return await loan_decision.human_review(
+        result = await loan_decision.human_review(
             decision_id=decision_id,
             human_decision_cd=req.human_decision_cd,
             employee_no=admin.employee_no,
             memo=req.memo,
         )
+        request.state.audit_after = {
+            "decision_id": decision_id,
+            "new_decision_cd": req.human_decision_cd,
+            "memo": (req.memo or "")[:500],
+        }
+        return result
     except ValueError as exc:
         raise HTTPException(404, str(exc))

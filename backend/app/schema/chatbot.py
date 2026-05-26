@@ -138,6 +138,11 @@ class ChatFeedbackRequest(BaseModel):
     message_id: int
     rating: int = Field(..., description="1=👎 / 5=👍")
     comment: str | None = Field(None, max_length=1000)
+    issue_category: str | None = Field(
+        None,
+        max_length=40,
+        description="👎 카테고리 — RETRIEVAL_MISS / ANSWER_INCORRECT / KNOWLEDGE_GAP / LENGTH / OTHER",
+    )
 
 
 # ----------------------------------------------------------------------
