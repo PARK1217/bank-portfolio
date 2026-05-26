@@ -194,3 +194,12 @@ WORKBOARD.md
 data/admin-sop/download*.tar
 data/admin-sop/extracted/
 data/admin-sop/json/
+
+# ML 모델 weights — 재학습 가능, 큰 binary
+data/*.pkl
+
+# Claude Code IDE 세팅 — 로컬 전용
+.claude/
+
+# TypeScript incremental build cache
+*.tsbuildinfo
