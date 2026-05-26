@@ -263,6 +263,16 @@ SELECT
   'OVERDUE','STAGE1',
   '110-006-100001','직장인 우대 신용대출';
 
+-- 자금 실행 이력 — 약정일에 30,000,000원 단건 실행 → 주거래 계좌(110-006-100001) 입금.
+INSERT INTO public."LOAN_EXEC_HISTORY"
+  ("LOAN_CONTRACT_NO","EXEC_SEQ","EXEC_DATETIME","EXEC_TYPE_CD",
+   "EXEC_AMOUNT","POST_EXEC_BALANCE","DEPOSIT_ACCOUNT_NO","CHANNEL_CD","EMP_NO","CREATED_BY")
+SELECT
+  'L-2024-100004', 1,
+  to_char(date_trunc('month', CURRENT_DATE - INTERVAL '17 months'), 'YYYYMMDD') || '100000',
+  'EXEC',
+  30000000, 30000000, '110-006-100001', 'BRANCH', 'ADMIN001', 'SEED';
+
 -- 상환 스케줄 60회차를 "오늘 기준 -16개월부터 매월 25일" 로 동적 생성.
 -- 시간이 흘러도 시드 재실행만 하면 항상 "1~6회차 PAID, 7회차부터 지난 회차는 OVERDUE,
 -- 남은 회차는 PENDING" 분포가 유지됨. 원리금균등(5%/60개월) 공식으로 회차별 원금·이자 계산.
