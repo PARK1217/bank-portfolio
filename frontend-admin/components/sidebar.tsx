@@ -27,6 +27,7 @@ import {
 import { cn } from "@/lib/utils";
 import { authLevelLabel } from "@/lib/labels";
 import { useAdminAuth } from "@/lib/auth";
+import { IdleCountdown } from "@/components/idle-countdown";
 
 
 interface MenuLeaf {
@@ -136,6 +137,7 @@ export function Sidebar() {
                 사번 {admin.employee_no} · {authLevelLabel(admin.auth_level_cd)}
               </div>
             </div>
+            <IdleCountdown />
             <button
               onClick={() => void logout()}
               className="flex w-full items-center justify-center gap-1.5 rounded-md border border-sidebar-foreground/20 px-3 py-1.5 text-xs text-sidebar-foreground/80 transition-colors hover:bg-sidebar-foreground/10"
