@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { useFetch } from "@/lib/use-fetch";
 import { cn } from "@/lib/utils";
+import { noticeCategoryTone } from "@/lib/labels";
 
 
 // ---------------------------------------------------------------------------
@@ -294,7 +295,12 @@ function NoticeList({ items, query }: { items: NoticeItem[]; query: string }) {
                   </span>
                 )}
                 {n.category_cd && (
-                  <span className="rounded border bg-background px-1.5 py-0.5">
+                  <span
+                    className={cn(
+                      "rounded border px-1.5 py-0.5",
+                      noticeCategoryTone(n.category_cd),
+                    )}
+                  >
                     {CATEGORY_LABEL[n.category_cd] ?? n.category_cd}
                   </span>
                 )}

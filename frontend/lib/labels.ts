@@ -388,6 +388,20 @@ export function noticeCategoryLabel(code: string | null | undefined): string {
   return NOTICE_CATEGORY_LABEL[code] ?? code;
 }
 
+// 공지 카테고리 톤 — 배지 색상 강조 (Tailwind utility 조각).
+const NOTICE_CATEGORY_TONE: Record<string, string> = {
+  SECURITY: "bg-destructive/15 text-destructive border-destructive/30",
+  SYSTEM:   "bg-warning/15 text-warning border-warning/30",
+  SERVICE:  "bg-primary/15 text-primary border-primary/30",
+  POLICY:   "bg-muted text-muted-foreground",
+  EVENT:    "bg-success/15 text-success border-success/30",
+  PROMO:    "bg-success/15 text-success border-success/30",
+};
+export function noticeCategoryTone(code: string | null | undefined): string {
+  if (!code) return "bg-background";
+  return NOTICE_CATEGORY_TONE[code] ?? "bg-background";
+}
+
 // AUTO_TRANSFER.REG_CHANNEL_CD — 자동이체 등록 채널
 const REG_CHANNEL_LABEL: Record<string, string> = {
   APP: "앱",

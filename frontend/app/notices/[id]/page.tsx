@@ -7,7 +7,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import { apiFetch } from "@/lib/api";
 import { useFetch } from "@/lib/use-fetch";
-import { noticeCategoryLabel } from "@/lib/labels";
+import { noticeCategoryLabel, noticeCategoryTone } from "@/lib/labels";
+import { cn } from "@/lib/utils";
 
 interface NoticeDetail {
   id: number;
@@ -75,7 +76,12 @@ export default function NoticeDetailPage() {
                 </span>
               )}
               {data.category_cd && (
-                <span className="rounded border bg-background px-1.5 py-0.5">
+                <span
+                  className={cn(
+                    "rounded border px-1.5 py-0.5",
+                    noticeCategoryTone(data.category_cd),
+                  )}
+                >
                   {noticeCategoryLabel(data.category_cd)}
                 </span>
               )}
