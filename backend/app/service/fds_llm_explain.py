@@ -23,11 +23,13 @@ log = structlog.get_logger("fds_llm_explain")
 
 
 _SYSTEM_PROMPT = (
-    "너는 다온뱅크의 의심거래 분석가야. 거래 정보와 자동 탐지 결과(룰·ML)를 받아서, "
+    "너는 다온뱅크의 의심거래 분석가야. 거래 정보와 자동 탐지 결과(탐지 사유·ML)를 받아서, "
     "고객이 직관적으로 이해할 수 있게 3~4문장의 한국어로 정리해. "
-    "원칙: (1) 발동된 룰과 ML 점수만 근거로 쓴다. (2) 추측·과장 금지. "
+    "원칙: (1) 입력으로 받은 탐지 사유와 ML 점수만 근거로 쓴다. (2) 추측·과장 금지. "
     "(3) 첫 문장은 핵심 의심 사유, 마지막 문장은 본인 거래가 아니면 신고 안내. "
-    "(4) 친근하지만 단정적인 어조로 작성. 길이 200자 이내."
+    "(4) 친근하지만 단정적인 어조로 작성. 길이 200자 이내. "
+    "(5) '룰', 'R_XXX', '점수', 'z-score', 'σ', 'ML' 같은 내부 용어·코드는 답변에 절대 쓰지 말 것 — "
+    "사유는 평범한 일상어(예: '심야 시간대', '평소보다 큰 금액', '해외에서 접속')로 풀어 설명."
 )
 
 
@@ -43,7 +45,9 @@ def _build_user_prompt(
     ml_anomaly: float,
     personal_avg: float | None,
 ) -> str:
-    rule_desc = "\n".join(f"- {r}: {RULES_META.get(r, ('?', 0))[0]}" for r in fired_rules) or "- (없음)"
+    # LLM 에는 룰 코드(R_NIGHT 등)는 노출하지 않고 사람 설명만 전달
+    # — 모델이 입력을 그대로 베껴 사용자에게 'R_NIGHT 룰 발동' 같은 문구가 새는 사고 방지.
+    rule_desc = "\n".join(f"- {RULES_META.get(r, ('?', 0))[0]}" for r in fired_rules) or "- (없음)"
     z = rule_features.get("zscore")
     avg = personal_avg or rule_features.get("avg") or 0
     body = [
@@ -54,10 +58,10 @@ def _build_user_prompt(
         f"이번 거래: {amount_krw:,}원 / {tx_time.strftime('%Y-%m-%d %H:%M')}",
         f"이체 유형: {'타행' if is_interbank else '당행'}",
         f"수취인: {counterpart_masked or '미상'}",
-        f"발동된 룰 ({len(fired_rules)}건):\n{rule_desc}",
+        f"탐지된 사유 ({len(fired_rules)}건):\n{rule_desc}",
         (
-            f"ML 이상도: {ml_anomaly:.2f} (0=정상, 1=상위 이상)"
-            + (f", z-score: {z:+.1f}σ" if isinstance(z, (int, float)) and z else "")
+            f"이상 정도: {ml_anomaly:.2f} (0=평소와 비슷, 1=많이 다름)"
+            + (f", 평소 대비 {z:+.1f}배 큼" if isinstance(z, (int, float)) and z else "")
         ),
     ]
     return "\n".join(body)
