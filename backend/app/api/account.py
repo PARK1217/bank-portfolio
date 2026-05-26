@@ -1,4 +1,4 @@
-"""계좌 라우터 — AC-001 목록 / AC-002 상세 / AC-004 거래내역."""
+"""계좌 라우터 — AC-001 목록 / AC-002 상세 / AC-004 거래내역 / AC-009 해지."""
 
 from __future__ import annotations
 
@@ -8,12 +8,15 @@ import structlog
 from fastapi import APIRouter, Depends, Query
 
 from ..schema.account import (
+    AccountCloseRequest,
+    AccountCloseResponse,
     AccountDetailResponse,
     AccountListResponse,
     DashboardResponse,
     TransactionListResponse,
 )
 from ..service.account import (
+    close_account,
     fetch_account,
     fetch_accounts_for,
     fetch_transactions,
@@ -79,6 +82,34 @@ async def get_account_detail(
         daily_limit_krw=row.daily_transfer_limit,
         once_limit_krw=row.daily_withdraw_limit,  # 명세 시트 확정 후 보정
         recent_transactions=recent_items,
+    )
+
+
+@router.post("/{account_token}/close", response_model=AccountCloseResponse)
+async def close_account_endpoint(
+    account_token: str,
+    req: AccountCloseRequest,
+    user: CurrentCustomer = Depends(current_customer),
+    tokens: TokenService = Depends(get_token_service),
+) -> AccountCloseResponse:
+    account_no = await resolve_account_token(tokens, account_token, user.customer_no)
+    target_no: str | None = None
+    if req.transfer_target_account_token:
+        target_no = await resolve_account_token(
+            tokens, req.transfer_target_account_token, user.customer_no
+        )
+    result = await close_account(
+        customer_no=user.customer_no,
+        account_no=account_no,
+        transfer_target_account_no=target_no,
+        password=req.password,
+    )
+    target_token = req.transfer_target_account_token if result["transferred_to_account_no"] else None
+    return AccountCloseResponse(
+        account_token=account_token,
+        closed_date=result["closed_date"],
+        transferred_amount_krw=int(result["transferred_amount_krw"] or 0),
+        transferred_to_account_token=target_token,
     )
 
 

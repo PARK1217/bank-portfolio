@@ -174,7 +174,14 @@ class AccountCloseRequest(BaseModel):
     transfer_target_account_token: str | None = Field(
         None, description="잔액 이전 대상. 잔액 0 이면 None 허용"
     )
-    password: str
+    password: str = Field(..., min_length=4, max_length=4, pattern=r"^\d{4}$")
+
+
+class AccountCloseResponse(BaseModel):
+    account_token: str
+    closed_date: str = Field(..., description="YYYYMMDD")
+    transferred_amount_krw: int = Field(0, description="해지 직전 잔액 이체 금액")
+    transferred_to_account_token: str | None = None
 
 
 class LostReportRequest(BaseModel):
