@@ -29,7 +29,7 @@ docker compose exec postgres psql -U bank -d bank -c \
 docker compose exec postgres psql -U bank -d bank -c \
   "SELECT \"CUSTOMER_NO\",\"SIMPLE_PIN\" IS NOT NULL AS pin_set FROM public.\"CUSTOMER\" WHERE \"CUSTOMER_NO\"=100001;"
 
-# 5. FDS 의심거래 시드 — PENDING 2건이 노출돼야 §의심거래 시연 가능
+# 5. FDS 의심거래 시드 — PENDING 2건이 노출돼야 의심거래 시연 가능
 docker compose exec postgres psql -U bank -d bank -c \
   "SELECT count(*) FROM public.\"FDS_DETECTION\" WHERE \"CUSTOMER_NO\"=100001 AND \"DECISION_CD\"='PENDING';"
 
