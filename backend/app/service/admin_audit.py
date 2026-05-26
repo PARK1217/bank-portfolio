@@ -52,6 +52,9 @@ _EXPLICIT_ACTIONS: dict[tuple[str, str], str] = {
     ("POST", "/api/admin/products"):                           "PRODUCT_CREATE",
     ("GET",  "/api/admin/products/:id"):                       "PRODUCT_DETAIL",
     ("PATCH","/api/admin/products/:id/status"):                "PRODUCT_STATUS_UPDATE",
+    ("POST", "/api/admin/chatbot/messages"):                   "CHATBOT_QUERY",
+    ("GET",  "/api/admin/chatbot/sessions"):                   "CHATBOT_SESSIONS",
+    ("GET",  "/api/admin/chatbot/sessions/:id"):               "CHATBOT_SESSION_DETAIL",
 }
 
 # ---------------------------------------------------------------------------
@@ -81,6 +84,8 @@ _TARGET_TABLE_RULES: list[tuple[re.Pattern[str], str, int | None]] = [
     (re.compile(r"^/api/admin/fds/(\d+/\d+)$"),                      "FDS_DETECTION", 1),
     (re.compile(r"^/api/admin/fds/dashboard$"),                      "FDS_DETECTION", None),
     (re.compile(r"^/api/admin/fds$"),                                "FDS_DETECTION", None),
+    (re.compile(r"^/api/admin/chatbot/sessions/(\d+)$"),              "AI_CHATBOT_SESSION", 1),
+    (re.compile(r"^/api/admin/chatbot/(messages|sessions)$"),         "AI_CHATBOT_SESSION", None),
 ]
 
 

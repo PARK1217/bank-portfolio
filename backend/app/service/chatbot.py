@@ -249,7 +249,14 @@ async def chat_send(
     message: str,
     session_id: int | None,
     tokens: TokenService,
+    audience: str = "USER",
 ) -> dict:
+    """audience='USER' (고객 페이지) 또는 'ADMIN' (관리자 콘솔).
+
+    audience='USER' → AUDIENCE_CD IN ('USER','BOTH') 검색 + 고객 톤 system prompt
+    audience='ADMIN' → AUDIENCE_CD IN ('USER','ADMIN','BOTH') 전부 + 직원 SOP 톤 system prompt
+    customer_no 는 ADMIN 호출의 경우 employee_no 매핑이라 의미가 다르지만, 동일 컬럼 재활용.
+    """
     # FastAPI 자동 span 이 root 역할. 여기선 retrieve / generate 두 sub span 으로 분리해
     # Phoenix 의 RAG 트리 (RETRIEVER → LLM) 를 그린다. OpenInference 컨벤션 따름.
     pool = get_pool()
@@ -306,15 +313,20 @@ async def chat_send(
         retr.set_attribute("session.id", session_id)
         retr.set_attribute("user.id", customer_no)
         query_vec = _embed_query(message)
+        # audience 분기 — USER 는 USER+BOTH, ADMIN 은 USER+ADMIN+BOTH 모두 검색
+        audience_filter = ['USER', 'BOTH'] if audience != 'ADMIN' else ['USER', 'ADMIN', 'BOTH']
+        retr.set_attribute("rbac.audience", audience)
         async with pool.acquire() as conn:
             rows = await conn.fetch(
-                'SELECT "FAQ_ID", "CATEGORY", "QUESTION", "ANSWER", '
+                'SELECT "FAQ_ID", "CATEGORY", "QUESTION", "ANSWER", "AUDIENCE_CD", '
                 '"EMBEDDING" <=> $1::vector AS distance '
                 'FROM public."AI_FAQ" '
                 'WHERE "STATUS_CD" = \'ACTIVE\' '
                 '  AND ("DELETE_YN" IS NULL OR "DELETE_YN" = \'N\') '
+                '  AND "AUDIENCE_CD" = ANY($2::text[]) '
                 'ORDER BY distance LIMIT 5',
                 query_vec,
+                audience_filter,
             )
         for i, r in enumerate(rows):
             retr.set_attribute(f"retrieval.documents.{i}.document.id", str(r["FAQ_ID"]))
@@ -389,11 +401,19 @@ async def chat_send(
                 f"[{r['QUESTION']}]\n{(r['ANSWER'] or '')[:800]}"
                 for r in top_term_rows
             )
-            system_prompt = (
-                "당신은 한국 은행의 상담 챗봇입니다. 아래 약관/규정 발췌만을 근거로 "
-                "사용자 질문에 한국어로 간결하게(3문장 이내) 답변하세요. "
-                "발췌에 없는 내용은 추측하지 말고 '약관에서 확인되지 않습니다'라고 답하세요."
-            )
+            if audience == "ADMIN":
+                system_prompt = (
+                    "당신은 다온뱅크 **직원 업무 어시스턴트**입니다. 아래 내부 SOP·규정·법령 발췌만을 "
+                    "근거로 직원 질문에 한국어로 답변하세요. 절차는 단계별로 명시(1·2·3...), 법령·약관은 "
+                    "조항·근거를 함께 인용하세요. 컴플라이언스 의심 사례는 보고 절차(KoFIU·금감원 등)도 "
+                    "함께 안내. 발췌에 없는 내용은 '내부 규정에서 확인되지 않습니다'라고 답하세요."
+                )
+            else:
+                system_prompt = (
+                    "당신은 다온뱅크 고객 상담 챗봇입니다. 아래 약관/규정 발췌만을 근거로 "
+                    "사용자 질문에 한국어로 간결하게(3문장 이내) 답변하세요. "
+                    "발췌에 없는 내용은 추측하지 말고 '약관에서 확인되지 않습니다'라고 답하세요."
+                )
             user_prompt = f"질문: {message}\n\n참고 약관:\n{context}"
             llm_answer = await _llm_chat_completion(
                 system_prompt, user_prompt, max_tokens=400

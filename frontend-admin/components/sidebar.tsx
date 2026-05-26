@@ -19,6 +19,7 @@ import {
   Sparkles,
   ScrollText,
   Package,
+  MessageSquare,
   Megaphone,
   FileText,
   LogOut,
@@ -86,6 +87,7 @@ const MENU: MenuEntry[] = [
       { href: "/audit", label: "감사 로그", icon: ScrollText },
     ],
   },
+  { href: "/ai-assist", label: "AI 직원 어시스턴트", icon: MessageSquare },
 ];
 
 

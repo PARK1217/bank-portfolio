@@ -188,3 +188,9 @@ WORKBOARD.md
 !frontend/lib/**
 !frontend-admin/lib/
 !frontend-admin/lib/**
+---
+
+# AI Hub 원본 데이터 (재현 가능, GitHub 100MB 제한 회피)
+data/admin-sop/download*.tar
+data/admin-sop/extracted/
+data/admin-sop/json/

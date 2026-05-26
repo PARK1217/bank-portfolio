@@ -31,6 +31,10 @@ services:
       - ./db/16_login_fail_count.sql:/docker-entrypoint-initdb.d/16_login_fail_count.sql:ro
       # ATTACHED_DOC 원본 파일 메타 컬럼 (FILE_NAME / MIME_TYPE / FILE_SIZE) — fresh init 자동 적용.
       - ./db/20_attached_doc_filemeta.sql:/docker-entrypoint-initdb.d/20_attached_doc_filemeta.sql:ro
+      # AI_FAQ.AUDIENCE_CD — RBAC 챗봇 (USER/ADMIN/BOTH 분기) — fresh init 자동 적용.
+      - ./db/21_ai_faq_audience.sql:/docker-entrypoint-initdb.d/21_ai_faq_audience.sql:ro
+      # AI_CHATBOT_SESSION FK 완화 — admin 챗봇 pseudo_customer_no(990000+) 지원.
+      - ./db/22_ai_chatbot_admin_session.sql:/docker-entrypoint-initdb.d/22_ai_chatbot_admin_session.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U bank -d bank"]
       interval: 5s

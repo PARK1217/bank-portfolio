@@ -20,6 +20,7 @@ from .api.admin_loan import router as admin_loan_router
 from .api.admin_loan_contract import router as admin_loan_contract_router
 from .api.admin_loan_repay import router as admin_loan_repay_router
 from .api.admin_notice import event_router as admin_event_router, notice_router as admin_notice_router
+from .api.admin_chatbot import router as admin_chatbot_router
 from .api.admin_overdue import router as admin_overdue_router
 from .api.admin_product import router as admin_product_router
 from .api.admin_terms import router as admin_terms_router
@@ -250,6 +251,7 @@ api.include_router(admin_attach_router)
 # admin_customer 가 /admin/customers 와 /admin/customers/{cust_no} 를 갖는다.
 # overdue 라우터를 먼저 등록해 /overdue 경로가 {cust_no} 다이내믹과 안 부딪히게 한다.
 api.include_router(admin_overdue_router)
+api.include_router(admin_chatbot_router)
 # admin_*_action 라우터를 base customer/account 라우터보다 먼저 등록 — literal segment
 # (`/{cust}/status`, `/{cust}/grade` 등) 가 base 의 `/{customer_no}` GET 보다 우선 매칭되도록.
 api.include_router(admin_customer_action_router)
