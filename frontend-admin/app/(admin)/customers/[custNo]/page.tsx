@@ -262,7 +262,9 @@ export default function CustomerDetailPage() {
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">대출 계약</CardTitle>
-                <CardDescription>{data.loans.length}건</CardDescription>
+                <CardDescription>
+                  {data.loans.length}건 — 계약번호 클릭 시 상환 관리 상세
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <Table>
@@ -274,6 +276,9 @@ export default function CustomerDetailPage() {
                       <TH className="text-right">사용</TH>
                       <TH className="text-right">금리</TH>
                       <TH>상태</TH>
+                      <TH className="text-right">연체 회차</TH>
+                      <TH className="text-right">연체 금액</TH>
+                      <TH className="text-right">최장 연체일</TH>
                       <TH>약정일</TH>
                       <TH>만기일</TH>
                     </TR>
@@ -281,7 +286,14 @@ export default function CustomerDetailPage() {
                   <TBody>
                     {data.loans.map((l) => (
                       <TR key={l.loan_contract_no}>
-                        <TD className="font-mono text-xs">{l.loan_contract_no}</TD>
+                        <TD className="font-mono text-xs">
+                          <Link
+                            href={`/loans/repayments/${encodeId(l.loan_contract_no)}`}
+                            className="hover:underline"
+                          >
+                            {l.loan_contract_no}
+                          </Link>
+                        </TD>
                         <TD>{l.product_name ?? "-"}</TD>
                         <TD className="num-tabular text-right">{fmtKrw(l.contract_limit)}</TD>
                         <TD className="num-tabular text-right">{fmtKrw(l.current_usage)}</TD>
@@ -297,6 +309,27 @@ export default function CustomerDetailPage() {
                           <Badge variant={l.loan_status_cd === "OVERDUE" ? "destructive" : "success"}>
                             {loanStatusLabel(l.loan_status_cd)}
                           </Badge>
+                        </TD>
+                        <TD className="num-tabular text-right">
+                          {l.overdue_count && l.overdue_count > 0 ? (
+                            <span className="font-semibold text-destructive">{fmtNumber(l.overdue_count)}건</span>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
+                        </TD>
+                        <TD className="num-tabular text-right">
+                          {l.overdue_amount_krw && l.overdue_amount_krw > 0 ? (
+                            <span className="font-semibold text-destructive">{fmtKrw(l.overdue_amount_krw)}</span>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
+                        </TD>
+                        <TD className="num-tabular text-right">
+                          {l.max_overdue_days && l.max_overdue_days > 0 ? (
+                            <span className="font-semibold text-warning">{l.max_overdue_days}일</span>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
                         </TD>
                         <TD className="text-xs text-muted-foreground">{fmtDateTime(l.contract_date)}</TD>
                         <TD className="text-xs text-muted-foreground">{fmtDateTime(l.maturity_date)}</TD>

@@ -348,6 +348,9 @@ export interface CustomerLoan {
   overdue_stage_cd?: string | null;
   contract_date?: string | null;
   maturity_date?: string | null;
+  overdue_count?: number | null;
+  overdue_amount_krw?: number | null;
+  max_overdue_days?: number | null;
 }
 
 export interface CustomerDelegation {

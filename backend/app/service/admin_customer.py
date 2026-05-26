@@ -138,13 +138,24 @@ async def get_customer_detail(customer_no: int) -> dict[str, Any]:
             'ORDER BY "PRIMARY_ACCOUNT_YN" DESC, "ACCOUNT_NO"',
             customer_no,
         )
+        # 회원 상세 — 위험도 한눈에 보이도록 OVERDUE 회차 통계를 LATERAL JOIN 으로 동봉.
         loans = await conn.fetch(
-            'SELECT "LOAN_CONTRACT_NO","PRODUCT_NAME_SNAPSHOT","LOAN_TYPE_CD",'
-            '       "CONTRACT_LIMIT","CURRENT_USAGE","CONTRACT_RATE","OVERDUE_SPREAD_RATE",'
-            '       "LOAN_STATUS_CD","OVERDUE_STAGE_CD","CONTRACT_DATE","MATURITY_DATE" '
-            'FROM public."LOAN_CONTRACT" '
-            'WHERE "CUSTOMER_NO" = $1 AND "DELETE_YN" = \'N\' '
-            'ORDER BY "CONTRACT_DATE" DESC',
+            'SELECT lc."LOAN_CONTRACT_NO",lc."PRODUCT_NAME_SNAPSHOT",lc."LOAN_TYPE_CD",'
+            '       lc."CONTRACT_LIMIT",lc."CURRENT_USAGE",lc."CONTRACT_RATE",lc."OVERDUE_SPREAD_RATE",'
+            '       lc."LOAN_STATUS_CD",lc."OVERDUE_STAGE_CD",lc."CONTRACT_DATE",lc."MATURITY_DATE",'
+            '       od.overdue_count, od.overdue_amount, od.max_overdue_days '
+            'FROM public."LOAN_CONTRACT" lc '
+            'LEFT JOIN LATERAL ('
+            '  SELECT COUNT(*) AS overdue_count, '
+            '         COALESCE(SUM(s."SCHEDULED_TOTAL"), 0) AS overdue_amount, '
+            '         COALESCE(MAX(CURRENT_DATE - to_date(s."SCHEDULED_DATE",\'YYYYMMDD\')), 0) AS max_overdue_days '
+            '  FROM public."LOAN_REPAY_SCHEDULE" s '
+            '  WHERE s."LOAN_CONTRACT_NO" = lc."LOAN_CONTRACT_NO" '
+            '    AND s."SCHEDULE_STATUS_CD" = \'OVERDUE\' '
+            '    AND s."DELETE_YN" = \'N\' '
+            ') od ON TRUE '
+            'WHERE lc."CUSTOMER_NO" = $1 AND lc."DELETE_YN" = \'N\' '
+            'ORDER BY lc."CONTRACT_DATE" DESC',
             customer_no,
         )
         # 화면에 위임자·대리인 회원번호만 보여주면 누군지 알기 어려워 PARTY_NAME JOIN.
@@ -232,6 +243,9 @@ async def get_customer_detail(customer_no: int) -> dict[str, Any]:
                 "overdue_stage_cd": l["OVERDUE_STAGE_CD"],
                 "contract_date": l["CONTRACT_DATE"],
                 "maturity_date": l["MATURITY_DATE"],
+                "overdue_count": int(l["overdue_count"] or 0),
+                "overdue_amount_krw": int(l["overdue_amount"] or 0),
+                "max_overdue_days": int(l["max_overdue_days"] or 0),
             }
             for l in loans
         ],

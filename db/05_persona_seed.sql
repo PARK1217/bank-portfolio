@@ -358,6 +358,19 @@ SELECT
   '110-006-100001', 'AUTO', 'OK', 'SEED'
 FROM amort;
 
+-- CURRENT_USAGE 를 누적 상환 후 잔여 원금(= 마지막 PAID 회차의 POST_PRINCIPAL_BALANCE) 으로
+-- 정합. 시간 흘러 PAID 회차가 늘어도 자동 추종 — UI 의 "현재 사용" ↔ 잔여 원금 일치.
+UPDATE public."LOAN_CONTRACT"
+SET "CURRENT_USAGE" = (
+  SELECT s."POST_PRINCIPAL_BALANCE"
+  FROM public."LOAN_REPAY_SCHEDULE" s
+  WHERE s."LOAN_CONTRACT_NO" = 'L-2024-100004'
+    AND s."SCHEDULE_STATUS_CD" = 'PAID'
+  ORDER BY s."INSTALLMENT_NO" DESC
+  LIMIT 1
+)
+WHERE "LOAN_CONTRACT_NO" = 'L-2024-100004';
+
 -- ---------------------------------------------------------------
 -- 9) LOAN — 김미선 P-005 마이너스통장 L-2025-100005 (한도 5천만, 사용 2,300만)
 -- ---------------------------------------------------------------
