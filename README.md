@@ -106,51 +106,240 @@ cd frontend-admin && npm install && npm run dev    # http://localhost:5001
 | 김영희 | `kim.yh@daon.example` | `demo1234` | 박철수 배우자 (공동명의 시연용) |
 | 김연체 | `kim.over@daon.example` | `demo1234` | 30일 넘게 연체 중 (관리자 추적용) |
 | 김미선 | `kim.ms@daon.example` | `demo1234` | 마이너스 통장 + 신용대출 (검토 큐에 잡힘) |
-| 회귀용 | `test@example.com` | `testpass123!` | 회귀 검증 기본 계정 |
-| 관리자 | `ADMIN001` (사번) | `admin1234` | 관리자 콘솔용 |
+| 회귀용 | `test@example.com` | `testpass123!` | 회귀 검증 기본 계정               |
+| 관리자 | `ADMIN001` (사번) | `admin1234` | 관리자 콘솔용                   |
 
 ---
 
 ## 어떻게 생긴 시스템인가요?
 
+### 1. 컨테이너 6개 — 각자 무슨 일을 하는가
+
 ```
-            ┌────────────────────────────────────────┐
-            │   브라우저 (고객용 / 관리자용)             │
-            └─────────────┬─────────────┬────────────┘
-                          │ 3001        │ 5001
-            ┌─────────────▼──┐    ┌─────▼─────────────┐
-            │  frontend      │    │  frontend-admin    │
-            │  (Next.js)     │    │  (Next.js)         │
-            └─────────┬──────┘    └─────────┬──────────┘
-                      │ /api/*              │ /api/admin/*
-                      └─────────┬───────────┘
-                                ▼
-                ┌──────────────────────────────────┐
-                │   backend (FastAPI, 8001 포트)    │
-                │   - 요청 ID/감사 로그 자동 적재 │
-                │   - 개인정보 자동 마스킹         │
-                │   - 25개+ 도메인 라우터          │
-                │   - 백그라운드 작업 3종           │
-                │      · 자동이체 실행 (1분 주기)  │
-                │      · 외부망 상태 체크          │
-                │      · Kafka 이벤트 처리         │
-                └────┬──────────┬──────────┬───────┘
-                     ▼          ▼          ▼
-              ┌──────────┐ ┌─────────┐ ┌──────────┐
-              │PostgreSQL│ │  Kafka  │ │ Phoenix  │
-              │ (100+ 표) │ │  메시지큐 │ │  관측 UI  │
-              └──────────┘ └─────────┘ └──────────┘
+┌──────────────────────┐  ┌──────────────────────┐
+│   frontend           │  │   frontend-admin     │
+│   :3001 (Next.js)    │  │   :5001 (Next.js)    │
+│  ─────────────────── │  │  ─────────────────── │
+│  일반 고객 화면 30+    │  │  직원·심사 콘솔 14    │
+│  /api/* 로 호출        │  │  /api/admin/* 로 호출 │
+└─────────┬────────────┘  └─────────┬────────────┘
+          │                          │
+          └──────────┬───────────────┘
+                     ▼  HTTP + JWT 토큰
+          ┌────────────────────────────┐
+          │   backend  (FastAPI)        │
+          │   :8001                     │
+          │  ─────────────────────────  │
+          │  라우터 41개 (/api 하위)     │
+          │  + 모든 요청 거치는 미들웨어 2개 │
+          │  + 1분/60초 주기 워커 2개     │
+          │  + Kafka 이벤트 수신자 6개    │
+          │  + ML 모델 2종(XGBoost/이상탐지)│
+          │  + RAG 검색(임베딩+벡터DB)    │
+          └─┬──────┬──────┬──────┬─────┘
+            │      │      │      │
+            │      │      │      │ LLM 호출 추적 자동 발송
+            ▼      ▼      ▼      ▼
+   ┌──────────┐ ┌────────┐ ┌─────────────┐
+   │postgres  │ │ kafka  │ │   phoenix    │
+   │:5434     │ │ :9092  │ │   :6006      │
+   │표 100+ + │ │이벤트큐 │ │  LLM 추적 UI │
+   │벡터DB    │ │7개 토픽 │ │  토큰·지연·  │
+   │pgvector  │ │        │ │  프롬프트 보기 │
+   └──────────┘ └────────┘ └─────────────┘
 ```
+
+| 컨테이너 | 포트 | 무슨 일을 하나 |
+|---|---|---|
+| **frontend** | 3001 | 사용자가 보는 화면 — 로그인·계좌·이체·대출·챗봇 등 30개 넘는 페이지 |
+| **frontend-admin** | 5001 | 직원이 보는 콘솔 — 회원·계좌 조회, 대출 심사 큐, 연체 추적, 감사 로그 등 14 페이지 |
+| **backend** | 8001 | 모든 비즈니스 로직이 도는 한 프로세스 — API + 백그라운드 작업 + ML 추론 + 챗봇이 한 곳 |
+| **postgres** | 5434 | 일반 테이블 100개 + 벡터 검색용 확장(`pgvector`). 한 DB 안에서 거래·약관·임베딩까지 다 처리 |
+| **kafka** | 9092 | 비동기로 처리할 작업을 잠시 쌓아두는 줄 — 이체 정산, 이상거래 평가, LLM 호출 기록 등 |
+| **phoenix** | 6006 | LLM 호출을 한 화면에서 보는 도구 — 어떤 모델이 몇 토큰을, 몇 ms 만에, 어떤 프롬프트로 답했는지 |
+
+> 용어 풀이 — **pgvector**: PostgreSQL 에 "768차원 벡터" 컬럼 타입을 추가해 주는 확장. 챗봇이 질문을 벡터로 바꾼 뒤 약관 본문 벡터들과 코사인 거리로 비교하는 데 사용. / **JWT 토큰**: 로그인 후 발급되는 짧은 문자열 — 누구인지·언제까지 유효한지가 서명되어 들어가 있어 매 요청마다 다시 로그인할 필요가 없음.
+
+---
+
+### 2. backend 한 프로세스 안의 7가지 일
+
+```
+FastAPI 앱이 켜질 때 (lifespan 훅) 아래 7가지가 한꺼번에 기동됩니다.
+
+① 미들웨어 2개 — 모든 요청이 거쳐가는 관문
+   • RequestContextMiddleware
+       → 요청마다 고유 ID(X-Request-ID) 부여 + 로그에 자동으로 따라붙음.
+         장애 분석 시 "이 ID 로 검색하면 그 요청의 전 과정 로그가 모임".
+   • AdminAuditMiddleware
+       → /api/admin/* 응답이 끝나는 순간 ADMIN_AUDIT_LOG 테이블에 자동 기록.
+         "누가, 언제, 어떤 API, 어떤 자원에, 결과는 OK/거부/오류" 까지.
+         업무 코드에 한 줄도 안 넣어도 되고, 위조 토큰 시도까지 다 남음.
+
+② 라우터 41개 (api/*.py)
+   사용자용 22개 + 관리자용 19개, 모두 /api 아래로만 묶여 있음.
+   (예외: 상태 확인용 / 와 /health 두 개만 prefix 없이 노출)
+
+③ 서비스 레이어 — 실제 비즈니스 로직
+   transfer / loan / fds_pipeline / chatbot / loan_decision /
+   auto_transfer_worker / admin_audit / llm / chatbot_cache / ...
+
+④ 백그라운드 워커 2개 — 누가 부르지 않아도 알아서 도는 작업
+   • auto_transfer_worker.run()  → 1분마다 "이번 회차에 빠질 자동이체" 스캔·실행
+   • admin_health.worker_loop()  → 60초마다 외부망 5종(KFTC·BOK·NICE·KCB·마이데이터) ping
+
+⑤ Kafka 이벤트 수신자 6개 (start_consumer × 6)
+   각 토픽에 메시지가 도착할 때마다 핸들러가 자동 실행 — §3 표 참고.
+
+⑥ ML/RAG 부팅 (한 번만)
+   • fds_anomaly.ensure_model()
+       → 거래 약 1,000건으로 IsolationForest 학습 + .pkl 캐시 → 이후 추론 1ms
+   • load_corpora(/app/data)
+       → FAQ·약관·SOP 문서를 메모리에 올려두고 검색 준비
+
+⑦ 관측 (Observability) 자동 연결
+   • OpenTelemetry 자동 계측 활성화 → LLM 호출이 일어날 때마다
+     "어떤 모델, 몇 토큰, 몇 ms, 어떤 프롬프트" 를 phoenix 컨테이너로 자동 전송.
+```
+
+> 용어 풀이 — **lifespan 훅**: 앱이 켜질 때·꺼질 때 단 한 번씩 실행되는 자리. DB 연결 풀, 모델 로드, 워커 시작 같은 "준비 작업" 을 여기서 처리. / **OpenTelemetry 자동 계측**: LLM 라이브러리에 패치를 걸어 함수가 호출될 때마다 자동으로 trace 정보를 남기는 표준. 비즈니스 코드에 한 줄도 안 넣어도 호출 흔적이 phoenix 에 쌓임.
+
+---
+
+### 3. Kafka 토픽 7개 — 비동기 작업이 어디로 흘러가나
+
+| 토픽 이름 | 누가 메시지를 보내나 | 누가 받아서 무엇을 하나 |
+|---|---|---|
+| `transfer.settlement.requested` | `service/transfer.py` — 타행 이체에서 출금이 끝난 직후 | `handle_settlement_requested` — 외부 결제망(KFTC) 호출을 흉내내고 성공이면 입금까지 마무리, 실패면 출금을 되돌려 균형 복구 |
+| `transfer.settlement.completed` | settlement 처리 완료 후 | (감사·관측용. 지금은 받는 곳이 없음 — 알림·통계용으로 나중에 연결할 자리) |
+| `transfer.account.verify.requested` | 사용자가 "타행 계좌" 입력하고 예금주 확인 누를 때 | `handle_external_bank_verify` — 외부 은행 응답을 시뮬한 뒤 reply 토픽으로 응답 |
+| `transfer.account.verify.replies` | 위 시뮬 응답 | `handle_verify_reply` — DB 에 예금주 결과 저장 → 프론트가 이걸 폴링해서 화면에 표시 |
+| `fds.transaction.detected` | TRANSACTION 한 건이 DB 에 들어간 직후 | `handle_fds_evaluation` — **룰 8개 + IsolationForest + LLM 한국어 설명** 을 한 파이프라인으로 돌려 의심거래 판정 |
+| `chatbot.llm.calls` | `service/llm.py` — LLM 을 호출할 때마다 | `handle_llm_call_trace` — `AI_LLM_CALL_LOG` 테이블에 모델명·토큰·지연·프롬프트 전문 적재 |
+| `chatbot.rag.evaluations` | 챗봇이 검색을 끝낸 직후 | `handle_rag_evaluation` — `AI_RAG_EVALUATION` 에 질문·검색 결과·Faithfulness 점수 적재 |
+
+**Kafka 가 꺼져 있을 때는 어떻게 되나요?**
+- 메시지를 보내는 쪽(producer)은 그냥 **조용히 건너뜁니다** — HTTP 응답은 막히지 않고 정상 동작.
+- 받아서 처리해야 할 핸들러(예: 정산 처리, FDS 평가)는 **같은 backend 프로세스 안에서 비동기 작업으로 직접 실행**합니다. 즉 "큐를 거쳐 처리되던 일을 즉시 그 자리에서 처리" — 사용자는 차이를 못 느낍니다.
+- 결과적으로 Kafka 가 살아 있든 죽어 있든 서비스는 끊기지 않습니다. (운영 환경에서는 Kafka 가 다시 살아나면 자동으로 큐 경로로 복귀)
+
+---
+
+### 4. 핵심 시나리오 4가지 — 어떤 코드가 어떻게 연결되어 도나
+
+#### A. 이체 — 같은 은행·다른 은행·거액(1억+) 3갈래
+
+```
+[사용자가 이체 버튼 클릭]
+   └─ POST /api/transfer   (frontend → backend)
+       └─ api/transfer.py
+          ├─ 같은 은행(INTRA): DB 한 작업 묶음에서 출금+입금을 한꺼번에
+          │                   (둘 다 성공 or 둘 다 실패 — 절반만 빠지는 일 없음)
+          ├─ 다른 은행(INTER): 출금만 즉시 처리 → settlement.requested 토픽으로 메시지
+          └─ 거액(1억+): 위와 같지만 "거액 라우팅" 플래그 — 한국은행 망 시뮬 경로
+              ↓ Kafka
+    handle_settlement_requested 가 받아서:
+      ├─ 외부 KFTC 호출 시뮬 → 성공이면 입금 반영 + settlement.completed 발행
+      └─ 실패면 출금을 되돌리는 거래를 자동으로 한 건 더 적재 (잔액 복원)
+              ↓ TRANSACTION INSERT
+       fds.transaction.detected 가 자동 발행됨 → 아래 B 흐름으로 이어짐
+```
+
+> "출금만 됐는데 입금이 실패했을 때 출금을 되돌리는 방식" = Saga 패턴의 **보상 거래**. 분산 시스템에서 흔히 쓰는 안전망. / "같은 요청이 두 번 들어오면 한 번만 처리" = `IDEMPOTENCY_KEY` 컬럼에 UNIQUE 제약을 걸어 DB 단에서 차단.
+
+#### B. 의심거래 분류 — 룰 + ML + LLM 한 파이프라인
+
+```
+TRANSACTION 1건 INSERT
+   └─ Kafka 토픽: fds.transaction.detected
+        └─ handle_fds_evaluation 가 받아서:
+           ① fds_rules.evaluate()        → 8가지 규칙 점검, rule_score (0~145)
+           ② fds_anomaly.score()         → IsolationForest 추론, ml_score (0~40)
+           ③ total = rule×0.6 + ml×0.4   (0~127 범위)
+           ④ 60 미만 : AI_FDS_DECISION 에만 기록 (감사용, 화면엔 노출 X)
+           └─ 60 이상 : fds_llm_explain.generate()
+                          → Groq Llama 가 한국어 3~4문장으로 "왜 의심인지" 설명
+                          + FDS_DETECTION INSERT + 사용자 알림 생성
+                          → 사용자 화면에 카드가 자동으로 등장
+```
+
+#### C. 대출 자동 심사 — XGBoost 점수 0~1 → 3갈래
+
+```
+[사용자] POST /api/loans/.../apply
+   └─ api/loan.py → LOAN_APPLICATION 테이블에 신청 1건 적재
+[관리자/시스템] POST /api/admin/loans/{id}/predict
+   └─ api/admin_loan.py → loan_decision.predict_and_persist()
+      ① extract_features()           → DB 에서 6개 피처 즉시 집계
+                                       (신용점수·연체이력·예금잔액·연소득·신청비율 등)
+      ② joblib.load("loan_xgb_v1.joblib").predict_proba()
+                                       → 0~1 사이 점수
+      ├─ 점수 ≥ 0.85 : AUTO_APPROVE (자동 승인)
+      ├─ 점수 ≤ 0.30 : AUTO_REJECT (자동 거절)
+      └─ 0.30~0.85   : HUMAN_REVIEW (회색지대 — 관리자 콘솔 "검토 큐"로 자동 등재)
+                          └─ 직원이 화면에서 승인/반려 라벨링 → 결정 영구 적재
+```
+
+#### D. 챗봇 — 캐시 → 검색 → 필요 시 LLM, 단 환각 방지
+
+```
+[사용자/관리자] POST /api/chatbot/messages 또는 /api/admin/chatbot/messages
+   └─ 라우터가 audience='USER' 인지 'ADMIN' 인지 자동 결정
+      (사용자 토글 불가 — 토큰에서 자동 판별)
+      └─ service/chatbot.chat_send()
+         ① 캐시 확인 — chatbot_cache.get_cached(audience, 정규화된 질문)
+            └─ HIT  : ~1ms 만에 그대로 응답 (임베딩·검색·LLM 모두 스킵)
+         ② MISS면 3단계 검색 (Tier):
+            ├─ Tier1 KEYWORD/FAQ (거리 ≤ 0.50): FAQ 답변 그대로, LLM 미사용
+            ├─ Tier2 VECTOR     (거리 ≤ 0.70): 약관/SOP 발췌 → LLM 으로 합성
+            │   └─ service/llm.py  → Groq → 실패 시 Mistral → 그래도 실패면 HF
+            │       └─ Kafka 발행: chatbot.llm.calls         → AI_LLM_CALL_LOG
+            │       └─ Kafka 발행: chatbot.rag.evaluations  → AI_RAG_EVALUATION
+            │       └─ 자동 추적:  → phoenix (토큰·지연·프롬프트 전문)
+            └─ 모두 초과: "확인되지 않습니다" 솔직히 거절 (환각 차단)
+
+권한 분리 — 같은 코드, 검색 범위만 다름:
+   USER  → AUDIENCE_CD IN ('USER','BOTH')           : 약관·상품·고객 화면 가이드
+   ADMIN → AUDIENCE_CD IN ('USER','ADMIN','BOTH')   : 위 + KYC/AML/SOP/직원 가이드
+   (직원 SOP 가 일반 고객에게 누출될 수 없음 — SQL WHERE 한 줄 차이)
+```
+
+> 챗봇 캐시(`chatbot_cache.py`)는 최근 호출 256건을 메모리에 두고 1시간 TTL — 같은 질문이 1초 안에 두 번 들어오면 두 번째는 LLM 을 아예 안 부르고 0.6초 → 0.001초로 끝납니다. 모든 호출은 캐시 hit 여부까지 `AI_LLM_CALL_LOG` 에 적혀 사후 재현 가능.
+
+---
+
+### 5. 전체 흐름 한눈에
+
+```
+사용자 요청 ──► RequestContextMiddleware (요청 ID 발급)
+                       │
+                       ▼
+                  라우터 → 서비스
+                       │
+            ┌──────────┼─────────────┬──────────────┬─────────────┐
+            ▼          ▼             ▼              ▼             ▼
+        postgres   Kafka 토픽       ML 추론        LLM 호출      Phoenix
+        (즉시 반영) (비동기 작업    (XGBoost /    (Groq/Mistral / (자동 추적
+                    분리)         IsoForest)    HF 폴백)        남김)
+
+관리자 요청 ──► AdminAuditMiddleware ──► ADMIN_AUDIT_LOG (응답 직후 자동 기록)
+```
+
+**한 줄 요약** — 요청은 미들웨어 두 개를 거쳐 라우터·서비스로 떨어지고, 즉시 반영할 일은 PostgreSQL 에, 시간이 걸리거나 외부 망에 의존하는 일은 Kafka 로 떼어내 비동기로 돌리며, AI 호출(ML/LLM)은 모두 Phoenix 에 trace 가 자동으로 남고, 관리자 호출은 모두 감사 로그 테이블에 자동 적재됩니다.
 
 ---
 
 ## 이체는 어떻게 처리되나요?
 
-당행이체는 DB 한 트랜잭션 안에서 즉시 처리(ACID) 하고, 타행이체는 출금만 즉시 끝낸 뒤 Kafka 토픽에 "정산 요청" 메시지를 던져 백그라운드 컨슈머가 외부 결제망(KFTC) 호출을 흉내내며 입금까지 마무리합니다.
+**같은 은행 안에서 보내는 이체**는 DB 한 작업 묶음 안에서 출금·입금을 한꺼번에 처리합니다. 둘 중 하나라도 실패하면 둘 다 취소 — 절반만 빠지는 일이 없습니다. (DB 트랜잭션의 ACID 보장)
 
-실패하면 Saga 보상 트랜잭션(역분개) 로 출금액을 자동 복원하고, 중복 요청은 멱등성 키 UNIQUE 제약으로 차단, Kafka 가 죽어도 같은 핸들러를 asyncio 태스크로 in-process fallback 실행해서 절대 끊기지 않습니다.
+**다른 은행으로 보내는 이체**는 출금만 즉시 끝내고, 입금 처리는 Kafka 라는 이벤트 큐에 "정산 처리 요청" 메시지로 떼어 놓습니다. 백그라운드에서 도는 작업자가 그 메시지를 받아 외부 결제망(KFTC) 호출을 흉내내고 입금까지 마무리합니다.
 
-결과: 사용자 체감은 항상 100ms 이내, 시스템은 외부 결제망 장애로부터 격리 — 실제 한국 은행이 쓰는 event-driven 분산 트랜잭션 모델입니다.
+이때 입금 시뮬이 실패하면 **자동으로 출금을 되돌리는 거래를 한 건 더 적재**해서 잔액을 원상 복구합니다. 같은 요청이 두 번 들어오면 DB 컬럼의 UNIQUE 제약 덕분에 한 번만 처리됩니다. 만약 Kafka 가 꺼져 있으면 같은 처리 함수를 **같은 backend 프로세스 안에서 비동기 작업으로 즉시 실행** — 큐를 거치지 않고 그 자리에서 처리하므로 사용자는 차이를 못 느낍니다.
+
+> 용어 풀이 — **Saga 패턴 / 보상 거래**: 분산 시스템에서 "한 번에 묶기 어려운 작업"을 작은 단계로 쪼개고, 중간에 실패하면 이전 단계를 되돌리는 거래를 추가로 한 건 발행해 균형을 맞추는 방식. 여기서는 "출금만 됐는데 입금이 실패하면 출금 취소 거래 자동 발행" 이 보상 거래.
+
+결과적으로 사용자 체감은 항상 100ms 이내이고, 시스템은 외부 결제망의 장애로부터 격리됩니다. 한국 은행 실무에서 쓰는 이벤트 기반 분산 트랜잭션 모델을 그대로 따라간 구조입니다.
 
 ---
 
@@ -266,12 +455,6 @@ LLM 호출이 실패해도 룰 한국어 설명을 슬래시로 결합한 fallba
 
 `AI_FDS_DECISION` 테이블에 룰·ML·LLM 점수 근거를 영구 저장. `FDS_DETECTION` 과 1:1 매핑 + `LLM_CALL_ID` 컬럼이 `AI_LLM_CALL_LOG` 와 링크되어 Phoenix trace 까지 추적 가능. 감사·재현·재학습 데이터 베이스로 그대로 사용 가능.
 
-### 어필 포인트
-
-> - **"룰의 정확성 + ML 의 일반화 + LLM 의 설명력"** — 한 모델 단점을 다른 둘이 보완
-> - **"심야 1시 신규 수취인 거액 이체 → 카드 자동 등장 + 한국어 설명"** — 발표 1분 시연
-> - **"FDS_DETECTION 시드 카드 3장 → 실시간 자동 누적"** — 운영 도메인 완성도
-
 ---
 
 ## 챗봇은 어떻게 답변하나요?
@@ -327,13 +510,26 @@ LLM 호출이 실패해도 룰 한국어 설명을 슬래시로 결합한 fallba
 
 LLM 이 단계별·표·코드블록을 markdown 으로 반환하므로 양쪽 화면 모두 `react-markdown` + `remark-gfm` 으로 렌더합니다. 사용자 화면은 친근한 본문 위주, 관리자 화면은 표·번호 리스트·법령 인용 anchor 가 그대로 살아납니다. 출처 카드의 미리보기는 `stripMarkdown` 으로 평문 변환해 노이즈 제거.
 
-### 모든 호출은 자동 추적 → Phoenix
+### 답변 캐싱 — 같은 질문은 LLM 다시 안 부른다
 
-`service/llm.py` 가 LLM 호출할 때마다 **Kafka 토픽 2개**에 메시지를 던집니다:
-- `chatbot.llm.calls` → `AI_LLM_CALL_LOG` (모델명, 토큰 수, 지연 시간)
-- `chatbot.rag.evaluations` → `AI_RAG_EVALUATION` (질문·검색 문서·답변, 향후 Faithfulness 점수)
+`service/chatbot_cache.py` 가 최근 256건 메모리 캐시 + 1시간 만료(TTL)로 운영됩니다. 캐시 키는 `(audience, 정규화된 질문)` — USER/ADMIN 권한이 다르면 같은 문장이라도 따로 캐싱. 같은 질문이 1초 안에 두 번 들어오면 두 번째는 임베딩·검색·LLM 모두 건너뛰고 **약 1ms 만에 즉시 응답** (실측: 1812ms → 1ms, 99.9% 단축).
 
-동시에 `OpenTelemetry` 자동 계측으로 **Arize Phoenix UI** 에 trace 가 실시간 적재되어 관리자가 한 화면에서 모니터링 가능합니다 (Total Traces · Latency P50 · Token 누적).
+캐시가 효과적인 이유는 시연·운영 모두 같은 질문 반복 빈도가 높기 때문 — "한도 어디서 봐요?", "보이스피싱 절차" 같은 자주 묻는 항목. 매번 LLM 호출 비용을 안 들이고도 응답 품질은 동일하게 유지됩니다.
+
+### 모든 호출은 자동 추적 — 사후 재현 가능
+
+LLM 을 호출할 때마다 다음이 자동으로 영구 기록됩니다:
+
+- **Kafka 토픽 2개로 비동기 적재**
+  - `chatbot.llm.calls` → `AI_LLM_CALL_LOG` 테이블 — 모델명·토큰 수·지연·**system 프롬프트 전문·user 프롬프트 전문·retrieved context 청크·response 전문·cache hit 여부** 모두 잘리지 않고 저장 (`db/26_llm_call_log_prompt_trace.sql`).
+  - `chatbot.rag.evaluations` → `AI_RAG_EVALUATION` 테이블 — 검색 결과 + Faithfulness/Answer-Relevance/Context-Precision/Context-Recall 4가지 RAG 품질 메트릭.
+- **자동 추적 도구(OpenTelemetry)** — 코드 변경 없이 호출 흔적이 Phoenix 컨테이너로 실시간 전송.
+
+**관리자 콘솔에는 두 가지 보는 길**이 있습니다:
+1. **자체 화면 `/observability`** — `AI_LLM_CALL_LOG` 를 KPI 5종(24시간 누적·캐시 hit·miss·hit률·평균 LLM 지연) + 필터(USER/ADMIN, hit/miss, 질문 검색) + 행 클릭 펼침으로 system 프롬프트·user 프롬프트·검색된 context 청크·응답 전문을 한 자리에서 확인.
+2. **Phoenix UI iframe 임베드** — 같은 화면 아래쪽에 외부 도구 그대로. trace 타임라인·토큰 누적·지연 분포 등.
+
+"왜 이 답변이 나왔는지" 어떤 시점이든 사후 재현 가능 — 캐시 hit 시점에도 같은 프롬프트가 그대로 남아 있어 추적성이 끊기지 않습니다.
 
 ---
 
@@ -388,15 +584,8 @@ require_admin Depends 가드
 | **연체 추적** | `LOAN_REPAY_HISTORY.OVERDUE` 회차 집계 + 회원별 상세 + 가산금리 |
 | **외부망 헬스** | KFTC / BOK-Wire / 마이데이터 / NICE / KCB 5종 — 워커가 60초마다 ping → `EXTERNAL_API_HEALTH` 적재 |
 | **AI 업무 도우미** | 직원용 챗봇 (RBAC 분리) — KYC·AML·내부 SOP 검색, 대화 이력 검색·근거 전문 modal, 👍/👎 + 이슈 카테고리 |
-| **AI 관측 (Phoenix)** | Phoenix UI 를 iframe 으로 임베드 — 한 화면에서 LLM 트레이스·토큰·지연 모니터링 |
+| **AI 호출 추적** | `/observability` — 자체 화면(KPI 5종 + 필터 + 행 클릭 시 system/user 프롬프트·context·응답 전문 펼침) + 아래에 Phoenix UI iframe |
 | **감사 로그** | `ADMIN_AUDIT_LOG` 조회 — 누가 언제 무엇을 했는지 시계열 |
-
-### 4. 핵심 어필 포인트 — "한 콘솔에서 동시 감독"
-
-> - **"AI 자동 승인 30% + 사람 검토 70%"** — 사람·AI 협업 모델
-> - **"Faithfulness 0.85 미만 답변은 자동 보류"** — RAG 품질 게이팅
-> - **"첨부서류 누락 자동 감지"** — `DOC_REQUIREMENT` vs `ATTACHED_DOC` 차집합 시각화
-> - **"한 화면에서 LLM 품질 + 외부망 헬스 + 연체 큐 동시 감독"** — 운영 콘솔 일관성
 
 ---
 
