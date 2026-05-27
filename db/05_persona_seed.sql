@@ -570,4 +570,63 @@ VALUES
    to_char(date_trunc('month', CURRENT_DATE - INTERVAL '7 months'), 'YYYYMMDD') || '163000',
    'LIMITED','5050','USER_REQUEST','부분 상환 약정 체결 — 정상 상태 복원','ADMIN001');
 
+-- ---------------------------------------------------------------
+-- 14) FDS_DETECTION — /fds 이상거래 조사 화면용 시드 4건
+--     화면 비어 있는 문제 해소. 페르소나별 의미있는 분포:
+--     - 박철수(100001) 2건: 카드결제 심야 PENDING + 통신비 정상 CONFIRM
+--     - 김연체(100004) 1건: 연체 중 대량 출금 시도 PENDING (시연 임팩트)
+--     - 김미선(100005) 1건: 마통 한도 임박 출금 WARN/CONFIRM
+--     DETECT_DATETIME 은 CURRENT_DATE 기준 상대화. 멱등 정리는 line 62 (FDS_DETECTION) 이미 처리.
+--     기존 db/09_fds_alert_seed.sql 의 내용을 본 시드에 통합 — fresh init 자동 적재 + reset 일관성.
+-- ---------------------------------------------------------------
+INSERT INTO public."FDS_DETECTION"
+  ("CUSTOMER_NO","DETECT_SEQ","TRANSACTION_ID","ACCOUNT_NO",
+   "DETECT_DATETIME","TOTAL_SCORE","JUDGMENT_CD",
+   "ACCESS_IP","ACCESS_COUNTRY","REMARK",
+   "INVESTIGATION_STATUS_CD","CREATED_BY")
+VALUES
+  -- 박철수 #1: 심야 카드 결제 PENDING (시드 5e3절 신용카드 결제 -350,000 매핑)
+  (100001, 1,
+   (SELECT "TRANSACTION_ID" FROM public."TRANSACTION"
+      WHERE "ACCOUNT_NO" = '110-001-100001' AND "TX_DATETIME" = '20250327150000'
+        AND "TX_AMOUNT" = -350000 LIMIT 1),
+   '110-001-100001',
+   to_char(CURRENT_DATE - INTERVAL '8 days', 'YYYYMMDD') || '013200', 82, 'WARN',
+   '203.0.113.47', 'KR',
+   '심야 시간대 결제 / 평소 사용 위치와 다름 / 단기 다발 결제',
+   'PENDING', 'SEED'),
+  -- 박철수 #2: 통신비 자동이체 NORMAL (이미 본인 확인 완료)
+  (100001, 2,
+   (SELECT "TRANSACTION_ID" FROM public."TRANSACTION"
+      WHERE "ACCOUNT_NO" = '110-001-100001' AND "TX_DATETIME" = '20250325093000'
+        AND "TX_AMOUNT" = -65000 LIMIT 1),
+   '110-001-100001',
+   to_char(CURRENT_DATE - INTERVAL '9 days', 'YYYYMMDD') || '092500', 65, 'NORMAL',
+   '203.0.113.10', 'KR',
+   '월 통신비 자동이체 / 거래액 평소 대비 동일',
+   'CONFIRM', 'SEED'),
+  -- 김연체 #1: 연체 중 대량 출금 시도 PENDING — 시연 의미 큼
+  (100004, 1,
+   NULL,
+   '110-006-100001',
+   to_char(CURRENT_DATE - INTERVAL '5 days', 'YYYYMMDD') || '224500', 88, 'WARN',
+   '198.51.100.77', 'KR',
+   '연체 중 잔액 한도 임박 출금 시도 / 평소 거래 패턴과 상이 / 신규 IP',
+   'PENDING', 'SEED'),
+  -- 김미선 #1: 마통 한도 임박 출금 CONFIRM (정상 처리됨)
+  (100005, 1,
+   NULL,
+   '110-007-100001',
+   to_char(CURRENT_DATE - INTERVAL '2 days', 'YYYYMMDD') || '143000', 72, 'WARN',
+   '203.0.113.155', 'KR',
+   '마이너스통장 한도 임박 인출 / 단기 다발 거래',
+   'CONFIRM', 'SEED');
+
+UPDATE public."FDS_DETECTION"
+   SET "INVESTIGATION_CONCLUSION" = '고객 본인 거래로 확인'
+ WHERE "CUSTOMER_NO" = 100001 AND "DETECT_SEQ" = 2;
+UPDATE public."FDS_DETECTION"
+   SET "INVESTIGATION_CONCLUSION" = '잔액 임박 정당 인출 — 본인 거래'
+ WHERE "CUSTOMER_NO" = 100005 AND "DETECT_SEQ" = 1;
+
 COMMIT;
