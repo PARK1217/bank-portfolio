@@ -35,6 +35,9 @@ services:
       - ./db/21_ai_faq_audience.sql:/docker-entrypoint-initdb.d/21_ai_faq_audience.sql:ro
       # AI_CHATBOT_SESSION FK 완화 — admin 챗봇 pseudo_customer_no(990000+) 지원.
       - ./db/22_ai_chatbot_admin_session.sql:/docker-entrypoint-initdb.d/22_ai_chatbot_admin_session.sql:ro
+      # AI_LLM_CALL_LOG 에 prompt 전문·retrieval context·response·cache·rewrite 흔적 컬럼 추가
+      # (WORKBOARD §RAG 6번 — 사후 재현 추적성). fresh init 자동 적용.
+      - ./db/26_llm_call_log_prompt_trace.sql:/docker-entrypoint-initdb.d/26_llm_call_log_prompt_trace.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U bank -d bank"]
       interval: 5s

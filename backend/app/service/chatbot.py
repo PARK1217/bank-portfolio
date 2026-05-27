@@ -22,6 +22,7 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import TypedDict
@@ -32,6 +33,8 @@ from ..db import get_pool
 from ..errors import E_NOT_FOUND
 from ..exceptions import NotFoundError
 from ..observability import get_tracer
+from .chatbot_cache import get_cached, put_cached
+from .chatbot_prompts import build_system_prompt
 from .chatbot_suggestions import follow_up_questions
 from .llm import chat_completion as _llm_chat_completion
 from .token import ResourceType, TokenService
@@ -282,6 +285,28 @@ def _doc_metadata_json(category: str | None, question: str | None) -> str:
     return _json.dumps({"category": category or "", "question": question or ""}, ensure_ascii=False)
 
 
+def _retrieved_context_json(rows) -> str:
+    """AI_LLM_CALL_LOG.RETRIEVED_CONTEXT 적재용 jsonb 직렬화.
+
+    pgvector top-k 청크 메타를 rank 순서 그대로 배열로. 본문은 800자까지
+    (chat_send 가 LLM 컨텍스트에 넣는 절단 길이와 동일) — 사후 재현 시 동일
+    프롬프트 복원 가능.
+    """
+    items = []
+    for rank, r in enumerate(rows, start=1):
+        items.append({
+            "rank": rank,
+            "faq_id": int(r["FAQ_ID"]),
+            "category": r.get("CATEGORY") or "",
+            "question": r.get("QUESTION") or "",
+            "audience_cd": r.get("AUDIENCE_CD") or "",
+            "source_tag": r.get("SOURCE_TAG") or "",
+            "distance": round(float(r["distance"]), 6),
+            "snippet": (r.get("ANSWER") or "")[:800],
+        })
+    return json.dumps(items, ensure_ascii=False)
+
+
 async def chat_send(
     customer_no: int,
     message: str,
@@ -480,124 +505,178 @@ async def chat_send(
         confidence = "HIGH" if top_faq_d <= 0.30 else "MEDIUM"
     elif (top_terms is not None and top_terms_d <= 0.70) or (force_llm and rows):
         tier = "VECTOR"
-        top_term_rows = []
-        # ADMIN: faq_hits (SYNTH_SOP+AIHUB) 우선, USER 도메인 매칭 fallback
-        # USER: terms_hits 만 (기존 동작)
-        candidate_rows = (faq_hits[:3] + terms_hits[:2]) if force_llm else terms_hits[:3]
-        for r in candidate_rows[:3]:
-            if not force_llm and float(r["distance"]) > 0.85:
-                break
-            top_term_rows.append(r)
-            title, _, clause = (r["QUESTION"] or "").partition(" · ")
-            sources.append({
-                "doc_token": await tokens.issue(
-                    ResourceType.DOC, f"AI_FAQ:{r['FAQ_ID']}", customer_no
-                ),
-                "doc_type": (r.get("CATEGORY") or "TERMS"),
-                "doc_id": int(r["FAQ_ID"]),
-                "title": title or r["QUESTION"],
-                "clause": clause or None,
-                "snippet": (r["ANSWER"] or "")[:120],
-                "score": round(_to_score(float(r["distance"])), 3),
-            })
-        # LLM 자연어 답변 생성 시도 — 실패 시 약관 안내 fallback (가이드 §3.7).
-        llm_answer: str | None = None
-        try:
-            context = "\n\n".join(
-                f"[{r['QUESTION']}]\n{(r['ANSWER'] or '')[:800]}"
-                for r in top_term_rows
-            )
-            if audience == "ADMIN":
-                # 최상위 매칭 distance 평가 — 0.55 이상이면 자료가 부족하다는 신호 추가
-                top_dist = float(top_term_rows[0]["distance"]) if top_term_rows else 1.0
-                low_relevance_warn = (
-                    "\n\n[중요] 발췌 자료의 최상위 유사도가 낮습니다. 질문과 직접 관련 없으면 "
-                    "단계 절차로 답변 강제하지 말고 '내부 SOP 자료에서 직접 확인되지 않습니다. "
-                    "관련 부서·시스템(예: PRODUCT 카탈로그·여신부)에 문의하세요'라고 정직히 답변하세요."
-                ) if top_dist > 0.55 else ""
-                system_prompt = (
-                    "당신은 다온뱅크 **직원 업무 어시스턴트**입니다. 아래 내부 SOP·규정 발췌만을 "
-                    "근거로 한국어 답변을 작성하세요.\n\n"
-                    "[작성 규칙]\n"
-                    "- 질문 유형에 맞춰 답변하세요:\n"
-                    "  * 절차·SOP 질문 → 단계별(1·2·3) 답변\n"
-                    "  * 정보 조회·정의 질문 → 평문으로 간결히 (단계 강제 X)\n"
-                    "  * 정책·기준 질문 → 요약 + 근거 조항\n"
-                    "- 발췌 본문을 그대로 길게 옮기지 마세요. 핵심만 직원 톤으로 재구성.\n"
-                    "- 분량 6문장 이내. 법령·약관 인용은 조항만 짧게(예: '특정금융정보법 §4').\n"
-                    "- 발췌가 학술 보고서·논문이면 결론만 요약하고 보고서체는 피하세요.\n"
-                    "- **발췌에 없는 사실은 절대 추측·창작 금지** — 내부 자료에서 확인되지 않으면 "
-                    "'내부 SOP에서 확인되지 않습니다. 관련 부서·시스템에 문의 권유드립니다'."
-                    + low_relevance_warn
-                )
-            else:
-                system_prompt = (
-                    "당신은 다온뱅크 고객 상담 챗봇입니다. 아래 약관/규정 발췌만을 근거로 "
-                    "사용자 질문에 한국어로 간결하게(3문장 이내) 답변하세요. "
-                    "발췌에 없는 내용은 추측하지 말고 '약관에서 확인되지 않습니다'라고 답하세요."
-                )
-            user_prompt = f"질문: {message}\n\n참고 약관:\n{context}"
-            llm_answer = await _llm_chat_completion(
-                system_prompt, user_prompt, max_tokens=400
-            )
-            # LLM 호출이 성공했으면 (a) AI_LLM_CALL_LOG 동기 INSERT 후 LLM_CALL_ID 수령,
-            # (b) Kafka 발행 (Phoenix trace 용도), (c) RAG 품질 평가 비동기 fire-and-forget.
-            # 동기 INSERT 패턴이라 LLM_CALL_ID 를 ASSISTANT 메시지 INSERT 시 그대로 채움.
-            if llm_answer:
-                import uuid
 
-                from .llm import get_last_usage
-                from . import kafka as kafka_svc
+        # 캐시 lookup — VECTOR tier 만 (KEYWORD/FAQ 는 이미 빠름).
+        # hit 시 retrieval/LLM 모두 스킵, doc_token 만 본인별 재발급.
+        cached = get_cached(audience, message)
+        if cached is not None:
+            import uuid
 
-                usage_meta = get_last_usage()
-                if usage_meta:
-                    llm_trace_id = uuid.uuid4().hex
-                    try:
-                        async with pool.acquire() as conn:
-                            llm_call_id = int(await conn.fetchval(
-                                'INSERT INTO public."AI_LLM_CALL_LOG" ('
-                                '  "TRACE_ID", "MODEL_NAME", "PURPOSE_CD", '
-                                '  "PROMPT_TOKENS", "COMPLETION_TOKENS", '
-                                '  "STATUS_CD", "CREATED_BY", "DELETE_YN"'
-                                ") VALUES ($1, $2, 'CHATBOT_RAG', $3, $4, 'OK', $5, 'N') "
-                                'RETURNING "LLM_CALL_ID"',
-                                llm_trace_id,
-                                usage_meta["model_name"],
-                                usage_meta["prompt_tokens"],
-                                usage_meta["completion_tokens"],
-                                f"CUSTOMER:{customer_no}",
-                            ))
-                    except Exception:
-                        log.exception("llm_call_log_insert_failed", trace_id=llm_trace_id)
-                    await kafka_svc.send_event(
-                        kafka_svc.TOPIC_CHATBOT_LLM_CALLS,
-                        {
-                            "trace_id": llm_trace_id,
+            cache_t0 = time.perf_counter()
+            for sm in cached["sources_meta"]:
+                sources.append({
+                    "doc_token": await tokens.issue(
+                        ResourceType.DOC, f"AI_FAQ:{sm['doc_id']}", customer_no
+                    ),
+                    "doc_type": sm.get("doc_type"),
+                    "doc_id": sm["doc_id"],
+                    "title": sm.get("title"),
+                    "clause": sm.get("clause"),
+                    "snippet": sm.get("snippet"),
+                    "score": sm.get("score"),
+                })
+            answer = cached["answer"]
+            confidence = cached["confidence"]
+            cache_latency_ms = max(1, int((time.perf_counter() - cache_t0) * 1000))
+            llm_trace_id = uuid.uuid4().hex
+            try:
+                async with pool.acquire() as conn:
+                    llm_call_id = int(await conn.fetchval(
+                        'INSERT INTO public."AI_LLM_CALL_LOG" ('
+                        '  "TRACE_ID", "MODEL_NAME", "PURPOSE_CD", '
+                        '  "PROMPT_TOKENS", "COMPLETION_TOKENS", "LATENCY_MS", '
+                        '  "STATUS_CD", "CREATED_BY", "DELETE_YN", '
+                        '  "SYSTEM_PROMPT", "USER_PROMPT", "RAW_QUESTION", '
+                        '  "REWRITTEN_QUERY", "RETRIEVED_CONTEXT", "RESPONSE_TEXT", '
+                        '  "CACHE_HIT_YN", "AUDIENCE_CD"'
+                        ") VALUES ($1, $2, 'CHATBOT_RAG', 0, 0, $3, 'OK', $4, 'N', "
+                        "         $5, $6, $7, NULL, $8::jsonb, $9, 'Y', $10) "
+                        'RETURNING "LLM_CALL_ID"',
+                        llm_trace_id,
+                        cached["model_name"],
+                        cache_latency_ms,
+                        f"CUSTOMER:{customer_no}",
+                        cached["system_prompt"],
+                        cached["user_prompt"],
+                        message,
+                        cached["retrieved_context_json"],
+                        cached["answer"],
+                        audience,
+                    ))
+            except Exception:
+                log.exception("llm_call_log_insert_failed", trace_id=llm_trace_id)
+            log.info(
+                "chatbot_cache_hit",
+                trace_id=llm_trace_id,
+                audience=audience,
+                lat_ms=cache_latency_ms,
+            )
+        else:
+            # CACHE MISS — retrieval + LLM 호출 풀체인
+            top_term_rows = []
+            # ADMIN: faq_hits (SYNTH_SOP+AIHUB) 우선, USER 도메인 매칭 fallback
+            # USER: terms_hits 만 (기존 동작)
+            candidate_rows = (faq_hits[:3] + terms_hits[:2]) if force_llm else terms_hits[:3]
+            for r in candidate_rows[:3]:
+                if not force_llm and float(r["distance"]) > 0.85:
+                    break
+                top_term_rows.append(r)
+                title, _, clause = (r["QUESTION"] or "").partition(" · ")
+                sources.append({
+                    "doc_token": await tokens.issue(
+                        ResourceType.DOC, f"AI_FAQ:{r['FAQ_ID']}", customer_no
+                    ),
+                    "doc_type": (r.get("CATEGORY") or "TERMS"),
+                    "doc_id": int(r["FAQ_ID"]),
+                    "title": title or r["QUESTION"],
+                    "clause": clause or None,
+                    "snippet": (r["ANSWER"] or "")[:120],
+                    "score": round(_to_score(float(r["distance"])), 3),
+                })
+            llm_answer: str | None = None
+            confidence = "MEDIUM" if top_terms_d <= 0.50 else "LOW"
+            try:
+                context = "\n\n".join(
+                    f"[{r['QUESTION']}]\n{(r['ANSWER'] or '')[:800]}"
+                    for r in top_term_rows
+                )
+                top_dist = float(top_term_rows[0]["distance"]) if top_term_rows else None
+                system_prompt = build_system_prompt(audience, top_dist)
+                user_prompt = f"질문: {message}\n\n참고 약관:\n{context}"
+                t_llm_start = time.perf_counter()
+                llm_answer = await _llm_chat_completion(
+                    system_prompt, user_prompt, max_tokens=400
+                )
+                llm_latency_ms = int((time.perf_counter() - t_llm_start) * 1000)
+                if llm_answer:
+                    import uuid
+
+                    from .llm import get_last_usage
+                    from . import kafka as kafka_svc
+
+                    usage_meta = get_last_usage()
+                    if usage_meta:
+                        llm_trace_id = uuid.uuid4().hex
+                        retrieved_ctx_json = _retrieved_context_json(top_term_rows)
+                        try:
+                            async with pool.acquire() as conn:
+                                llm_call_id = int(await conn.fetchval(
+                                    'INSERT INTO public."AI_LLM_CALL_LOG" ('
+                                    '  "TRACE_ID", "MODEL_NAME", "PURPOSE_CD", '
+                                    '  "PROMPT_TOKENS", "COMPLETION_TOKENS", "LATENCY_MS", '
+                                    '  "STATUS_CD", "CREATED_BY", "DELETE_YN", '
+                                    '  "SYSTEM_PROMPT", "USER_PROMPT", "RAW_QUESTION", '
+                                    '  "REWRITTEN_QUERY", "RETRIEVED_CONTEXT", "RESPONSE_TEXT", '
+                                    '  "CACHE_HIT_YN", "AUDIENCE_CD"'
+                                    ") VALUES ($1, $2, 'CHATBOT_RAG', $3, $4, $5, 'OK', $6, 'N', "
+                                    "         $7, $8, $9, NULL, $10::jsonb, $11, 'N', $12) "
+                                    'RETURNING "LLM_CALL_ID"',
+                                    llm_trace_id,
+                                    usage_meta["model_name"],
+                                    usage_meta["prompt_tokens"],
+                                    usage_meta["completion_tokens"],
+                                    llm_latency_ms,
+                                    f"CUSTOMER:{customer_no}",
+                                    system_prompt,
+                                    user_prompt,
+                                    message,
+                                    retrieved_ctx_json,
+                                    llm_answer,
+                                    audience,
+                                ))
+                        except Exception:
+                            log.exception("llm_call_log_insert_failed", trace_id=llm_trace_id)
+                        await kafka_svc.send_event(
+                            kafka_svc.TOPIC_CHATBOT_LLM_CALLS,
+                            {
+                                "trace_id": llm_trace_id,
+                                "model_name": usage_meta["model_name"],
+                                "purpose_cd": "CHATBOT_RAG",
+                                "prompt_tokens": usage_meta["prompt_tokens"],
+                                "completion_tokens": usage_meta["completion_tokens"],
+                                "status_cd": "OK",
+                            },
+                            key=llm_trace_id,
+                        )
+                        asyncio.create_task(
+                            _evaluate_and_publish(
+                                trace_id=llm_trace_id,
+                                question=message,
+                                retrieved_docs=sources,
+                                answer=llm_answer,
+                            )
+                        )
+                        # 응답 캐시 저장 — doc_token 제외 (본인별 발급이라 캐시 X)
+                        put_cached(audience, message, {
+                            "answer": llm_answer,
+                            "sources_meta": [
+                                {k: v for k, v in s.items() if k != "doc_token"}
+                                for s in sources
+                            ],
+                            "retrieved_context_json": retrieved_ctx_json,
+                            "system_prompt": system_prompt,
+                            "user_prompt": user_prompt,
                             "model_name": usage_meta["model_name"],
-                            "purpose_cd": "CHATBOT_RAG",
                             "prompt_tokens": usage_meta["prompt_tokens"],
                             "completion_tokens": usage_meta["completion_tokens"],
-                            "status_cd": "OK",
-                        },
-                        key=llm_trace_id,
-                    )
-                    # RAG 응답 품질 추적 — 평가는 LLM 4번 호출이라 4~8초 걸려 사용자 응답을 막지 않도록
-                    # asyncio.create_task 로 백그라운드 fire-and-forget. 평가 끝나면 같은 trace_id 로 발행.
-                    asyncio.create_task(
-                        _evaluate_and_publish(
-                            trace_id=llm_trace_id,
-                            question=message,
-                            retrieved_docs=sources,
-                            answer=llm_answer,
-                        )
-                    )
-        except Exception:
-            log.exception("llm_answer_failed")
-        if llm_answer:
-            answer = llm_answer
-        else:
-            answer = f"관련 약관 [{top_terms['QUESTION']}] 을 확인하세요."
-        confidence = "MEDIUM" if top_terms_d <= 0.50 else "LOW"
+                            "confidence": confidence,
+                        })
+            except Exception:
+                log.exception("llm_answer_failed")
+            if llm_answer:
+                answer = llm_answer
+            else:
+                answer = f"관련 약관 [{top_terms['QUESTION']}] 을 확인하세요."
     else:
         tier = None
         answer = "관련 정보를 찾지 못했습니다. 상담원 연결을 도와드릴까요?"
