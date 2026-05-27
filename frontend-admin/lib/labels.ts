@@ -491,7 +491,7 @@ export function targetTableLabel(code: string | null | undefined): string {
   return TARGET_TABLE_LABEL[code] ?? code;
 }
 
-// CUSTOMER_STATUS_HISTORY.REASON_CD / 기타 상태 변경 사유
+// CUSTOMER_STATUS_HISTORY.REASON_CD / CUSTOMER_GRADE_HISTORY.GRADE_REASON_CD / 기타 사유
 const REASON_CD_LABEL: Record<string, string> = {
   UNLOCK: "잠금 해제",
   FRAUD_LOCK: "사기 의심 잠금",
@@ -502,6 +502,9 @@ const REASON_CD_LABEL: Record<string, string> = {
   KYC_REVERIFY: "KYC 재검증",
   COMPLIANCE: "컴플라이언스",
   PWD_FAIL: "비밀번호 실패",
+  INITIAL: "초기 산정",
+  UPGRADE: "등급 상향",
+  DOWNGRADE: "등급 하향",
 };
 export function reasonCdLabel(code: string | null | undefined): string {
   if (!code) return "-";

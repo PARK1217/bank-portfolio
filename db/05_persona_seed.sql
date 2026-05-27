@@ -520,4 +520,54 @@ VALUES
   ('110-004-100001',1001,'JOINT',1,0.50,'20250120','ACTIVE','Y','SEED'),
   ('110-004-100001',1002,'JOINT',2,0.50,'20250120','ACTIVE','Y','SEED');
 
+-- ---------------------------------------------------------------
+-- 12) CUSTOMER_GRADE_HISTORY — 회원 상세 「등급 변경 이력」 카드용
+--     모든 페르소나에 최소 1행씩 가입 시점 등급 행 적재 → 빈 카드 노출 방지.
+--     박철수/김미선은 GENERAL → VIP 승급 흐름으로 2행 (직전 행 END_DATE 채우고
+--     새 행 START_DATE 으로 마감 패턴, backend/app/service/admin_customer_action
+--     의 change_customer_grade 와 동일 구조).
+-- ---------------------------------------------------------------
+INSERT INTO public."CUSTOMER_GRADE_HISTORY"
+  ("CUSTOMER_NO","GRADE_START_DATE","GRADE_END_DATE","CUST_GRADE_CD",
+   "GRADE_REASON_CD","REMARK","CREATED_BY")
+VALUES
+  -- 박철수: 가입 GENERAL → 6개월 뒤 VIP 승급 (현재)
+  (100001,'20250120','20250720','GENERAL','INITIAL','가입 시 초기 산정','SEED'),
+  (100001,'20250720',NULL,      'VIP',    'UPGRADE','거래 실적 우수 — 자동 승급','SEED'),
+  -- 김영희: 가입 시점 GENERAL (현재)
+  (100002,'20250120',NULL,      'GENERAL','INITIAL','가입 시 초기 산정','SEED'),
+  -- 최지영: 가입 시점 MINOR (현재)
+  (100003,'20250120',NULL,      'MINOR',  'INITIAL','미성년 자동 등급','SEED'),
+  -- 김연체: 가입 시점 GENERAL (현재) — 연체 발생 후에도 등급 자체는 유지
+  (100004,'20240601',NULL,      'GENERAL','INITIAL','가입 시 초기 산정','SEED'),
+  -- 김미선: 가입 GENERAL → 9개월 뒤 VIP 승급 (현재)
+  (100005,'20240301','20241201','GENERAL','INITIAL','가입 시 초기 산정','SEED'),
+  (100005,'20241201',NULL,      'VIP',    'UPGRADE','법인대표·신용대출 우량 — 자동 승급','SEED');
+
+-- ---------------------------------------------------------------
+-- 13) CUSTOMER_STATUS_HISTORY — 회원 상세 「상태 변경 이력」 카드용
+--     박철수: 보이스피싱 의심 거래로 일시 잠금(LOCKED) → 본인인증 후 해제(5050).
+--     김연체: 연체 발생으로 한도 제한(LIMITED) → 일부 상환 약정 후 정상 복원(5050).
+--     이력의 마지막 NEW_STATUS_CD 가 CUSTOMER.CUST_STATUS_CD 와 일치 → 도메인 정합.
+--     일자는 CURRENT_DATE 기준 상대화하여 시연 시 "최근 이벤트" 자연스럽게 노출.
+-- ---------------------------------------------------------------
+INSERT INTO public."CUSTOMER_STATUS_HISTORY"
+  ("CUSTOMER_NO","EVENT_DATETIME","OLD_STATUS_CD","NEW_STATUS_CD",
+   "REASON_CD","REMARK","EMPLOYEE_NO")
+VALUES
+  -- 박철수 (100001): 보이스피싱 의심 → 잠금 → 본인인증 후 해제 (CURRENT_DATE 약 3개월 전)
+  (100001,
+   to_char(CURRENT_DATE - INTERVAL '3 months', 'YYYYMMDD') || '141500',
+   '5050','LOCKED','FRAUD_LOCK','보이스피싱 의심 거래 패턴 탐지 — FDS 자동 잠금','ADMIN001'),
+  (100001,
+   to_char(CURRENT_DATE - INTERVAL '3 months' + INTERVAL '1 day', 'YYYYMMDD') || '093000',
+   'LOCKED','5050','UNLOCK','본인 영상 인증 완료 — 정상 복원','ADMIN001'),
+  -- 김연체 (100004): 연체 발생 → 한도 제한 → 약정 합의 후 복원 (시드 약정일 + 8개월)
+  (100004,
+   to_char(date_trunc('month', CURRENT_DATE - INTERVAL '9 months'), 'YYYYMMDD') || '101000',
+   '5050','LIMITED','COMPLIANCE','연체 60일 경과 — 이체 한도·신규 가입 제한','ADMIN001'),
+  (100004,
+   to_char(date_trunc('month', CURRENT_DATE - INTERVAL '7 months'), 'YYYYMMDD') || '163000',
+   'LIMITED','5050','USER_REQUEST','부분 상환 약정 체결 — 정상 상태 복원','ADMIN001');
+
 COMMIT;
