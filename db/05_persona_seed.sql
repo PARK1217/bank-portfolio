@@ -386,6 +386,107 @@ VALUES
    '110-007-100001','110-007-100001','마이너스통장 한도대출');
 
 -- ---------------------------------------------------------------
+-- 9.5) 대시보드 KPI 시드 — LOAN_APPLICATION + AI_LOAN_DECISION 9건
+--      자동승인 3건(오늘 2 + 어제 1) / 자동반려 2건(오늘 1 + 어제 1) /
+--      사람검토 4건(점수 0.45~0.78). 일자는 모두 CURRENT_DATE 기준 상대화 →
+--      시드 재실행 시 항상 "오늘"/"어제" KPI 분포가 유지된다.
+--
+--      대시보드(/dashboard) "검토 대기 / 오늘 자동 승인 / 오늘 자동 반려" 카드가
+--      0건으로 비어 보이던 문제를 해소. ID 대역 20011~20019 (14_human_review_seed
+--      의 20003/20004 와 겹치지 않게 +10 이동).
+--
+--      AUTO_APPROVE: SCORE ≥ 0.85 / AUTO_REJECT: ≤ 0.30 / HUMAN_REVIEW: 그 사이.
+--      14_human_review_seed.sql 은 fresh-init 자동 적재 보존 — 본 시드 재실행 시
+--      DELETE 블록이 그것까지 함께 정리하므로 결과 분포는 본 섹션이 권위.
+-- ---------------------------------------------------------------
+INSERT INTO public."LOAN_APPLICATION"
+  ("LOAN_APP_ID","CUSTOMER_NO","APPLY_PRODUCT_ID","APPLY_TYPE_CD","LOAN_TYPE_CD",
+   "DESIRED_AMOUNT","EXPECTED_LIMIT","EXPECTED_RATE",
+   "APPLY_DATETIME","APPLY_STATUS_CD","APPLY_CHANNEL_CD",
+   "PURPOSE_CD","CREATED_BY")
+VALUES
+  -- AUTO_APPROVE 3건
+  (20011, 100001, 401, 'NEW', 'CREDIT',
+   20000000, 20000000, 4.500,
+   to_char(CURRENT_DATE, 'YYYYMMDD') || '093000', 'APPROVED', 'MOBILE',
+   'LIVING', 'SEED'),
+  (20012, 100002, 401, 'NEW', 'CREDIT',
+    8000000,  8000000, 4.800,
+   to_char(CURRENT_DATE, 'YYYYMMDD') || '142500', 'APPROVED', 'MOBILE',
+   'LIVING', 'SEED'),
+  (20013, 100005, 401, 'NEW', 'CREDIT',
+   12000000, 12000000, 4.700,
+   to_char(CURRENT_DATE - INTERVAL '1 day', 'YYYYMMDD') || '110000', 'APPROVED', 'MOBILE',
+   'LIVING', 'SEED'),
+  -- AUTO_REJECT 2건
+  (20014, 100004, 401, 'NEW', 'CREDIT',
+   50000000, 50000000, 7.200,
+   to_char(CURRENT_DATE, 'YYYYMMDD') || '101500', 'REJECTED', 'MOBILE',
+   'LIVING', 'SEED'),
+  (20015, 100001, 401, 'NEW', 'CREDIT',
+  300000000,300000000, 6.500,
+   to_char(CURRENT_DATE - INTERVAL '1 day', 'YYYYMMDD') || '163000', 'REJECTED', 'MOBILE',
+   'LIVING', 'SEED'),
+  -- HUMAN_REVIEW 4건
+  (20016, 100002, 401, 'NEW', 'CREDIT',
+   25000000, 25000000, 5.300,
+   to_char(CURRENT_DATE,                       'YYYYMMDD') || '113000', 'APPLIED', 'MOBILE',
+   'LIVING', 'SEED'),
+  (20017, 100005, 401, 'NEW', 'CREDIT',
+   18000000, 18000000, 5.700,
+   to_char(CURRENT_DATE,                       'YYYYMMDD') || '155500', 'APPLIED', 'MOBILE',
+   'LIVING', 'SEED'),
+  (20018, 100001, 401, 'NEW', 'CREDIT',
+   35000000, 35000000, 5.000,
+   to_char(CURRENT_DATE - INTERVAL '1 day',    'YYYYMMDD') || '094500', 'APPLIED', 'MOBILE',
+   'LIVING', 'SEED'),
+  (20019, 100002, 401, 'NEW', 'CREDIT',
+   15000000, 15000000, 5.500,
+   to_char(CURRENT_DATE - INTERVAL '2 days',   'YYYYMMDD') || '173000', 'APPLIED', 'MOBILE',
+   'LIVING', 'SEED');
+
+-- AI_LOAN_DECISION 9건. CREATED_AT 을 CURRENT_TIMESTAMP 또는 -1d/-2d 로 명시 →
+-- 프론트 todayDecisions 필터(created_at startsWith today) 가 정확히 "오늘" 분만 집계.
+INSERT INTO public."AI_LOAN_DECISION"
+  ("APPLICATION_ID","MODEL_VERSION","FEATURES_JSON","SCORE","DECISION_CD",
+   "THRESHOLD_HIGH","THRESHOLD_LOW","CREATED_AT")
+VALUES
+  -- AUTO_APPROVE (SCORE ≥ 0.85)
+  (20011, 'loan_xgb_v1',
+   '{"credit_score": 820, "annual_income": 72000000, "overdue_ratio": 0.0, "request_ratio": 0.244, "deposit_balance": 18000000, "overdue_days_24m": 0}'::jsonb,
+   0.9100, 'AUTO_APPROVE', 0.8500, 0.3000, CURRENT_TIMESTAMP - INTERVAL '5 hours'),
+  (20012, 'loan_xgb_v1',
+   '{"credit_score": 750, "annual_income": 32000000, "overdue_ratio": 0.0, "request_ratio": 0.107, "deposit_balance": 5400000, "overdue_days_24m": 0}'::jsonb,
+   0.8800, 'AUTO_APPROVE', 0.8500, 0.3000, CURRENT_TIMESTAMP - INTERVAL '40 minutes'),
+  (20013, 'loan_xgb_v1',
+   '{"credit_score": 780, "annual_income": 96000000, "overdue_ratio": 0.0, "request_ratio": 0.154, "deposit_balance": 22000000, "overdue_days_24m": 0}'::jsonb,
+   0.8950, 'AUTO_APPROVE', 0.8500, 0.3000,
+   date_trunc('day', CURRENT_TIMESTAMP) - INTERVAL '1 day' + INTERVAL '11 hours 30 minutes'),
+  -- AUTO_REJECT (SCORE ≤ 0.30)
+  (20014, 'loan_xgb_v1',
+   '{"credit_score": 540, "annual_income": 28000000, "overdue_ratio": 0.183, "request_ratio": 0.925, "deposit_balance": 80000, "overdue_days_24m": 305}'::jsonb,
+   0.1500, 'AUTO_REJECT',  0.8500, 0.3000, CURRENT_TIMESTAMP - INTERVAL '2 hours'),
+  (20015, 'loan_xgb_v1',
+   '{"credit_score": 820, "annual_income": 72000000, "overdue_ratio": 0.0, "request_ratio": 3.658, "deposit_balance": 18000000, "overdue_days_24m": 0}'::jsonb,
+   0.2400, 'AUTO_REJECT',  0.8500, 0.3000,
+   date_trunc('day', CURRENT_TIMESTAMP) - INTERVAL '1 day' + INTERVAL '16 hours 45 minutes'),
+  -- HUMAN_REVIEW (0.30 < SCORE < 0.85, HUMAN_REVIEWED_AT IS NULL → 대기 큐)
+  (20016, 'loan_xgb_v1',
+   '{"credit_score": 700, "annual_income": 32000000, "overdue_ratio": 0.0, "request_ratio": 0.357, "deposit_balance": 5400000, "overdue_days_24m": 0}'::jsonb,
+   0.5800, 'HUMAN_REVIEW', 0.8500, 0.3000, CURRENT_TIMESTAMP - INTERVAL '3 hours'),
+  (20017, 'loan_xgb_v1',
+   '{"credit_score": 720, "annual_income": 96000000, "overdue_ratio": 0.0, "request_ratio": 0.250, "deposit_balance": 22000000, "overdue_days_24m": 0}'::jsonb,
+   0.7100, 'HUMAN_REVIEW', 0.8500, 0.3000, CURRENT_TIMESTAMP - INTERVAL '1 hour'),
+  (20018, 'loan_xgb_v1',
+   '{"credit_score": 760, "annual_income": 72000000, "overdue_ratio": 0.0, "request_ratio": 0.461, "deposit_balance": 18000000, "overdue_days_24m": 0}'::jsonb,
+   0.6400, 'HUMAN_REVIEW', 0.8500, 0.3000,
+   date_trunc('day', CURRENT_TIMESTAMP) - INTERVAL '1 day' + INTERVAL '9 hours 50 minutes'),
+  (20019, 'loan_xgb_v1',
+   '{"credit_score": 690, "annual_income": 32000000, "overdue_ratio": 0.0, "request_ratio": 0.214, "deposit_balance": 5400000, "overdue_days_24m": 0}'::jsonb,
+   0.4500, 'HUMAN_REVIEW', 0.8500, 0.3000,
+   date_trunc('day', CURRENT_TIMESTAMP) - INTERVAL '2 days' + INTERVAL '17 hours 35 minutes');
+
+-- ---------------------------------------------------------------
 -- 10) DELEGATION — 박철수→김영희 (배우자) / 박철수→최지영 (친권자 8권한)
 -- ---------------------------------------------------------------
 INSERT INTO public."DELEGATION"
