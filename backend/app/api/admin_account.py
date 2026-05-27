@@ -20,7 +20,12 @@ async def list_accounts_route(
     admin: CurrentAdmin = Depends(require_admin),
     query: str | None = Query(None, max_length=100, description="account_no/holder_name/customer_no 부분 일치"),
     account_type_cd: str | None = Query(None, max_length=10),
-    status_cd: str | None = Query(None, max_length=10),
+    status_cd: str | None = Query(None, max_length=10, description="ACTIVE=NORMAL+5050 묶음 / LIMITED / LOCKED / CLOSED"),
+    sort_by: str = Query(
+        "account_no",
+        pattern="^(account_no|open_date|balance|last_tx_datetime)$",
+    ),
+    sort_dir: str = Query("asc", pattern="^(asc|desc)$"),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
 ) -> dict:
@@ -28,6 +33,8 @@ async def list_accounts_route(
         query=query,
         account_type_cd=account_type_cd,
         status_cd=status_cd,
+        sort_by=sort_by,
+        sort_dir=sort_dir,
         limit=limit,
         offset=offset,
     )

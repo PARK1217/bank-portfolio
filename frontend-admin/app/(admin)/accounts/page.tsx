@@ -20,12 +20,21 @@ const TYPES: { value: string; label: string }[] = [
   { value: "INSTALL", label: "적금" },
   { value: "FOREIGN", label: "외화" },
 ];
+// 상태 옵션 — 정상은 ACTIVE 가상 코드 하나로 노출 (시드 5050 + 운영 NORMAL 묶음).
+// 백엔드 list_accounts 가 status_cd='ACTIVE' 일 때 IN ('NORMAL','5050') OR 검색.
 const STATUSES: { value: string; label: string }[] = [
-  { value: "NORMAL", label: "정상" },
-  { value: "5050", label: "정상(시드)" },
+  { value: "ACTIVE", label: "정상" },
   { value: "LIMITED", label: "거래제한" },
   { value: "LOCKED", label: "잠금" },
   { value: "CLOSED", label: "해지" },
+];
+
+type SortKey = "account_no" | "open_date" | "balance" | "last_tx_datetime";
+const SORT_OPTIONS: { value: SortKey; label: string; defaultDir: "asc" | "desc" }[] = [
+  { value: "account_no",        label: "계좌번호 ↑",       defaultDir: "asc"  },
+  { value: "open_date",         label: "개설일 최근 순",   defaultDir: "desc" },
+  { value: "balance",           label: "잔액 많은 순",     defaultDir: "desc" },
+  { value: "last_tx_datetime",  label: "최근 거래 순",     defaultDir: "desc" },
 ];
 
 
@@ -33,6 +42,7 @@ export default function AccountsPage() {
   const [query, setQuery] = useState("");
   const [accountTypeCd, setAccountTypeCd] = useState("");
   const [statusCd, setStatusCd] = useState("");
+  const [sortBy, setSortBy] = useState<SortKey>("account_no");
   const [data, setData] = useState<AccountListResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -41,10 +51,13 @@ export default function AccountsPage() {
     setLoading(true);
     setError(null);
     try {
+      const sortOpt = SORT_OPTIONS.find((o) => o.value === sortBy) ?? SORT_OPTIONS[0];
       const params = new URLSearchParams();
       if (query) params.set("query", query);
       if (accountTypeCd) params.set("account_type_cd", accountTypeCd);
       if (statusCd) params.set("status_cd", statusCd);
+      params.set("sort_by", sortBy);
+      params.set("sort_dir", sortOpt.defaultDir);
       params.set("limit", "100");
       const res = await api.get<AccountListResponse>(`/api/admin/accounts?${params.toString()}`);
       setData(res);
@@ -58,7 +71,7 @@ export default function AccountsPage() {
   useEffect(() => {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [sortBy]);
 
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -88,6 +101,9 @@ export default function AccountsPage() {
                   className="pl-8"
                 />
               </div>
+              <span className="text-[10px] text-muted-foreground">
+                회원번호는 정확 일치, 계좌번호·예금주는 부분 일치
+              </span>
             </label>
             <label className="space-y-1.5">
               <span className="text-[11px] font-medium text-muted-foreground">유형</span>
@@ -115,6 +131,20 @@ export default function AccountsPage() {
                 {STATUSES.map((s) => (
                   <option key={s.value} value={s.value}>
                     {s.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="space-y-1.5">
+              <span className="text-[11px] font-medium text-muted-foreground">정렬</span>
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as SortKey)}
+                className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+              >
+                {SORT_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
                   </option>
                 ))}
               </select>

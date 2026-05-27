@@ -21,10 +21,20 @@ from ..exceptions import NotFoundError
 log = structlog.get_logger("admin_account")
 
 
+_SORT_COLUMN_MAP = {
+    "account_no":       ('a."ACCOUNT_NO"',       "ASC"),
+    "open_date":        ('a."OPEN_DATE"',        "DESC"),
+    "balance":          ('a."BALANCE"',          "DESC"),
+    "last_tx_datetime": ('a."LAST_TX_DATETIME"', "DESC"),
+}
+
+
 async def list_accounts(
     query: str | None = None,
     account_type_cd: str | None = None,
     status_cd: str | None = None,
+    sort_by: str = "account_no",
+    sort_dir: str = "asc",
     limit: int = 50,
     offset: int = 0,
 ) -> dict[str, Any]:
@@ -45,9 +55,18 @@ async def list_accounts(
             params.append(account_type_cd)
             clauses.append(f'a."ACCOUNT_TYPE_CD" = ${len(params)}')
         if status_cd:
-            params.append(status_cd)
-            clauses.append(f'a."ACCOUNT_STATUS_CD" = ${len(params)}')
+            # ACTIVE 는 가상 코드 — 시드 5050 과 운영 NORMAL 두 정상 코드를 한 옵션으로 묶음.
+            if status_cd == "ACTIVE":
+                clauses.append('a."ACCOUNT_STATUS_CD" IN (\'NORMAL\', \'5050\')')
+            else:
+                params.append(status_cd)
+                clauses.append(f'a."ACCOUNT_STATUS_CD" = ${len(params)}')
         where = " AND ".join(clauses)
+
+        # 정렬 화이트리스트 가드 — SQL 인젝션 방지.
+        sort_col, default_dir = _SORT_COLUMN_MAP.get(sort_by, _SORT_COLUMN_MAP["account_no"])
+        direction = sort_dir.upper() if sort_dir.upper() in ("ASC", "DESC") else default_dir
+        order_by = f"{sort_col} {direction} NULLS LAST, a.\"ACCOUNT_NO\" ASC"
 
         total = await conn.fetchval(
             f'SELECT COUNT(*) FROM public."ACCOUNT" a WHERE {where}',
@@ -66,7 +85,7 @@ async def list_accounts(
             f'LEFT JOIN public."CUSTOMER" c ON c."CUSTOMER_NO" = a."CUSTOMER_NO" '
             f'LEFT JOIN public."PARTY" p ON p."PARTY_ID" = c."PARTY_ID" '
             f"WHERE {where} "
-            f'ORDER BY a."ACCOUNT_NO" '
+            f"ORDER BY {order_by} "
             f"LIMIT ${len(params_with_paging) - 1} OFFSET ${len(params_with_paging)}",
             *params_with_paging,
         )
