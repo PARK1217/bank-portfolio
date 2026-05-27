@@ -30,6 +30,11 @@ async def list_customers_route(
     query: str | None = Query(None, max_length=100, description="customer_no/email/PARTY_NAME 부분 일치"),
     grade_cd: str | None = Query(None, max_length=10),
     status_cd: str | None = Query(None, max_length=10),
+    sort_by: str = Query(
+        "customer_no",
+        pattern="^(customer_no|join_datetime|total_balance|account_count|loan_count)$",
+    ),
+    sort_dir: str = Query("asc", pattern="^(asc|desc)$"),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
 ) -> dict:
@@ -37,6 +42,8 @@ async def list_customers_route(
         query=query,
         grade_cd=grade_cd,
         status_cd=status_cd,
+        sort_by=sort_by,
+        sort_dir=sort_dir,
         limit=limit,
         offset=offset,
     )

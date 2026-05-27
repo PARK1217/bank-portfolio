@@ -19,10 +19,22 @@ import {
 } from "@/lib/labels";
 
 
+type SortKey = "customer_no" | "join_datetime" | "total_balance" | "account_count" | "loan_count";
+
+const SORT_OPTIONS: { value: SortKey; label: string; defaultDir: "asc" | "desc" }[] = [
+  { value: "customer_no",   label: "회원번호 ↑",      defaultDir: "asc"  },
+  { value: "join_datetime", label: "가입일 최근 순",  defaultDir: "desc" },
+  { value: "total_balance", label: "총 잔액 많은 순", defaultDir: "desc" },
+  { value: "account_count", label: "계좌 많은 순",    defaultDir: "desc" },
+  { value: "loan_count",    label: "대출 많은 순",    defaultDir: "desc" },
+];
+
+
 export default function CustomersPage() {
   const [query, setQuery] = useState("");
   const [gradeCd, setGradeCd] = useState("");
   const [statusCd, setStatusCd] = useState("");
+  const [sortBy, setSortBy] = useState<SortKey>("customer_no");
   const [data, setData] = useState<CustomerListResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -31,10 +43,13 @@ export default function CustomersPage() {
     setLoading(true);
     setError(null);
     try {
+      const sortOpt = SORT_OPTIONS.find((o) => o.value === sortBy) ?? SORT_OPTIONS[0];
       const params = new URLSearchParams();
       if (query) params.set("query", query);
       if (gradeCd) params.set("grade_cd", gradeCd);
       if (statusCd) params.set("status_cd", statusCd);
+      params.set("sort_by", sortBy);
+      params.set("sort_dir", sortOpt.defaultDir);
       params.set("limit", "100");
       const res = await api.get<CustomerListResponse>(`/api/admin/customers?${params.toString()}`);
       setData(res);
@@ -48,7 +63,7 @@ export default function CustomersPage() {
   useEffect(() => {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [sortBy]);
 
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -78,6 +93,9 @@ export default function CustomersPage() {
                   className="pl-8"
                 />
               </div>
+              <span className="text-[10px] text-muted-foreground">
+                회원번호는 정확 일치, 이메일·이름은 부분 일치
+              </span>
             </label>
             <label className="space-y-1.5">
               <span className="text-[11px] font-medium text-muted-foreground">등급</span>
@@ -105,6 +123,20 @@ export default function CustomersPage() {
                 {CUSTOMER_STATUS_OPTIONS.map((s) => (
                   <option key={s.value} value={s.value}>
                     {s.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="space-y-1.5">
+              <span className="text-[11px] font-medium text-muted-foreground">정렬</span>
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as SortKey)}
+                className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+              >
+                {SORT_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
                   </option>
                 ))}
               </select>
@@ -175,7 +207,14 @@ export default function CustomersPage() {
                       <StatusBadge status={row.status_cd} />
                     </TD>
                     <TD className="num-tabular text-right">{fmtNumber(row.account_count)}</TD>
-                    <TD className="num-tabular text-right font-medium">{fmtKrw(row.total_balance)}</TD>
+                    <TD
+                      className={`num-tabular text-right font-medium ${
+                        row.total_balance < 0 ? "text-destructive" : ""
+                      }`}
+                      title={row.total_balance < 0 ? "마이너스통장 사용으로 음수" : undefined}
+                    >
+                      {fmtKrw(row.total_balance)}
+                    </TD>
                     <TD className="num-tabular text-right">{fmtNumber(row.loan_count)}</TD>
                     <TD className="text-xs text-muted-foreground">{fmtDateTime(row.join_datetime)}</TD>
                   </TR>

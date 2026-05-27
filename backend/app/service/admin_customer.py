@@ -21,16 +21,29 @@ from ..exceptions import NotFoundError
 log = structlog.get_logger("admin_customer")
 
 
+_SORT_COLUMN_MAP = {
+    "customer_no":   ('c."CUSTOMER_NO"',  "ASC"),
+    "join_datetime": ('c."JOIN_DATETIME"', "DESC"),
+    "total_balance": ("total_balance",     "DESC"),
+    "account_count": ("account_count",     "DESC"),
+    "loan_count":    ("loan_count",        "DESC"),
+}
+
+
 async def list_customers(
     query: str | None = None,
     grade_cd: str | None = None,
     status_cd: str | None = None,
+    sort_by: str = "customer_no",
+    sort_dir: str = "asc",
     limit: int = 50,
     offset: int = 0,
 ) -> dict[str, Any]:
     pool = get_pool()
     async with pool.acquire() as conn:
-        clauses = ['c."DELETE_YN" = \'N\'']
+        # CUSTOMER_NO 990000+ 은 회귀 자격증명(#999999) + admin chatbot pseudo customer.
+        # 도메인 회원이 아니라 운영 목록에서는 노출 제외. 상세 직접 진입(/customers/{no})은 허용.
+        clauses = ['c."DELETE_YN" = \'N\'', 'c."CUSTOMER_NO" < 990000']
         params: list[Any] = []
         if query:
             params.append(f"%{query}%")
@@ -48,6 +61,12 @@ async def list_customers(
             params.append(status_cd)
             clauses.append(f'c."CUST_STATUS_CD" = ${len(params)}')
         where = " AND ".join(clauses)
+
+        # 정렬 화이트리스트 가드 — SQL 인젝션 방지.
+        sort_col, default_dir = _SORT_COLUMN_MAP.get(sort_by, _SORT_COLUMN_MAP["customer_no"])
+        direction = sort_dir.upper() if sort_dir.upper() in ("ASC", "DESC") else default_dir
+        # customer_no tiebreaker — 같은 값 두 회원 사이 페이지네이션 안정성.
+        order_by = f"{sort_col} {direction} NULLS LAST, c.\"CUSTOMER_NO\" ASC"
 
         # 합산 카운트
         total = await conn.fetchval(
@@ -75,7 +94,7 @@ async def list_customers(
             f'FROM public."CUSTOMER" c '
             f'LEFT JOIN public."PARTY" p ON p."PARTY_ID" = c."PARTY_ID" '
             f"WHERE {where} "
-            f'ORDER BY c."CUSTOMER_NO" '
+            f"ORDER BY {order_by} "
             f"LIMIT ${len(params_with_paging) - 1} OFFSET ${len(params_with_paging)}",
             *params_with_paging,
         )
