@@ -57,6 +57,9 @@ _EXPLICIT_ACTIONS: dict[tuple[str, str], str] = {
     ("GET",  "/api/admin/chatbot/sessions"):                   "CHATBOT_SESSIONS",
     ("GET",  "/api/admin/chatbot/sessions/:id"):               "CHATBOT_SESSION_DETAIL",
     ("GET",  "/api/admin/chatbot/source/:id"):                 "CHATBOT_SOURCE_VIEW",
+    ("GET",  "/api/admin/observability/llm-calls"):            "LLM_CALL_LIST",
+    ("GET",  "/api/admin/observability/llm-calls/:id"):        "LLM_CALL_DETAIL",
+    ("GET",  "/api/admin/observability/stats"):                "LLM_CALL_STATS",
 }
 
 # ---------------------------------------------------------------------------
@@ -89,6 +92,9 @@ _TARGET_TABLE_RULES: list[tuple[re.Pattern[str], str, int | None]] = [
     (re.compile(r"^/api/admin/chatbot/sessions/(\d+)$"),              "AI_CHATBOT_SESSION", 1),
     (re.compile(r"^/api/admin/chatbot/(messages|sessions)$"),         "AI_CHATBOT_SESSION", None),
     (re.compile(r"^/api/admin/chatbot/feedback$"),                    "AI_CHATBOT_FEEDBACK", None),
+    (re.compile(r"^/api/admin/observability/llm-calls/(\d+)$"),       "AI_LLM_CALL_LOG", 1),
+    (re.compile(r"^/api/admin/observability/llm-calls$"),             "AI_LLM_CALL_LOG", None),
+    (re.compile(r"^/api/admin/observability/stats$"),                 "AI_LLM_CALL_LOG", None),
 ]
 
 

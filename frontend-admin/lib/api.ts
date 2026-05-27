@@ -471,6 +471,71 @@ export interface AuditFacets {
 }
 
 
+// AI_LLM_CALL_LOG — observability/page.tsx
+export interface LlmCallListItem {
+  llm_call_id: number;
+  called_at: string;
+  audience_cd: string | null;
+  cache_hit_yn: string | null;
+  model_name: string | null;
+  purpose_cd: string | null;
+  prompt_tokens: number | null;
+  completion_tokens: number | null;
+  latency_ms: number | null;
+  status_cd: string | null;
+  raw_question_head: string | null;
+}
+
+export interface LlmCallListResponse {
+  items: LlmCallListItem[];
+  total: number;
+}
+
+export interface LlmRetrievedChunk {
+  rank: number;
+  faq_id: number;
+  category?: string;
+  question?: string;
+  audience_cd?: string;
+  source_tag?: string;
+  distance: number;
+  snippet?: string;
+}
+
+export interface LlmCallDetail {
+  llm_call_id: number;
+  trace_id: string;
+  span_id: string | null;
+  called_at: string;
+  audience_cd: string | null;
+  cache_hit_yn: string | null;
+  model_name: string | null;
+  purpose_cd: string | null;
+  prompt_tokens: number | null;
+  completion_tokens: number | null;
+  latency_ms: number | null;
+  status_cd: string | null;
+  error_message: string | null;
+  system_prompt: string | null;
+  user_prompt: string | null;
+  raw_question: string | null;
+  rewritten_query: string | null;
+  retrieved_context: LlmRetrievedChunk[] | null;
+  response_text: string | null;
+}
+
+export interface LlmCallStats {
+  total: number;
+  cache_hits: number;
+  cache_misses: number;
+  cache_hit_rate: number;
+  avg_miss_latency_ms: number | null;
+  avg_hit_latency_ms: number | null;
+  prompt_tokens_24h: number;
+  completion_tokens_24h: number;
+}
+
+
 export interface AccountDetail {
   account: {
     account_no: string;
