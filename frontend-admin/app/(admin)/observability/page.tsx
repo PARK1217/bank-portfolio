@@ -11,6 +11,7 @@ import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import {
   api,
   type FeedbackAudienceStat,
+  type FeedbackDetail,
   type FeedbackListItem,
   type FeedbackListResponse,
   type FeedbackStats,
@@ -680,21 +681,146 @@ function AudienceSatRow({ label, stat }: { label: string; stat?: FeedbackAudienc
 
 function FeedbackRow({ f }: { f: FeedbackListItem }) {
   const up = f.rating === 5;
+  const [expanded, setExpanded] = useState(false);
+  const [detail, setDetail] = useState<FeedbackDetail | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (expanded && !detail && !loading) {
+      setLoading(true);
+      setError(null);
+      api
+        .get<FeedbackDetail>(`/api/admin/observability/feedback/${f.feedback_id}`)
+        .then((d) => setDetail(d))
+        .catch((err) => setError(err instanceof Error ? err.message : "상세를 불러오지 못했습니다."))
+        .finally(() => setLoading(false));
+    }
+  }, [expanded, detail, loading, f.feedback_id]);
+
   return (
-    <div className="rounded border bg-card p-2 text-[11px]">
-      <div className="mb-1 flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
-        {up ? <Badge variant="success">👍 좋아요</Badge> : <Badge variant="destructive">👎 싫어요</Badge>}
-        {f.audience_cd === "ADMIN" ? <Badge variant="warning">직원</Badge> : <Badge variant="primary">고객</Badge>}
-        {f.issue_category ? (
-          <Badge variant="muted">{ISSUE_LABELS[f.issue_category] ?? f.issue_category}</Badge>
-        ) : null}
-        <span className="ml-auto whitespace-nowrap">{fmtDateTime(f.at)}</span>
-      </div>
-      {f.comment ? (
-        <div className="whitespace-pre-wrap leading-snug text-foreground/90">{f.comment}</div>
+    <div className="rounded border bg-card text-[11px]">
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="flex w-full flex-col gap-1 p-2 text-left hover:bg-accent/40"
+      >
+        <div className="flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
+          {up ? <Badge variant="success">👍 좋아요</Badge> : <Badge variant="destructive">👎 싫어요</Badge>}
+          {f.audience_cd === "ADMIN" ? <Badge variant="warning">직원</Badge> : <Badge variant="primary">고객</Badge>}
+          {f.issue_category ? (
+            <Badge variant="muted">{ISSUE_LABELS[f.issue_category] ?? f.issue_category}</Badge>
+          ) : null}
+          <span className="ml-auto whitespace-nowrap">{fmtDateTime(f.at)}</span>
+        </div>
+        {f.comment ? (
+          <div className="whitespace-pre-wrap leading-snug text-foreground/90">{f.comment}</div>
+        ) : (
+          <span className="text-muted-foreground/60">(코멘트 없음 · 클릭하면 평가 대상 답변·자동 점수 대조)</span>
+        )}
+      </button>
+
+      {expanded ? (
+        <div className="border-t bg-muted/20 p-2">
+          {loading && !detail ? (
+            <Spinner label="평가 대상 불러오는 중…" />
+          ) : error ? (
+            <div className="rounded-md border border-destructive/50 bg-destructive/5 px-2 py-1.5 text-destructive">
+              {error}
+            </div>
+          ) : detail ? (
+            <FeedbackDetailView detail={detail} />
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+
+function FeedbackDetailView({ detail }: { detail: FeedbackDetail }) {
+  return (
+    <div className="space-y-2.5">
+      <CrossSignalVerdict rating={detail.rating} evaluation={detail.evaluation} />
+
+      {detail.question ? (
+        <TextBlock label="질문 (직전 사용자 메시지)" text={detail.question} mono={false} />
+      ) : null}
+
+      {detail.answer ? (
+        <TextBlock
+          label={`평가 대상 답변${detail.rag_tier_cd ? ` · ${detail.rag_tier_cd}` : ""}`}
+          text={detail.answer}
+          mono={false}
+        />
       ) : (
-        <span className="text-muted-foreground/60">(코멘트 없음)</span>
+        <p className="text-[11px] text-muted-foreground/70">평가 대상 답변을 찾을 수 없습니다 (메시지 삭제됨).</p>
       )}
+
+      {detail.evaluation ? (
+        <EvalScoresBlock evaluation={detail.evaluation} />
+      ) : (
+        <p className="text-[11px] text-muted-foreground/70">
+          자동 평가 점수 없음 — 캐시 적중 응답이거나 아직 채점되지 않았습니다.
+        </p>
+      )}
+    </div>
+  );
+}
+
+
+// 사람 평가(👍/👎)와 자동 평가(LLM-as-judge) 대조 → 불일치 시 재확인 권고.
+function CrossSignalVerdict({
+  rating,
+  evaluation,
+}: {
+  rating: number | null;
+  evaluation: RagEvalScores | null;
+}) {
+  if (!evaluation) return null;
+  const scores = [
+    evaluation.faithfulness,
+    evaluation.answer_relevancy,
+    evaluation.context_precision,
+    evaluation.context_recall,
+  ].filter((s): s is number => s != null);
+  if (scores.length === 0) return null;
+
+  const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
+  const autoPct = (avg * 100).toFixed(0);
+  const down = rating === 1;
+  const up = rating === 5;
+
+  let tone: "warning" | "success" | "muted" = "muted";
+  let text = "";
+  if (down && avg >= 0.7) {
+    tone = "warning";
+    text = `사람은 👎 인데 자동 평가는 양호(${autoPct}%) — 허위·오해 가능성, 평가 재확인 권장`;
+  } else if (up && avg < 0.5) {
+    tone = "warning";
+    text = `사람은 👍 인데 자동 평가는 미흡(${autoPct}%) — 답변 품질 재확인 권장`;
+  } else if (down && avg < 0.5) {
+    tone = "muted";
+    text = `사람 👎 · 자동 평가도 미흡(${autoPct}%) — 실제 품질 문제로 일치`;
+  } else if (up && avg >= 0.7) {
+    tone = "success";
+    text = `사람 👍 · 자동 평가도 양호(${autoPct}%) — 신호 일치`;
+  } else {
+    text = `사람 평가와 자동 평가(${autoPct}%) 비교`;
+  }
+
+  return (
+    <div
+      className={`flex items-start gap-1.5 rounded-md border px-2 py-1.5 text-[11px] ${
+        tone === "warning"
+          ? "border-warning/50 bg-warning/5 text-warning"
+          : tone === "success"
+            ? "border-success/40 bg-success/5 text-success"
+            : "border-border bg-muted/30 text-muted-foreground"
+      }`}
+    >
+      {tone === "warning" ? <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> : null}
+      <span>{text}</span>
     </div>
   );
 }

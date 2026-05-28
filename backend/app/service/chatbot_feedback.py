@@ -195,3 +195,84 @@ async def list_feedback(
         for r in rows
     ]
     return {"items": items, "total": int(total or 0)}
+
+
+async def get_feedback_detail(feedback_id: int) -> dict | None:
+    """피드백 단건 + 평가 대상 답변 + 자동 평가 점수(LLM-as-judge).
+
+    사람 평가(👍/👎)와 자동 평가를 한 화면에서 대조하기 위한 데이터.
+    체인: FEEDBACK.MESSAGE_ID → CHATBOT_MESSAGE(답변) → LLM_CALL_ID → RAG_EVALUATION.
+    질문 = 같은 세션에서 그 답변 직전 USER 메시지.
+    """
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        fb = await conn.fetchrow(
+            'SELECT "FEEDBACK_ID", "MESSAGE_ID", "CUSTOMER_NO", "RATING", "COMMENT", '
+            '       "AUDIENCE_CD", "ISSUE_CATEGORY", '
+            '       COALESCE("UPDATED_AT", "CREATED_AT") AS at '
+            'FROM public."AI_CHATBOT_FEEDBACK" '
+            "WHERE \"FEEDBACK_ID\" = $1 AND \"DELETE_YN\" = 'N'",
+            feedback_id,
+        )
+        if fb is None:
+            return None
+
+        msg = await conn.fetchrow(
+            'SELECT "MESSAGE_ID", "SESSION_ID", "ROLE_CD", "CONTENT", '
+            '       "RAG_TIER_CD", "LLM_CALL_ID" '
+            'FROM public."AI_CHATBOT_MESSAGE" '
+            'WHERE "MESSAGE_ID" = $1',
+            int(fb["MESSAGE_ID"]),
+        )
+
+        question = answer = rag_tier = None
+        llm_call_id = None
+        evaluation = None
+        if msg is not None:
+            answer = msg["CONTENT"]
+            rag_tier = msg["RAG_TIER_CD"]
+            llm_call_id = msg["LLM_CALL_ID"]
+
+            q = await conn.fetchrow(
+                'SELECT "CONTENT" FROM public."AI_CHATBOT_MESSAGE" '
+                'WHERE "SESSION_ID" = $1 AND "ROLE_CD" = \'USER\' '
+                '  AND "MESSAGE_ID" < $2 '
+                'ORDER BY "MESSAGE_ID" DESC LIMIT 1',
+                int(msg["SESSION_ID"]),
+                int(msg["MESSAGE_ID"]),
+            )
+            if q is not None:
+                question = q["CONTENT"]
+
+            if llm_call_id is not None:
+                ev = await conn.fetchrow(
+                    'SELECT "FAITHFULNESS", "ANSWER_RELEVANCY", "CONTEXT_PRECISION", '
+                    '       "CONTEXT_RECALL", "EVALUATED_AT" '
+                    'FROM public."AI_RAG_EVALUATION" '
+                    "WHERE \"LLM_CALL_ID\" = $1 AND \"DELETE_YN\" = 'N' "
+                    'ORDER BY "EVAL_ID" DESC LIMIT 1',
+                    int(llm_call_id),
+                )
+                if ev is not None:
+                    evaluation = {
+                        "faithfulness": float(ev["FAITHFULNESS"]) if ev["FAITHFULNESS"] is not None else None,
+                        "answer_relevancy": float(ev["ANSWER_RELEVANCY"]) if ev["ANSWER_RELEVANCY"] is not None else None,
+                        "context_precision": float(ev["CONTEXT_PRECISION"]) if ev["CONTEXT_PRECISION"] is not None else None,
+                        "context_recall": float(ev["CONTEXT_RECALL"]) if ev["CONTEXT_RECALL"] is not None else None,
+                        "evaluated_at": ev["EVALUATED_AT"],
+                    }
+
+    return {
+        "feedback_id": int(fb["FEEDBACK_ID"]),
+        "message_id": int(fb["MESSAGE_ID"]),
+        "rating": int(fb["RATING"]) if fb["RATING"] is not None else None,
+        "comment": fb["COMMENT"],
+        "audience_cd": (fb["AUDIENCE_CD"] or "USER").strip() or "USER",
+        "issue_category": fb["ISSUE_CATEGORY"],
+        "at": fb["at"],
+        "question": question,
+        "answer": answer,
+        "rag_tier_cd": rag_tier,
+        "llm_call_id": int(llm_call_id) if llm_call_id is not None else None,
+        "evaluation": evaluation,
+    }

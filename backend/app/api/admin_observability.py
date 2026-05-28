@@ -10,6 +10,7 @@ AI_LLM_CALL_LOG 펼침 UI 를 띄우기 위해 호출.
 - GET /api/admin/observability/rag-eval-stats     RAG 품질 4지표 평균 (faithfulness 등)
 - GET /api/admin/observability/feedback-stats     사용자/직원 피드백 👍/👎 집계 + 👎 이슈 분포
 - GET /api/admin/observability/feedback           피드백 목록 (코멘트·카테고리)
+- GET /api/admin/observability/feedback/{id}       피드백 단건 + 평가 대상 답변 + 자동 점수 (사람↔자동 대조)
 """
 
 from __future__ import annotations
@@ -24,7 +25,11 @@ from ..service.admin_observability import (
     llm_call_stats,
     rag_eval_stats,
 )
-from ..service.chatbot_feedback import feedback_stats, list_feedback
+from ..service.chatbot_feedback import (
+    feedback_stats,
+    get_feedback_detail,
+    list_feedback,
+)
 
 router = APIRouter(prefix="/admin/observability", tags=["admin-observability"])
 
@@ -101,3 +106,14 @@ async def list_feedback_route(
         limit=limit,
         offset=offset,
     )
+
+
+@router.get("/feedback/{feedback_id}")
+async def get_feedback_detail_route(
+    feedback_id: int,
+    admin: CurrentAdmin = Depends(require_admin),
+) -> dict:
+    row = await get_feedback_detail(feedback_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail={"code": E_NOT_FOUND, "message": "해당 피드백을 찾을 수 없습니다."})
+    return row

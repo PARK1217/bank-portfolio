@@ -586,6 +586,21 @@ export interface FeedbackListResponse {
   total: number;
 }
 
+export interface FeedbackDetail {
+  feedback_id: number;
+  message_id: number;
+  rating: number | null;
+  comment: string | null;
+  audience_cd: string;
+  issue_category: string | null;
+  at: string;
+  question: string | null;
+  answer: string | null;
+  rag_tier_cd: string | null;
+  llm_call_id: number | null;
+  evaluation: RagEvalScores | null;
+}
+
 
 export interface AccountDetail {
   account: {
