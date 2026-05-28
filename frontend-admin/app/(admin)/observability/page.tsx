@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ExternalLink, Sparkles, AlertTriangle, RefreshCw, Search, Database } from "lucide-react";
+import { ExternalLink, Sparkles, AlertTriangle, RefreshCw, Search, Database, ThumbsUp, ThumbsDown, MessageSquare } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,6 +10,10 @@ import { Spinner } from "@/components/ui/spinner";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import {
   api,
+  type FeedbackAudienceStat,
+  type FeedbackListItem,
+  type FeedbackListResponse,
+  type FeedbackStats,
   type LlmCallDetail,
   type LlmCallListItem,
   type LlmCallListResponse,
@@ -32,6 +36,8 @@ export default function ObservabilityPage() {
   // LLM 호출 추적 — DB 직접 적재 (Phoenix iframe 과 별개)
   const [stats, setStats] = useState<LlmCallStats | null>(null);
   const [ragStats, setRagStats] = useState<RagEvalStats | null>(null);
+  const [fbStats, setFbStats] = useState<FeedbackStats | null>(null);
+  const [fbList, setFbList] = useState<FeedbackListResponse | null>(null);
   const [audienceCd, setAudienceCd] = useState("");
   const [cacheHitYn, setCacheHitYn] = useState("");
   const [q, setQ] = useState("");
@@ -73,6 +79,24 @@ export default function ObservabilityPage() {
         setRagStats(rs);
       } catch {
         // rag-eval-stats 실패해도 화면은 동작
+      }
+    })();
+    (async () => {
+      try {
+        const fs = await api.get<FeedbackStats>("/api/admin/observability/feedback-stats");
+        setFbStats(fs);
+      } catch {
+        // feedback-stats 실패해도 화면은 동작
+      }
+    })();
+    (async () => {
+      try {
+        const fl = await api.get<FeedbackListResponse>(
+          "/api/admin/observability/feedback?has_comment=true&limit=50",
+        );
+        setFbList(fl);
+      } catch {
+        // feedback 목록 실패해도 화면은 동작
       }
     })();
     void load();
@@ -158,6 +182,9 @@ export default function ObservabilityPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* 사용자/직원 만족도 — AI_CHATBOT_FEEDBACK */}
+      <FeedbackSection stats={fbStats} list={fbList} />
 
       {/* 필터 */}
       <Card>
@@ -511,6 +538,163 @@ function RetrievedContextBlock({ chunks }: { chunks: LlmRetrievedChunk[] }) {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+
+// 👎 이슈 카테고리 코드 → 라벨 (ai-assist 제출 화면과 동일)
+const ISSUE_LABELS: Record<string, string> = {
+  RETRIEVAL_MISS: "검색이 엉뚱한 자료",
+  ANSWER_INCORRECT: "답이 부정확",
+  KNOWLEDGE_GAP: "매뉴얼 부재",
+  LENGTH: "답 길이 문제",
+  OTHER: "기타",
+};
+
+
+function FeedbackSection({
+  stats,
+  list,
+}: {
+  stats: FeedbackStats | null;
+  list: FeedbackListResponse | null;
+}) {
+  const user = stats?.by_audience?.USER;
+  const admin = stats?.by_audience?.ADMIN;
+  const maxIssue = stats?.issue_breakdown?.[0]?.count || 1;
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base flex items-center gap-2">
+          <MessageSquare className="h-4 w-4 text-primary" />
+          사용자 만족도
+          {stats ? (
+            <span className="ml-1 text-xs font-normal text-muted-foreground">
+              피드백 {fmtNumber(stats.total)}건
+            </span>
+          ) : null}
+        </CardTitle>
+        <CardDescription>
+          챗봇 답변에 대한 👍/👎 평가 — 고객(USER) · 직원(ADMIN) 신호 분리, 👎 사유 분포 포함
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {stats && stats.total > 0 ? (
+          <>
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+              <KpiCard label="총 평가" value={fmtNumber(stats.total)} unit="건" color="text-foreground" />
+              <KpiCard label="좋아요" value={fmtNumber(stats.up)} unit="건" color="text-success" />
+              <KpiCard label="싫어요" value={fmtNumber(stats.down)} unit="건" color="text-destructive" />
+              <KpiCard
+                label="만족도"
+                value={stats.satisfaction_rate != null ? (stats.satisfaction_rate * 100).toFixed(1) : "-"}
+                unit="%"
+                color="text-success"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+              <AudienceSatRow label="고객 (USER)" stat={user} />
+              <AudienceSatRow label="직원 (ADMIN)" stat={admin} />
+            </div>
+
+            {stats.issue_breakdown.length > 0 ? (
+              <div>
+                <div className="mb-1.5 text-[11px] font-medium text-muted-foreground">👎 사유 분포</div>
+                <div className="space-y-1">
+                  {stats.issue_breakdown.map((it) => (
+                    <div key={it.category} className="flex items-center gap-2">
+                      <span className="w-28 shrink-0 text-[11px] text-muted-foreground">
+                        {ISSUE_LABELS[it.category] ?? it.category}
+                      </span>
+                      <div className="h-2 flex-1 overflow-hidden rounded bg-muted">
+                        <div
+                          className="h-full rounded bg-destructive/60"
+                          style={{ width: `${Math.round((it.count / maxIssue) * 100)}%` }}
+                        />
+                      </div>
+                      <span className="num-tabular w-8 shrink-0 text-right text-[11px] text-muted-foreground">
+                        {it.count}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </>
+        ) : (
+          <p className="rounded-md border border-dashed bg-muted/30 p-4 text-center text-sm text-muted-foreground">
+            아직 수집된 피드백이 없습니다. 챗봇 답변의 👍/👎 가 쌓이면 집계됩니다.
+          </p>
+        )}
+
+        {list && list.items.length > 0 ? (
+          <div>
+            <div className="mb-1.5 text-[11px] font-medium text-muted-foreground">
+              최근 코멘트{" "}
+              <span className="font-normal text-muted-foreground/70">({list.items.length}건)</span>
+            </div>
+            <div className="space-y-1.5">
+              {list.items.map((f) => (
+                <FeedbackRow key={f.feedback_id} f={f} />
+              ))}
+            </div>
+          </div>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+
+function AudienceSatRow({ label, stat }: { label: string; stat?: FeedbackAudienceStat }) {
+  if (!stat || stat.total === 0) {
+    return (
+      <div className="flex items-center justify-between rounded-md border bg-card px-3 py-2 text-xs">
+        <span className="text-muted-foreground">{label}</span>
+        <span className="text-muted-foreground/60">데이터 없음</span>
+      </div>
+    );
+  }
+  return (
+    <div className="flex items-center justify-between rounded-md border bg-card px-3 py-2 text-xs">
+      <span className="font-medium">{label}</span>
+      <span className="flex items-center gap-3">
+        <span className="flex items-center gap-1 text-success">
+          <ThumbsUp className="h-3 w-3" />
+          {stat.up}
+        </span>
+        <span className="flex items-center gap-1 text-destructive">
+          <ThumbsDown className="h-3 w-3" />
+          {stat.down}
+        </span>
+        <span className="num-tabular font-semibold">
+          {stat.satisfaction_rate != null ? `${(stat.satisfaction_rate * 100).toFixed(0)}%` : "-"}
+        </span>
+      </span>
+    </div>
+  );
+}
+
+
+function FeedbackRow({ f }: { f: FeedbackListItem }) {
+  const up = f.rating === 5;
+  return (
+    <div className="rounded border bg-card p-2 text-[11px]">
+      <div className="mb-1 flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
+        {up ? <Badge variant="success">👍 좋아요</Badge> : <Badge variant="destructive">👎 싫어요</Badge>}
+        {f.audience_cd === "ADMIN" ? <Badge variant="warning">직원</Badge> : <Badge variant="primary">고객</Badge>}
+        {f.issue_category ? (
+          <Badge variant="muted">{ISSUE_LABELS[f.issue_category] ?? f.issue_category}</Badge>
+        ) : null}
+        <span className="ml-auto whitespace-nowrap">{fmtDateTime(f.at)}</span>
+      </div>
+      {f.comment ? (
+        <div className="whitespace-pre-wrap leading-snug text-foreground/90">{f.comment}</div>
+      ) : (
+        <span className="text-muted-foreground/60">(코멘트 없음)</span>
+      )}
     </div>
   );
 }

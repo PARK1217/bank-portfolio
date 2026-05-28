@@ -553,6 +553,39 @@ export interface RagEvalStats {
   context_recall: number | null;
 }
 
+// AI_CHATBOT_FEEDBACK — 사용자/직원 👍/👎 만족도
+export interface FeedbackAudienceStat {
+  total: number;
+  up: number;
+  down: number;
+  satisfaction_rate: number | null;
+}
+
+export interface FeedbackStats {
+  total: number;
+  up: number;
+  down: number;
+  satisfaction_rate: number | null;
+  by_audience: Record<string, FeedbackAudienceStat>;
+  issue_breakdown: { category: string; count: number }[];
+}
+
+export interface FeedbackListItem {
+  feedback_id: number;
+  message_id: number;
+  customer_no: number;
+  rating: number | null;
+  comment: string | null;
+  audience_cd: string;
+  issue_category: string | null;
+  at: string;
+}
+
+export interface FeedbackListResponse {
+  items: FeedbackListItem[];
+  total: number;
+}
+
 
 export interface AccountDetail {
   account: {

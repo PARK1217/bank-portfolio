@@ -8,6 +8,8 @@ AI_LLM_CALL_LOG 펼침 UI 를 띄우기 위해 호출.
 - GET /api/admin/observability/llm-calls/{id}     단건 상세 (system/user/retrieved/response 전문)
 - GET /api/admin/observability/stats              최근 24h hit/miss/avg latency/tokens
 - GET /api/admin/observability/rag-eval-stats     RAG 품질 4지표 평균 (faithfulness 등)
+- GET /api/admin/observability/feedback-stats     사용자/직원 피드백 👍/👎 집계 + 👎 이슈 분포
+- GET /api/admin/observability/feedback           피드백 목록 (코멘트·카테고리)
 """
 
 from __future__ import annotations
@@ -22,6 +24,7 @@ from ..service.admin_observability import (
     llm_call_stats,
     rag_eval_stats,
 )
+from ..service.chatbot_feedback import feedback_stats, list_feedback
 
 router = APIRouter(prefix="/admin/observability", tags=["admin-observability"])
 
@@ -73,3 +76,28 @@ async def rag_eval_stats_route(
     admin: CurrentAdmin = Depends(require_admin),
 ) -> dict:
     return await rag_eval_stats()
+
+
+@router.get("/feedback-stats")
+async def feedback_stats_route(
+    admin: CurrentAdmin = Depends(require_admin),
+) -> dict:
+    return await feedback_stats()
+
+
+@router.get("/feedback")
+async def list_feedback_route(
+    admin: CurrentAdmin = Depends(require_admin),
+    audience_cd: str | None = Query(None, pattern="^(USER|ADMIN)$"),
+    rating: int | None = Query(None, ge=1, le=5),
+    has_comment: bool = Query(False),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+) -> dict:
+    return await list_feedback(
+        audience_cd=audience_cd,
+        rating=rating,
+        has_comment=has_comment,
+        limit=limit,
+        offset=offset,
+    )
