@@ -7,6 +7,7 @@ AI_LLM_CALL_LOG 펼침 UI 를 띄우기 위해 호출.
 - GET /api/admin/observability/llm-calls          필터된 목록
 - GET /api/admin/observability/llm-calls/{id}     단건 상세 (system/user/retrieved/response 전문)
 - GET /api/admin/observability/stats              최근 24h hit/miss/avg latency/tokens
+- GET /api/admin/observability/rag-eval-stats     RAG 품질 4지표 평균 (faithfulness 등)
 """
 
 from __future__ import annotations
@@ -19,6 +20,7 @@ from ..service.admin_observability import (
     get_llm_call,
     list_llm_calls,
     llm_call_stats,
+    rag_eval_stats,
 )
 
 router = APIRouter(prefix="/admin/observability", tags=["admin-observability"])
@@ -64,3 +66,10 @@ async def stats_route(
     admin: CurrentAdmin = Depends(require_admin),
 ) -> dict:
     return await llm_call_stats()
+
+
+@router.get("/rag-eval-stats")
+async def rag_eval_stats_route(
+    admin: CurrentAdmin = Depends(require_admin),
+) -> dict:
+    return await rag_eval_stats()

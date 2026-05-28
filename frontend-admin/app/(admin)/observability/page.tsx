@@ -15,6 +15,8 @@ import {
   type LlmCallListResponse,
   type LlmCallStats,
   type LlmRetrievedChunk,
+  type RagEvalScores,
+  type RagEvalStats,
 } from "@/lib/api";
 import { fmtDateTime, fmtNumber } from "@/lib/utils";
 
@@ -29,6 +31,7 @@ export default function ObservabilityPage() {
 
   // LLM 호출 추적 — DB 직접 적재 (Phoenix iframe 과 별개)
   const [stats, setStats] = useState<LlmCallStats | null>(null);
+  const [ragStats, setRagStats] = useState<RagEvalStats | null>(null);
   const [audienceCd, setAudienceCd] = useState("");
   const [cacheHitYn, setCacheHitYn] = useState("");
   const [q, setQ] = useState("");
@@ -62,6 +65,14 @@ export default function ObservabilityPage() {
         setStats(s);
       } catch {
         // stats 실패해도 화면은 동작
+      }
+    })();
+    (async () => {
+      try {
+        const rs = await api.get<RagEvalStats>("/api/admin/observability/rag-eval-stats");
+        setRagStats(rs);
+      } catch {
+        // rag-eval-stats 실패해도 화면은 동작
       }
     })();
     void load();
@@ -111,6 +122,42 @@ export default function ObservabilityPage() {
           />
         </div>
       ) : null}
+
+      {/* RAG 응답 품질 — LLM-as-judge 4지표 평균 */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-primary" />
+            RAG 응답 신뢰도
+            {ragStats ? (
+              <span className="ml-1 text-xs font-normal text-muted-foreground">
+                평가 {fmtNumber(ragStats.total)}건 평균
+              </span>
+            ) : null}
+          </CardTitle>
+          <CardDescription>
+            Faithfulness(충실도) · Answer Relevancy(답변 적합도) · Context Precision(검색 정밀도) ·
+            Context Recall(검색 재현율) — 0~100%
+            <span className="mt-1 block text-[11px] text-warning">
+              ※ 응답 생성 모델이 자기 답을 채점하는 LLM-as-judge 값입니다. 절대 신뢰도가 아니라 상대 추이 지표로 보세요.
+            </span>
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {ragStats && ragStats.total > 0 ? (
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+              <ScoreCard label="충실도 (Faithfulness)" score={ragStats.faithfulness} />
+              <ScoreCard label="답변 적합도 (Answer Relevancy)" score={ragStats.answer_relevancy} />
+              <ScoreCard label="검색 정밀도 (Context Precision)" score={ragStats.context_precision} />
+              <ScoreCard label="검색 재현율 (Context Recall)" score={ragStats.context_recall} />
+            </div>
+          ) : (
+            <p className="rounded-md border border-dashed bg-muted/30 p-4 text-center text-sm text-muted-foreground">
+              아직 평가된 RAG 응답이 없습니다. 챗봇에 질문하면(캐시 miss 시) 백그라운드 채점 후 집계됩니다.
+            </p>
+          )}
+        </CardContent>
+      </Card>
 
       {/* 필터 */}
       <Card>
@@ -404,6 +451,8 @@ function LlmCallDetailView({ detail }: { detail: LlmCallDetail }) {
         <TextBlock label="RESPONSE_TEXT (LLM 응답)" text={detail.response_text} mono={false} />
       ) : null}
 
+      {detail.evaluation ? <EvalScoresBlock evaluation={detail.evaluation} /> : null}
+
       {detail.error_message ? (
         <TextBlock label="ERROR_MESSAGE" text={detail.error_message} mono={true} />
       ) : null}
@@ -459,6 +508,64 @@ function RetrievedContextBlock({ chunks }: { chunks: LlmRetrievedChunk[] }) {
                 {c.snippet}
               </div>
             ) : null}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+
+// 0~1 점수 → 색상 (낮으면 위험, 높으면 안전)
+function scoreColor(score: number | null): string {
+  if (score == null) return "text-muted-foreground";
+  if (score >= 0.8) return "text-success";
+  if (score >= 0.5) return "text-warning";
+  return "text-destructive";
+}
+
+function fmtScore(score: number | null): string {
+  return score == null ? "-" : (score * 100).toFixed(1);
+}
+
+
+function ScoreCard({ label, score }: { label: string; score: number | null }) {
+  return (
+    <Card>
+      <CardContent className="p-4">
+        <div className="text-[11px] text-muted-foreground">{label}</div>
+        <div className="mt-1 flex items-baseline gap-1">
+          <span className={`num-tabular text-xl font-semibold ${scoreColor(score)}`}>{fmtScore(score)}</span>
+          {score != null ? <span className="text-[10px] text-muted-foreground">%</span> : null}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+
+function EvalScoresBlock({ evaluation }: { evaluation: RagEvalScores }) {
+  const items: { label: string; score: number | null }[] = [
+    { label: "충실도", score: evaluation.faithfulness },
+    { label: "답변 적합도", score: evaluation.answer_relevancy },
+    { label: "검색 정밀도", score: evaluation.context_precision },
+    { label: "검색 재현율", score: evaluation.context_recall },
+  ];
+  return (
+    <div>
+      <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+        RAG 품질 평가{" "}
+        <span className="font-normal normal-case text-muted-foreground/70">(LLM-as-judge · 자가 채점)</span>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {items.map((it) => (
+          <div
+            key={it.label}
+            className="flex items-baseline gap-1.5 rounded border bg-card px-2.5 py-1.5 text-[11px]"
+          >
+            <span className="text-muted-foreground">{it.label}</span>
+            <span className={`num-tabular font-semibold ${scoreColor(it.score)}`}>{fmtScore(it.score)}</span>
+            {it.score != null ? <span className="text-[10px] text-muted-foreground">%</span> : null}
           </div>
         ))}
       </div>

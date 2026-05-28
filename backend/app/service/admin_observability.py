@@ -112,6 +112,25 @@ async def get_llm_call(llm_call_id: int) -> dict | None:
             ctx = json.loads(ctx)
         except Exception:
             ctx = None
+    # 해당 LLM 호출의 최신 RAG 품질 평가(있으면) — 1:N 이라 최신 1건.
+    async with pool.acquire() as conn:
+        ev = await conn.fetchrow(
+            'SELECT "FAITHFULNESS", "ANSWER_RELEVANCY", "CONTEXT_PRECISION", '
+            '       "CONTEXT_RECALL", "EVALUATED_AT" '
+            'FROM public."AI_RAG_EVALUATION" '
+            'WHERE "LLM_CALL_ID" = $1 AND "DELETE_YN" = \'N\' '
+            'ORDER BY "EVAL_ID" DESC LIMIT 1',
+            llm_call_id,
+        )
+    evaluation = None
+    if ev is not None:
+        evaluation = {
+            "faithfulness": float(ev["FAITHFULNESS"]) if ev["FAITHFULNESS"] is not None else None,
+            "answer_relevancy": float(ev["ANSWER_RELEVANCY"]) if ev["ANSWER_RELEVANCY"] is not None else None,
+            "context_precision": float(ev["CONTEXT_PRECISION"]) if ev["CONTEXT_PRECISION"] is not None else None,
+            "context_recall": float(ev["CONTEXT_RECALL"]) if ev["CONTEXT_RECALL"] is not None else None,
+            "evaluated_at": ev["EVALUATED_AT"],
+        }
     return {
         "llm_call_id": int(r["LLM_CALL_ID"]),
         "trace_id": r["TRACE_ID"],
@@ -132,6 +151,7 @@ async def get_llm_call(llm_call_id: int) -> dict | None:
         "rewritten_query": r["REWRITTEN_QUERY"],
         "retrieved_context": ctx,
         "response_text": r["RESPONSE_TEXT"],
+        "evaluation": evaluation,
     }
 
 
@@ -162,4 +182,34 @@ async def llm_call_stats() -> dict:
         "avg_hit_latency_ms": int(r["avg_hit_lat"]) if r["avg_hit_lat"] else None,
         "prompt_tokens_24h": int(r["prompt_tokens"] or 0),
         "completion_tokens_24h": int(r["completion_tokens"] or 0),
+    }
+
+
+async def rag_eval_stats() -> dict:
+    """RAG 응답 품질 4지표 평균 — AI_RAG_EVALUATION 전체(미삭제) 집계.
+
+    LLM-as-judge 자가 채점값이라 절대 신뢰도가 아니라 상대 추이 지표.
+    값이 NULL(채점 실패)인 행은 avg 가 자동 제외.
+    """
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        r = await conn.fetchrow(
+            'SELECT count(*) AS total, '
+            '       avg("FAITHFULNESS") AS faithfulness, '
+            '       avg("ANSWER_RELEVANCY") AS answer_relevancy, '
+            '       avg("CONTEXT_PRECISION") AS context_precision, '
+            '       avg("CONTEXT_RECALL") AS context_recall '
+            'FROM public."AI_RAG_EVALUATION" '
+            "WHERE \"DELETE_YN\" = 'N'"
+        )
+
+    def _f(v) -> float | None:
+        return round(float(v), 4) if v is not None else None
+
+    return {
+        "total": int(r["total"] or 0),
+        "faithfulness": _f(r["faithfulness"]),
+        "answer_relevancy": _f(r["answer_relevancy"]),
+        "context_precision": _f(r["context_precision"]),
+        "context_recall": _f(r["context_recall"]),
     }

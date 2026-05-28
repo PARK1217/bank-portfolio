@@ -502,6 +502,14 @@ export interface LlmRetrievedChunk {
   snippet?: string;
 }
 
+export interface RagEvalScores {
+  faithfulness: number | null;
+  answer_relevancy: number | null;
+  context_precision: number | null;
+  context_recall: number | null;
+  evaluated_at: string | null;
+}
+
 export interface LlmCallDetail {
   llm_call_id: number;
   trace_id: string;
@@ -522,6 +530,7 @@ export interface LlmCallDetail {
   rewritten_query: string | null;
   retrieved_context: LlmRetrievedChunk[] | null;
   response_text: string | null;
+  evaluation: RagEvalScores | null;
 }
 
 export interface LlmCallStats {
@@ -533,6 +542,15 @@ export interface LlmCallStats {
   avg_hit_latency_ms: number | null;
   prompt_tokens_24h: number;
   completion_tokens_24h: number;
+}
+
+// AI_RAG_EVALUATION — RAG 품질 4지표 평균 (LLM-as-judge 자가 채점)
+export interface RagEvalStats {
+  total: number;
+  faithfulness: number | null;
+  answer_relevancy: number | null;
+  context_precision: number | null;
+  context_recall: number | null;
 }
 
 
